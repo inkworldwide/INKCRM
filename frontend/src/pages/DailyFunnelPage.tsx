@@ -220,9 +220,6 @@ export default function DailyFunnelPage() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               Daily Lead Funnel Analytics
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Analyze daily lead flow, day-of-week trends (Monday - Sunday), and conversion metrics.
-            </p>
           </div>
         </div>
 

@@ -427,9 +427,6 @@ export default function AccessPrivilege() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               Access Privilege
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Configure role-based navigation menu access and data visibility across the CRM.
-            </p>
           </div>
         </div>
 

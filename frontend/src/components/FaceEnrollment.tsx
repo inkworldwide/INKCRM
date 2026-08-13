@@ -205,14 +205,14 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
   };
 
   return (
-    <div className="bg-white border-t-[3px] border-t-indigo-600 border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+    <div className="bg-white dark:bg-slate-900 border-t-[3px] border-t-indigo-600 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4 text-left">
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-500" />
             {mode === 'signup' ? 'Mandatory Face Enrollment' : 'Biometric Security'}
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {mode === 'signup' 
               ? 'To complete your registration, you must configure Face Recognition. Passwords alone cannot grant access. Raw photos are never saved.' 
               : 'Enable Face Recognition for a faster, premium login experience. We store mathematical representations of your face, securely encrypted with AES-256. Raw photos are never saved.'

@@ -200,9 +200,6 @@ export default function AnnualFunnelPage() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               Annual Funnel Report
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Yearly lead distribution, 12-month funnel progression, and annual campaign conversion yield.
-            </p>
           </div>
         </div>
 

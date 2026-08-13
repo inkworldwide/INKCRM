@@ -188,9 +188,6 @@ export default function CampaignReportPage() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               My Campaign Report
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Real-time audit mapping for all active calling campaigns, telecaller throughput, and deal conversions.
-            </p>
           </div>
         </div>
 

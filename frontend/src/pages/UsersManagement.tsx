@@ -286,9 +286,6 @@ export default function UsersManagement() {
                 </span>
               )}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Manage team members, roles, reporting hierarchies, and registration approvals.
-            </p>
           </div>
         </div>
 

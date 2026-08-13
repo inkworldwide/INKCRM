@@ -36,7 +36,7 @@ export default function Layout({ children }: LayoutProps) {
   const { modules, fetchModules } = useModuleStore();
   const { user, logout, canAccessMenu } = useAuthStore();
   const { branding, fetchBranding } = useThemeStore();
-  const { toasts, hideToast, confirm, hideConfirm, alertModal, hideAlertModal } = useToastStore();
+  const { toasts, showToast, hideToast, confirm, hideConfirm, alertModal, hideAlertModal } = useToastStore();
 
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark' || (localStorage.getItem('theme') === null && branding?.themeSettings?.mode === 'dark');
@@ -77,6 +77,10 @@ export default function Layout({ children }: LayoutProps) {
       localStorage.setItem('theme', 'light');
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!branding) {
@@ -137,8 +141,8 @@ export default function Layout({ children }: LayoutProps) {
   const handleMarkAsRead = async (id: string, link?: string) => {
     try {
       await api.put(`/notifications/${id}/read`);
-      refetchNotifications();
-      refetchUnread();
+      await queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
       if (link) {
         setShowNotifications(false);
         navigate(link);
@@ -151,8 +155,8 @@ export default function Layout({ children }: LayoutProps) {
   const handleMarkAllAsRead = async () => {
     try {
       await api.put('/notifications/read-all');
-      refetchNotifications();
-      refetchUnread();
+      await queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
     } catch (e) {
       console.error('Failed to mark all read', e);
     }
@@ -161,10 +165,27 @@ export default function Layout({ children }: LayoutProps) {
   const handleClearAllNotifications = async () => {
     try {
       await api.delete('/notifications/clear-all');
-      refetchNotifications();
-      refetchUnread();
+      await queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
     } catch (e) {
       console.error('Failed to clear notifications', e);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    try {
+      await api.post('/notifications/test', {
+        title: 'New Lead Assignment & Alert',
+        message: 'Welcome to Ink CRM Notification Center! Real-time alerts and assignment reminders are active.',
+        type: 'info',
+        link: '/modules/leads'
+      });
+      await queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] });
+      showToast('Test notification created successfully!', 'success');
+    } catch (e) {
+      console.error('Failed to send test notification', e);
+      showToast('Failed to trigger test notification.', 'error');
     }
   };
 
@@ -188,12 +209,12 @@ export default function Layout({ children }: LayoutProps) {
   }, []);
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#F8F5F1] dark:bg-[#0f1115] text-[#1F2937] dark:text-white selection:bg-navy-800/20 selection:text-navy-800 flex flex-col">
+    <div className="h-screen w-screen overflow-hidden bg-[#F8F5F1] dark:bg-[#0B0F19] text-[#1F2937] dark:text-white selection:bg-navy-800/20 selection:text-navy-800 flex flex-col">
       
       {/* Clean Subtle Background Layer */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 bg-[#F8F5F1] dark:bg-[#0f1115]" />
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 bg-[#F8F5F1] dark:bg-[#0B0F19]" />
 
-      <div className="relative z-10 flex h-full w-full p-2 sm:p-4 gap-4 overflow-hidden">
+      <div className="relative z-10 flex h-full w-full p-0 sm:p-2 lg:p-4 gap-0 sm:gap-2 lg:gap-4 overflow-hidden">
         
         {/* Mobile Backdrop */}
         <AnimatePresence>
@@ -203,7 +224,7 @@ export default function Layout({ children }: LayoutProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSidebarOpen(false)}
-              className="fixed inset-0 bg-[#0f1115]/60 backdrop-blur-md z-40 lg:hidden"
+              className="fixed inset-0 bg-[#0B0F19]/70 backdrop-blur-md z-40 lg:hidden"
             />
           )}
         </AnimatePresence>
@@ -211,13 +232,11 @@ export default function Layout({ children }: LayoutProps) {
         {/* Visible Outer Bordered Sidebar Container */}
         <aside 
           className={cn(
-            "fixed inset-y-2 sm:inset-y-4 left-2 sm:left-4 z-50 lg:relative lg:inset-auto",
-            "flex-shrink-0 rounded-xl bg-[#FAFAF9] dark:bg-slate-900 border border-black/[0.14] dark:border-slate-700 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] flex flex-col h-full transition-all duration-200 ease-in-out overflow-hidden",
-            isCollapsed ? "w-[68px]" : "w-[250px]",
-            sidebarOpen ? "translate-x-0" : "-translate-x-[120%]",
-            "lg:translate-x-0"
+            "fixed inset-y-0 left-0 z-50 lg:relative lg:inset-auto",
+            "flex-shrink-0 bg-[#FAFAF9] dark:bg-slate-900 border-r lg:border border-black/[0.12] dark:border-slate-800 shadow-2xl lg:shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex flex-col h-full transition-all duration-200 ease-in-out overflow-hidden rounded-none lg:rounded-xl",
+            isCollapsed ? "w-[68px]" : "w-[280px] sm:w-[250px]",
+            sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           )}
-          style={{ border: '1px solid rgba(0, 0, 0, 0.14)' }}
         >
           
           {/* Clean Enterprise Logo Area */}
@@ -528,19 +547,20 @@ export default function Layout({ children }: LayoutProps) {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 min-h-0 rounded-xl bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col relative border border-black/[0.08]">
+        <main className="flex-1 min-w-0 min-h-0 rounded-none sm:rounded-xl bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col relative border-0 sm:border border-black/[0.08] dark:border-slate-800">
           
           {/* Dashboard Header */}
-          <header className="h-[68px] flex-shrink-0 bg-white dark:bg-slate-900 border-b border-black/[0.08] dark:border-slate-800 flex items-center justify-between px-4 sm:px-8 z-20 transition-colors duration-150">
-            <div className="flex items-center gap-3">
+          <header className="h-14 sm:h-[68px] flex-shrink-0 bg-white dark:bg-slate-900 border-b border-black/[0.08] dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 md:px-8 z-20 transition-colors duration-150">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button 
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 text-slate-600 hover:bg-[#FAFAF9] dark:hover:bg-slate-800 rounded-xl transition-colors -ml-2"
+                className="lg:hidden p-2 text-slate-700 dark:text-slate-300 hover:bg-[#FAFAF9] dark:hover:bg-slate-800 rounded-xl transition-colors -ml-1 flex-shrink-0 cursor-pointer"
+                title="Open Menu"
               >
-                <Icons.Menu className="w-5 h-5 dark:text-slate-400" />
+                <Icons.Menu className="w-5 h-5 dark:text-slate-300" />
               </button>
-              <div className="flex flex-col text-left">
-                <h2 className="text-lg sm:text-[19px] font-[850] text-[#111111] dark:text-white tracking-tight leading-tight">
+              <div className="flex flex-col text-left min-w-0">
+                <h2 className="text-sm sm:text-base md:text-[19px] font-[850] text-[#111111] dark:text-white tracking-tight leading-tight truncate">
                   {(() => {
                     const path = location.pathname;
                     if (path === '/reports/lead-reports') return 'Lead Reports';
@@ -579,48 +599,10 @@ export default function Layout({ children }: LayoutProps) {
                     return 'Dashboard Overview';
                   })()}
                 </h2>
-
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <p className="text-xs font-normal text-[#78716C] dark:text-stone-400 leading-tight">
-                    {(() => {
-                      const path = location.pathname;
-                      if (path === '/reports/lead-reports') return 'Filter, generate, and analyze lead distribution by month, year, status, and loan type.';
-                      if (path === '/reports/telecaller-reports') return 'Detailed call logs, lead allocations, and agent productivity performance audit.';
-                      if (path === '/reports/telecaller-monthly') return 'Monthly target tracking, telecaller performance matrix, and historical revenue trends.';
-                      if (path === '/reports/campaign-report') return 'Individual campaign lead performance, calls conducted, and conversion metrics.';
-                      if (path === '/reports/funnel-daily') return 'Analyze daily lead flow, day-of-week trends, and stage conversions.';
-                      if (path === '/reports/funnel-monthly') return 'Campaign lead status breakdown, conversion ring chart, and monthly progression.';
-                      if (path === '/reports/funnel-annual') return 'Yearly lead distribution, 12-month funnel progression, and annual yield.';
-                      if (path === '/reports') return 'Visual report designer and automated performance reports.';
-                      if (path === '/users-management') return 'Manage team members, roles, permissions, and reporting hierarchies.';
-                      if (path === '/settings') return 'Configure organization branding, modules, and system preferences.';
-                      if (path === '/access-privilege') return 'Configure role-based navigation menu access and data visibility across the CRM.';
-                      if (path === '/lead-transfer') return 'Reassign leads and bulk transfers across telecallers and sales managers.';
-                      if (path === '/my-campaign') return 'Quick calling workspace and customer interaction queue.';
-                      if (path === '/workflows') return 'Manage automated triggers, rules, and business processes.';
-                      if (path === '/status') return 'Configure custom lead statuses, progression pipeline, and display colors.';
-                      if (path.startsWith('/modules/leads/new')) return 'Create a new customer lead with complete contact and qualification details.';
-                      if (path.startsWith('/modules/leads')) return 'View, manage, and track client lead records.';
-                      if (path.startsWith('/modules/deals')) return 'Pipeline opportunities and sales deal stages.';
-                      if (path.startsWith('/modules/campaigns')) return 'Marketing campaigns and audience targeting drive.';
-                      if (path.startsWith('/modules/campaignassignments')) return 'Batch lead assignment to telecallers and marketing agents.';
-                      if (path.startsWith('/modules/')) return 'Manage records, custom fields, and data workflows.';
-                      return "Welcome back. Here is today's business summary.";
-                    })()}
-                  </p>
-
-                  <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-black/[0.08] dark:border-slate-800 text-[10.5px] font-medium text-[#78716C] dark:text-stone-400">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                    </span>
-                    <span>Live • {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-5 relative ml-auto">
+            <div className="flex items-center gap-2 sm:gap-4 relative ml-auto flex-shrink-0">
               {/* Backdrops to close popovers when clicking outside */}
               {(showNotifications || showUserDropdown) && (
                 <div 
@@ -633,11 +615,11 @@ export default function Layout({ children }: LayoutProps) {
               )}
 
               {/* Theme & Notification Buttons */}
-              <div className="flex items-center gap-2 z-40">
+              <div className="flex items-center gap-1.5 sm:gap-2 z-40">
                 {/* Theme Toggle */}
                 <button 
                   onClick={() => setDarkMode(!darkMode)}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center bg-white dark:bg-slate-800 border border-black/[0.08] dark:border-slate-700 shadow-2xs hover:bg-black/[0.03] transition-all cursor-pointer group"
+                  className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-white dark:bg-slate-800 border border-black/[0.08] dark:border-slate-700 shadow-2xs hover:bg-black/[0.03] dark:hover:bg-slate-700 transition-all cursor-pointer group"
                   title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
                 >
                   {darkMode ? (
@@ -653,16 +635,14 @@ export default function Layout({ children }: LayoutProps) {
                     setShowNotifications(!showNotifications);
                     setShowUserDropdown(false);
                   }}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center bg-white dark:bg-slate-800 border border-black/[0.08] dark:border-slate-700 shadow-2xs hover:bg-black/[0.03] transition-all relative cursor-pointer group"
+                  className="w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center bg-white dark:bg-slate-800 border border-black/[0.08] dark:border-slate-700 shadow-2xs hover:bg-black/[0.03] dark:hover:bg-slate-700 transition-all relative cursor-pointer group"
                   title="View Alerts & Notifications"
                 >
                   <Icons.Bell className="w-4 h-4 text-[#CA8A04] transition-transform duration-150 group-hover:scale-105" />
-                  {unreadData?.unreadCount > 0 ? (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#EF4444] text-white text-[9px] font-extrabold rounded-full flex items-center justify-center animate-pulse border-2 border-white dark:border-slate-800">
+                  {(unreadData?.unreadCount || 0) > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#EF4444] text-white text-[9px] font-extrabold rounded-full flex items-center justify-center animate-pulse border-2 border-white dark:border-slate-800 font-mono">
                       {unreadData.unreadCount > 9 ? '9+' : unreadData.unreadCount}
                     </span>
-                  ) : (
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-[#EF4444] rounded-full border border-white dark:border-slate-800" />
                   )}
                 </button>
               </div>
@@ -674,26 +654,33 @@ export default function Layout({ children }: LayoutProps) {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 md:right-[110px] top-12 w-[calc(100vw-32px)] sm:w-88 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-slate-950/80 p-4 z-40"
+                    className="absolute right-0 top-12 w-[calc(100vw-24px)] sm:w-88 max-w-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-4 z-50 text-left"
                   >
                     <div className="flex justify-between items-center pb-2.5 border-b border-slate-100 dark:border-slate-800 mb-3">
                       <div className="flex items-center gap-2">
                         <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                           <Icons.Bell className="w-3.5 h-3.5 text-[#CA8A04]" /> Notifications
                         </h4>
-                        {unreadData?.unreadCount > 0 && (
-                          <span className="text-[10px] bg-rose-50 dark:bg-rose-950 text-[#EF4444] dark:text-rose-400 px-2 py-0.5 rounded-full font-bold">
+                        {(unreadData?.unreadCount || 0) > 0 && (
+                          <span className="text-[10px] bg-rose-50 dark:bg-rose-950 text-[#EF4444] dark:text-rose-400 px-2 py-0.5 rounded-full font-bold font-mono">
                             {unreadData.unreadCount} New
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-[10px]">
-                        {unreadData?.unreadCount > 0 && (
+                        <button
+                          onClick={handleSendTestNotification}
+                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
+                          title="Trigger a live test notification"
+                        >
+                          <Icons.Sparkles className="w-3 h-3" /> Test
+                        </button>
+                        {(unreadData?.unreadCount || 0) > 0 && (
                           <button
                             onClick={handleMarkAllAsRead}
-                            className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                            className="text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 font-bold hover:underline cursor-pointer"
                           >
-                            Mark all read
+                            Mark read
                           </button>
                         )}
                         {notificationsData && notificationsData.length > 0 && (
@@ -715,18 +702,18 @@ export default function Layout({ children }: LayoutProps) {
                             onClick={() => handleMarkAsRead(item._id, item.link)}
                             className={`flex gap-3 items-start p-2.5 rounded-xl border transition-all cursor-pointer text-left ${
                               !item.isRead
-                                ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100/50'
+                                ? 'bg-indigo-50/60 dark:bg-indigo-950/40 border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/60'
                                 : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
                             }`}
                           >
                             <div className={`p-1.5 rounded-xl mt-0.5 flex-shrink-0 ${
-                              item.title?.includes('Assigned') || item.title?.includes('Transferred')
+                              item.title?.includes('Assigned') || item.title?.includes('Transferred') || item.title?.includes('Allocated')
                                 ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
                                 : item.type === 'success'
                                   ? 'bg-emerald-500/10 text-emerald-600'
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                             }`}>
-                              {item.title?.includes('Assigned') || item.title?.includes('Transferred') ? (
+                              {item.title?.includes('Assigned') || item.title?.includes('Transferred') || item.title?.includes('Allocated') ? (
                                 <Icons.UserCheck className="w-3.5 h-3.5" />
                               ) : (
                                 <Icons.Sparkles className="w-3.5 h-3.5" />
@@ -755,9 +742,16 @@ export default function Layout({ children }: LayoutProps) {
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-8 text-slate-400 text-xs">
-                          <Icons.BellOff className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                          No notifications yet.
+                        <div className="text-center py-6 px-4 text-slate-400 text-xs space-y-3">
+                          <Icons.BellOff className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto" />
+                          <p className="text-slate-500 dark:text-slate-400 font-medium">No notifications yet.</p>
+                          <button
+                            onClick={handleSendTestNotification}
+                            className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 dark:text-indigo-400 rounded-xl text-xs font-bold transition-all border border-indigo-200/60 dark:border-indigo-800/60 inline-flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                          >
+                            <Icons.Sparkles className="w-3.5 h-3.5" />
+                            <span>Send Test Alert</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -827,7 +821,7 @@ export default function Layout({ children }: LayoutProps) {
           </header>
 
           {/* Scrollable Main Content Area */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col bg-[#fdfbf7] dark:bg-slate-900 custom-scrollbar">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col bg-[#fdfbf7] dark:bg-[#0B0F19] custom-scrollbar">
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
@@ -835,7 +829,7 @@ export default function Layout({ children }: LayoutProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
-                className="flex-1 flex flex-col p-4 sm:p-6 text-slate-800 dark:text-slate-100 min-h-full"
+                className="flex-1 flex flex-col p-3 sm:p-5 md:p-6 text-slate-800 dark:text-slate-100 min-h-full"
               >
                 <div className="flex-1">
                   {children}

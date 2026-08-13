@@ -44,10 +44,15 @@
 
   body {
     font-family: var(--font-family);
-    background-color: #FAFAF9 !important;
+    background-color: #FAFAF9;
     font-size: 14px;
     color: #1A1A1A;
     @apply text-[#1A1A1A] antialiased;
+  }
+
+  html.dark body {
+    background-color: #0B0F19 !important;
+    color: #F8FAFC !important;
   }
 }
 
@@ -63,8 +68,14 @@
   background: rgba(31, 27, 22, 0.15);
   border-radius: 9999px;
 }
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(31, 27, 22, 0.28);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* Lightweight Clean Shimmer for loading states */
@@ -77,21 +88,29 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+.dark .animate-shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
 
 /* Enterprise Design System Utilities (Stripe / Linear / Mercury style) */
 .card-premium {
   box-shadow: 0 1px 2px rgba(16,16,16,0.04), 0 1px 1px rgba(16,16,16,0.03);
-  border: 1px solid rgba(20,20,20,0.08);
-  @apply bg-white rounded-xl p-6 transition-all duration-150;
+  @apply bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl p-4 sm:p-6 transition-all duration-150;
 }
 .card-premium:hover {
   border-color: rgba(20,20,20,0.16);
   box-shadow: 0 4px 14px rgba(16,16,16,0.06);
 }
+.dark .card-premium:hover {
+  border-color: rgba(255,255,255,0.15);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
 
 .card-ambient {
   box-shadow: 0 1px 2px rgba(16,16,16,0.04), 0 1px 1px rgba(16,16,16,0.03);
-  border: 1px solid rgba(20,20,20,0.08);
+  @apply bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800;
 }
 .card-ambient:hover {
   border-color: rgba(20,20,20,0.16);
@@ -99,43 +118,43 @@
 }
 
 .input-premium {
-  @apply bg-white border border-[#EAE4DA] rounded-xl px-4 py-2.5 text-xs font-semibold text-[#1A1A1A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-[#111111] transition-all duration-150;
+  @apply bg-white dark:bg-slate-800 border border-[#EAE4DA] dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-semibold text-[#1A1A1A] dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-150;
 }
 
 .label-premium {
-  @apply text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block mb-1.5;
+  @apply text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider block mb-1.5;
 }
 
 .btn-primary-premium {
-  @apply h-[40px] px-5 text-xs font-bold uppercase tracking-wider bg-[#111111] hover:bg-[#262626] active:bg-black text-white rounded-xl transition-all duration-150 shadow-none disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer;
+  @apply h-[40px] px-5 text-xs font-bold uppercase tracking-wider bg-[#111111] hover:bg-[#262626] active:bg-black text-white dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-xl transition-all duration-150 shadow-none disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer;
 }
 
 .btn-secondary-premium {
-  @apply h-[40px] px-4 text-xs font-bold uppercase tracking-wider bg-white hover:bg-[#FAFAF9] active:bg-[#F0EBE1] text-[#1A1A1A] rounded-xl border border-[#D1D5DB] transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer shadow-none;
+  @apply h-[40px] px-4 text-xs font-bold uppercase tracking-wider bg-white dark:bg-slate-800 hover:bg-[#FAFAF9] dark:hover:bg-slate-700 active:bg-[#F0EBE1] text-[#1A1A1A] dark:text-slate-200 rounded-xl border border-[#D1D5DB] dark:border-slate-700 transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer shadow-none;
 }
 
 .btn-edit-premium {
-  @apply p-2 bg-white hover:bg-[#FAFAF9] text-[#1A1A1A] border border-[#D1D5DB] rounded-xl transition-all duration-150 disabled:opacity-50;
+  @apply p-2 bg-white dark:bg-slate-800 hover:bg-[#FAFAF9] dark:hover:bg-slate-700 text-[#1A1A1A] dark:text-slate-200 border border-[#D1D5DB] dark:border-slate-700 rounded-xl transition-all duration-150 disabled:opacity-50;
 }
 
 .btn-delete-premium {
-  @apply p-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl transition-all duration-150 disabled:opacity-50;
+  @apply p-2 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-xl transition-all duration-150 disabled:opacity-50;
 }
 
 .status-active-premium {
-  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 text-emerald-800 border-emerald-200;
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80;
 }
 
 .status-inactive-premium {
-  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-slate-100 text-slate-700 border-slate-200;
+  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700;
 }
 
 .table-header-premium {
-  @apply border-b border-[#EAE4DA] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider h-10 bg-[#FAFAF9];
+  @apply border-b border-[#EAE4DA] dark:border-slate-800 text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider h-10 bg-[#FAFAF9] dark:bg-slate-800/90;
 }
 
 .checkbox-premium {
-  @apply rounded border-[#D1D5DB] text-[#111111] focus:ring-0 w-4 h-4 cursor-pointer;
+  @apply rounded border-[#D1D5DB] dark:border-slate-700 text-[#111111] dark:text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer;
 }
 
 :root {

@@ -28,15 +28,26 @@ export const createNotification = async ({
     let targetUserId: mongoose.Types.ObjectId | null = null;
 
     if (mongoose.Types.ObjectId.isValid(String(recipient))) {
-      targetUserId = new mongoose.Types.ObjectId(String(recipient));
-    } else {
+      const existingUser = await User.findOne({
+        _id: recipient,
+        organizationId
+      });
+      if (existingUser) {
+        targetUserId = existingUser._id as mongoose.Types.ObjectId;
+      }
+    }
+
+    if (!targetUserId) {
       // Look up user by full name or email
       const searchStr = String(recipient).trim().toLowerCase();
+      const parts = searchStr.split(/\s+/);
+
       const user = await User.findOne({
         organizationId,
         $or: [
           { email: searchStr },
           { firstName: new RegExp(`^${searchStr}$`, 'i') },
+          { lastName: new RegExp(`^${searchStr}$`, 'i') },
           {
             $expr: {
               $eq: [
@@ -44,7 +55,17 @@ export const createNotification = async ({
                 searchStr
               ]
             }
-          }
+          },
+          ...(parts.length > 1
+            ? [
+                {
+                  $and: [
+                    { firstName: new RegExp(`^${parts[0]}$`, 'i') },
+                    { lastName: new RegExp(`^${parts.slice(1).join(' ')}$`, 'i') }
+                  ]
+                }
+              ]
+            : [])
         ]
       });
 

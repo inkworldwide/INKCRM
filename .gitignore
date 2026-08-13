@@ -46,3 +46,7 @@ uploads/
 
 # Local MongoDB data
 mongodb-data/
+
+# Scratch scripts
+scratch/
+backend/scratch/

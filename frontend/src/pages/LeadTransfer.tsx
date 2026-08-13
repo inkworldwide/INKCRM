@@ -173,9 +173,6 @@ export default function LeadTransfer() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               Lead Transfer & Reassignment
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Reassign active customer leads between telecallers, sales reps, or unassign in bulk.
-            </p>
           </div>
         </div>
 

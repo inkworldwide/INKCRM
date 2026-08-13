@@ -1110,12 +1110,12 @@ export default function RecordForm() {
     <div className="space-y-6 max-w-5xl mx-auto text-left">
       
       {/* breadcrumbs */}
-      <div className="flex items-center gap-2 text-[11px] font-bold text-[#374151] uppercase tracking-wider">
-        <Link to={`/modules/${activeModule.apiPath}`} className="hover:text-indigo-600 transition-colors">
+      <div className="flex items-center gap-2 text-[11px] font-bold text-[#374151] dark:text-slate-400 uppercase tracking-wider">
+        <Link to={`/modules/${activeModule.apiPath}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
           {activeModule.pluralLabel}
         </Link>
         <Icons.ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-        <span className="text-[#111827] font-bold">
+        <span className="text-[#111827] dark:text-white font-bold">
           {id ? `Edit: ${recordName}` : `New ${activeModule.singularLabel}`}
         </span>
       </div>
@@ -1124,8 +1124,8 @@ export default function RecordForm() {
       <div className="card-premium p-0 overflow-hidden relative">
         
         {/* Header */}
-        <div className="px-8 py-5 border-b border-[#EAE4DA] bg-[#F8F5F1]/60 flex justify-between items-center">
-          <h2 className="text-sm font-bold text-[#111827] uppercase tracking-wider">
+        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-[#EAE4DA] dark:border-slate-800 bg-[#F8F5F1]/60 dark:bg-slate-850 flex justify-between items-center">
+          <h2 className="text-xs sm:text-sm font-bold text-[#111827] dark:text-white uppercase tracking-wider">
             {id ? `Edit ${activeModule.singularLabel}: ${recordName}` : `Create ${activeModule.singularLabel}`}
           </h2>
         </div>
@@ -1134,22 +1134,22 @@ export default function RecordForm() {
         <form onSubmit={handleSubmit(onSubmitForm)} autoComplete="off">
           
           {sections.map((section) => (
-            <div key={section.title} className="p-8 border-b border-[#EAE4DA] last:border-b-0 space-y-6">
+            <div key={section.title} className="p-4 sm:p-6 md:p-8 border-b border-[#EAE4DA] dark:border-slate-800 last:border-b-0 space-y-5 sm:space-y-6">
               <div className="flex items-center gap-2.5 pb-1.5 mb-2">
-                <div className="w-1.5 h-3.5 bg-[#17223B] rounded-full" />
-                <h3 className="text-xs font-bold text-[#111827] uppercase tracking-wider">
+                <div className="w-1.5 h-3.5 bg-[#17223B] dark:bg-indigo-500 rounded-full" />
+                <h3 className="text-xs font-bold text-[#111827] dark:text-white uppercase tracking-wider">
                   {section.title}
                 </h3>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-4 sm:gap-y-5">
                 {section.fields.map((field) => renderField(field))}
               </div>
             </div>
           ))}
 
           {/* Centered actions footer */}
-          <div className="p-6 bg-[#F8F5F1]/60 border-t border-[#EAE4DA] flex items-center justify-center gap-4">
+          <div className="p-4 sm:p-6 bg-[#F8F5F1]/60 dark:bg-slate-850 border-t border-[#EAE4DA] dark:border-slate-800 flex items-center justify-center gap-3 sm:gap-4">
             <Link
               to={`/modules/${activeModule.apiPath}`}
               className="btn-secondary-premium h-10 px-5 text-xs font-bold"
@@ -1159,7 +1159,7 @@ export default function RecordForm() {
             <button
               type="submit"
               disabled={saving}
-              className="btn-primary-premium h-10 px-5 text-xs font-bold flex items-center gap-1.5"
+              className="btn-primary-premium h-10 px-6 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               {saving && <Icons.Loader className="w-3.5 h-3.5 animate-spin" />}
               Save
@@ -1174,12 +1174,12 @@ export default function RecordForm() {
       {id && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Attachments panel */}
-          <div className="card-premium p-6">
+          <div className="card-premium p-4 sm:p-6">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="text-[10px] font-[800] text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <h4 className="text-[10px] font-[800] text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Icons.Paperclip className="w-4 h-4 text-indigo-500" /> Attachments
               </h4>
-              <label className="text-[10px] font-[800] text-indigo-600 hover:underline cursor-pointer flex items-center gap-1">
+              <label className="text-[10px] font-[800] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center gap-1">
                 {uploadingDoc ? (
                   <Icons.Loader className="w-3.5 h-3.5 animate-spin" />
                 ) : (
@@ -1193,7 +1193,7 @@ export default function RecordForm() {
 
             <div className="space-y-2">
               {documents.map((doc) => (
-                <div key={doc._id} className="p-3 bg-slate-50/50 rounded-xl border border-[#E8ECF4] flex items-center justify-between group">
+                <div key={doc._id} className="p-3 bg-slate-50/80 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 flex items-center justify-between group">
                   <div className="flex items-center gap-2.5 truncate">
                     <Icons.FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                     <div className="truncate text-left">
@@ -1201,12 +1201,12 @@ export default function RecordForm() {
                         href={`${FILE_BASE_URL}${doc.filePath}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:underline truncate block"
+                        className="text-xs font-bold text-slate-800 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                       >
                         {doc.name}
                       </a>
-                      <span className="text-[9px] text-slate-400 block font-semibold mt-0.5">
-                        {Math.round(doc.size / 1024)} KB • Version {doc.version}
+                      <span className="text-[10px] text-slate-400 block">
+                        {(doc.size / 1024).toFixed(1)} KB • {new Date(doc.uploadedAt || doc.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
@@ -1216,14 +1216,14 @@ export default function RecordForm() {
                         setEditingDocId(doc._id);
                         setEditingDocName(doc.name);
                       }}
-                      className="p-1 text-slate-400 hover:text-indigo-650 hover:bg-slate-100 rounded transition-colors"
+                      className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors cursor-pointer"
                       title="Rename file"
                     >
                       <Icons.Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDeleteDoc(doc._id)}
-                      className="p-1 text-rose-500 hover:bg-rose-50 rounded transition-colors"
+                      className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors cursor-pointer"
                       title="Delete file"
                     >
                       <Icons.Trash className="w-3.5 h-3.5" />
@@ -1232,7 +1232,7 @@ export default function RecordForm() {
                 </div>
               ))}
               {documents.length === 0 && (
-                <div className="py-6 text-center text-xs text-slate-400 border border-dashed rounded-xl border-slate-200 font-medium">
+                <div className="py-6 text-center text-xs text-slate-400 border border-dashed rounded-xl border-slate-200 dark:border-slate-700 font-medium">
                   No files attached.
                 </div>
               )}
@@ -1240,22 +1240,22 @@ export default function RecordForm() {
           </div>
 
           {/* Activity History panel */}
-          <div className="card-premium p-6">
-            <h4 className="text-[10px] font-[800] text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+          <div className="card-premium p-4 sm:p-6">
+            <h4 className="text-[10px] font-[800] text-slate-800 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
               <Icons.History className="w-4 h-4 text-indigo-500" /> Activity History
             </h4>
 
-            <div className="relative pl-4 border-l border-slate-100 space-y-4 max-h-[300px] overflow-y-auto">
+            <div className="relative pl-4 border-l border-slate-100 dark:border-slate-800 space-y-4 max-h-[300px] overflow-y-auto">
               {timeline.map((item) => (
                 <div key={item._id} className="relative text-left text-xs">
-                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-white"></div>
-                  <p className="font-semibold text-slate-700">
+                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-white dark:ring-slate-900"></div>
+                  <p className="font-semibold text-slate-700 dark:text-slate-200">
                     {item.userId?.firstName} {item.userId?.lastName}
                   </p>
                   <p className="text-[10px] text-slate-400 mt-0.5">{item.type} change</p>
                   {item.details?.fieldName && (
-                    <p className="text-slate-600 mt-1">
-                      Changed <span className="font-medium text-slate-700">{item.details.fieldName}</span> from{' '}
+                    <p className="text-slate-600 dark:text-slate-300 mt-1">
+                      Changed <span className="font-medium text-slate-700 dark:text-white">{item.details.fieldName}</span> from{' '}
                       <span className="font-semibold text-rose-500">{String(item.details.oldValue || 'None')}</span> to{' '}
                       <span className="font-semibold text-emerald-500">{String(item.details.newValue)}</span>.
                     </p>
@@ -1263,7 +1263,9 @@ export default function RecordForm() {
                 </div>
               ))}
               {timeline.length === 0 && (
-                <div className="text-center py-6 text-xs text-slate-400 font-medium">No edits recorded.</div>
+                <div className="py-6 text-center text-xs text-slate-400 font-medium">
+                  No activity history yet.
+                </div>
               )}
             </div>
           </div>

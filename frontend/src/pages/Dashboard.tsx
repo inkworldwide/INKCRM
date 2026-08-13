@@ -816,50 +816,50 @@ export default function Dashboard() {
       </div>
 
       {/* 4. TODAY'S & UPCOMING FOLLOWUP LEADS DETAILS */}
-      <div className="bg-[#F8F5F1] border border-[#EAE4DA] rounded-2xl p-6 md:p-8 overflow-hidden text-left shadow-[0_2px_8px_rgba(23,34,59,0.02)]">
-        <div className="px-2 pb-5 border-b border-[#EAE4DA] flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="bg-[#F8F5F1] dark:bg-slate-900 border border-[#EAE4DA] dark:border-slate-800 rounded-2xl p-4 sm:p-6 md:p-8 overflow-hidden text-left shadow-xs">
+        <div className="px-1 pb-5 border-b border-[#EAE4DA] dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white border border-[#EAE4DA] flex items-center justify-center shadow-2xs">
-              <Icons.CalendarClock className="w-4.5 h-4.5 text-indigo-600" />
+            <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 border border-[#EAE4DA] dark:border-slate-700 flex items-center justify-center shadow-2xs">
+              <Icons.CalendarClock className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-sm font-[800] text-slate-800 uppercase tracking-wider">
+              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
                 Followup Leads Details
               </h2>
-              <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
                 {followupTab === 'today' ? "Scheduled for action today" : "Upcoming scheduled followups"}
               </p>
             </div>
           </div>
 
           {/* Tab buttons: Today's vs Upcoming */}
-          <div className="flex items-center gap-2 bg-white border border-[#EAE4DA] p-1.5 rounded-xl shadow-2xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-white dark:bg-slate-800 border border-[#EAE4DA] dark:border-slate-700 p-1.5 rounded-xl shadow-2xs">
             <button
               onClick={() => setFollowupTab('today')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
                 followupTab === 'today'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}
             >
               <Icons.Calendar className="w-3.5 h-3.5" />
               <span>Today's Followups</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${followupTab === 'today' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${followupTab === 'today' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
                 {metricsData?.todayFollowupsCount || 0}
               </span>
             </button>
 
             <button
               onClick={() => setFollowupTab('upcoming')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
                 followupTab === 'upcoming'
                   ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}
             >
               <Icons.Clock className="w-3.5 h-3.5" />
               <span>Upcoming Followups</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${followupTab === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${followupTab === 'upcoming' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
                 {metricsData?.upcomingFollowupsCount || 0}
               </span>
             </button>
@@ -874,11 +874,11 @@ export default function Dashboard() {
 
             if (!activeList || activeList.length === 0) {
               return (
-                <div className="py-12 bg-white border border-[#EAE4DA] rounded-xl flex flex-col items-center justify-center text-center shadow-xs">
-                  <div className="w-14 h-14 rounded-full bg-[#F8F5F1] border border-[#EAE4DA] flex items-center justify-center mb-3 shadow-inner">
-                    <Icons.CheckCircle2 className="w-7 h-7 text-slate-400" />
+                <div className="py-12 bg-white dark:bg-slate-800/80 border border-[#EAE4DA] dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center text-center shadow-xs">
+                  <div className="w-14 h-14 rounded-full bg-[#F8F5F1] dark:bg-slate-700/60 border border-[#EAE4DA] dark:border-slate-600 flex items-center justify-center mb-3 shadow-inner">
+                    <Icons.CheckCircle2 className="w-7 h-7 text-slate-400 dark:text-slate-300" />
                   </div>
-                  <h3 className="text-sm font-bold text-slate-800">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                     {followupTab === 'today' ? "No follow-ups scheduled today." : "No upcoming follow-ups scheduled."}
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">Enjoy your day.</p>
@@ -1121,7 +1121,7 @@ export default function Dashboard() {
         />
 
         {/* Pipeline Summary Horizontal KPI Bar */}
-        <div className="w-full grid grid-cols-2 sm:grid-cols-4 bg-white border border-black/[0.06] rounded-2xl p-4 sm:p-5 items-center gap-4 shadow-sm text-left">
+        <div className="w-full grid grid-cols-2 sm:grid-cols-4 bg-white dark:bg-slate-900 border border-black/[0.06] dark:border-slate-800 rounded-2xl p-4 sm:p-5 items-center gap-4 shadow-sm text-left">
           <div className="flex items-center gap-3 pl-1">
             <div 
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -1130,12 +1130,12 @@ export default function Dashboard() {
               <Icons.Briefcase className="w-4.5 h-4.5 stroke-[2.2]" style={{ color: '#4F46E5' }} />
             </div>
             <div className="text-left min-w-0">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider truncate">Total Pipeline</p>
-              <p className="text-base font-black text-[#1A1A1A] tracking-tight mt-0.5 truncate">₹{totalPipeline.toLocaleString('en-IN')}</p>
+              <p className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider truncate">Total Pipeline</p>
+              <p className="text-base font-black text-[#1A1A1A] dark:text-white tracking-tight mt-0.5 truncate">₹{totalPipeline.toLocaleString('en-IN')}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06]">
+          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06] dark:border-slate-800">
             <div 
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: 'rgba(5, 150, 105, 0.1)', color: '#059669' }}
@@ -1143,12 +1143,12 @@ export default function Dashboard() {
               <Icons.Percent className="w-4.5 h-4.5 stroke-[2.2]" style={{ color: '#059669' }} />
             </div>
             <div className="text-left min-w-0">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider truncate">Win Rate</p>
-              <p className="text-base font-black text-[#1A1A1A] tracking-tight mt-0.5 truncate">{winRate}%</p>
+              <p className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider truncate">Win Rate</p>
+              <p className="text-base font-black text-[#1A1A1A] dark:text-white tracking-tight mt-0.5 truncate">{winRate}%</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06]">
+          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06] dark:border-slate-800">
             <div 
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', color: '#2563EB' }}
@@ -1156,12 +1156,12 @@ export default function Dashboard() {
               <Icons.Calendar className="w-4.5 h-4.5 stroke-[2.2]" style={{ color: '#2563EB' }} />
             </div>
             <div className="text-left min-w-0">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider truncate">Avg. Cycle</p>
-              <p className="text-base font-black text-[#1A1A1A] tracking-tight mt-0.5 truncate">28 Days</p>
+              <p className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider truncate">Avg. Cycle</p>
+              <p className="text-base font-black text-[#1A1A1A] dark:text-white tracking-tight mt-0.5 truncate">28 Days</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06]">
+          <div className="flex items-center gap-3 pl-1 sm:border-l border-black/[0.06] dark:border-slate-800">
             <div 
               className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: 'rgba(217, 119, 6, 0.1)', color: '#D97706' }}
@@ -1169,8 +1169,8 @@ export default function Dashboard() {
               <Icons.IndianRupee className="w-4.5 h-4.5 stroke-[2.2]" style={{ color: '#D97706' }} />
             </div>
             <div className="text-left min-w-0">
-              <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider truncate">Avg. Deal</p>
-              <p className="text-base font-black text-[#1A1A1A] tracking-tight mt-0.5 truncate">₹{avgDealSize.toLocaleString('en-IN')}</p>
+              <p className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider truncate">Avg. Deal</p>
+              <p className="text-base font-black text-[#1A1A1A] dark:text-white tracking-tight mt-0.5 truncate">₹{avgDealSize.toLocaleString('en-IN')}</p>
             </div>
           </div>
         </div>
@@ -1186,21 +1186,21 @@ export default function Dashboard() {
 
       {/* Record History & Timeline Modal */}
       {activeHistoryRecord && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 text-left">
-          <div className="bg-white border border-[#EAE4DA] rounded-xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 text-left">
+          <div className="bg-white dark:bg-slate-900 border border-[#EAE4DA] dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Header */}
-            <div className="p-5 border-b border-[#EAE4DA] flex justify-between items-center bg-[#FAFAF9]">
+            <div className="p-5 border-b border-[#EAE4DA] dark:border-slate-800 flex justify-between items-center bg-[#FAFAF9] dark:bg-slate-850">
               <div>
-                <h3 className="font-bold text-[#111111] text-xs uppercase tracking-wider">
+                <h3 className="font-bold text-[#111111] dark:text-white text-xs uppercase tracking-wider">
                   Lead Audit History
                 </h3>
-                <p className="text-[10px] text-[#6B7280] font-bold mt-0.5 uppercase tracking-wider">
+                <p className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold mt-0.5 uppercase tracking-wider">
                   {activeHistoryRecord.data?.firstName} {activeHistoryRecord.data?.lastName}
                 </p>
               </div>
               <button 
                 onClick={() => setActiveHistoryRecord(null)}
-                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white hover:bg-[#FAFAF9] border border-[#EAE4DA] text-[#6B7280] transition-colors"
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-[#FAFAF9] dark:hover:bg-slate-700 border border-[#EAE4DA] dark:border-slate-700 text-[#6B7280] dark:text-slate-300 transition-colors cursor-pointer"
               >
                 <Icons.X className="w-3.5 h-3.5" />
               </button>
@@ -1210,31 +1210,31 @@ export default function Dashboard() {
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {loadingHistory ? (
                 <div className="flex justify-center items-center py-10">
-                  <Icons.Loader2 className="w-6 h-6 text-[#111111] animate-spin" />
+                  <Icons.Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
                 </div>
               ) : (
                 <>
                   {/* Documents Section */}
                   <div>
-                    <h4 className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                      <Icons.File className="w-3.5 h-3.5 text-[#111111]" /> Attached Documents ({historyDocuments.length})
+                    <h4 className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                      <Icons.File className="w-3.5 h-3.5 text-[#111111] dark:text-slate-300" /> Attached Documents ({historyDocuments.length})
                     </h4>
                     {historyDocuments.length > 0 ? (
                       <div className="space-y-2">
                         {historyDocuments.map((doc: any) => (
-                          <div key={doc._id} className="flex justify-between items-center p-3 bg-[#FAFAF9] border border-[#EAE4DA] rounded-xl">
+                          <div key={doc._id} className="flex justify-between items-center p-3 bg-[#FAFAF9] dark:bg-slate-800/80 border border-[#EAE4DA] dark:border-slate-700 rounded-xl">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <Icons.FileText className="w-4 h-4 text-[#111111] flex-shrink-0" />
+                              <Icons.FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                               <div className="min-w-0">
-                                <p className="text-xs font-semibold text-[#1A1A1A] truncate">{doc.name}</p>
-                                <p className="text-[10px] text-[#6B7280]">{(doc.size / 1024).toFixed(1)} KB</p>
+                                <p className="text-xs font-semibold text-[#1A1A1A] dark:text-white truncate">{doc.name}</p>
+                                <p className="text-[10px] text-[#6B7280] dark:text-slate-400">{(doc.size / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
                             <a 
                               href={`${FILE_BASE_URL}${doc.filePath}`} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="text-xs font-bold text-[#111111] hover:underline flex items-center gap-1"
+                              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                             >
                               <Icons.Download className="w-3.5 h-3.5" /> Download
                             </a>
@@ -1242,29 +1242,29 @@ export default function Dashboard() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-[#6B7280] italic">No files attached to this record.</p>
+                      <p className="text-xs text-[#6B7280] dark:text-slate-400 italic">No files attached to this record.</p>
                     )}
                   </div>
 
                   {/* Timeline Section */}
                   <div>
-                    <h4 className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                      <Icons.Clock className="w-3.5 h-3.5 text-[#111111]" /> System Activities
+                    <h4 className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                      <Icons.Clock className="w-3.5 h-3.5 text-[#111111] dark:text-slate-300" /> System Activities
                     </h4>
                     {historyActivities.length > 0 ? (
-                      <div className="relative border-l border-[#EAE4DA] ml-2 pl-4 space-y-4">
+                      <div className="relative border-l border-[#EAE4DA] dark:border-slate-800 ml-2 pl-4 space-y-4">
                         {historyActivities.map((act: any) => (
                           <div key={act._id} className="relative">
-                            <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[#111111] ring-4 ring-white" />
+                            <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-white dark:ring-slate-900" />
                             <div className="text-xs">
-                              <p className="font-semibold text-[#1A1A1A]">{act.action}</p>
+                              <p className="font-semibold text-[#1A1A1A] dark:text-white">{act.action}</p>
                               {act.details && Object.keys(act.details).length > 0 && (
-                                <p className="text-[11px] text-[#6B7280] mt-0.5">
+                                <p className="text-[11px] text-[#6B7280] dark:text-slate-400 mt-0.5">
                                   {act.details.status && `Status: ${act.details.status}`}
                                   {act.details.assignedTo && ` Assigned To: ${act.details.assignedTo}`}
                                 </p>
                               )}
-                              <p className="text-[10px] text-[#8C8C8C] mt-1">
+                              <p className="text-[10px] text-[#8C8C8C] dark:text-slate-400 mt-1">
                                 {act.performedBy ? `${act.performedBy.firstName} ${act.performedBy.lastName}` : 'System'} • {new Date(act.createdAt).toLocaleString()}
                               </p>
                             </div>
@@ -1272,7 +1272,7 @@ export default function Dashboard() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-[#6B7280] italic">No activity log found for this record.</p>
+                      <p className="text-xs text-[#6B7280] dark:text-slate-400 italic">No activity log found for this record.</p>
                     )}
                   </div>
                 </>
@@ -1280,10 +1280,10 @@ export default function Dashboard() {
             </div>
             
             {/* Modal Footer */}
-            <div className="p-4 bg-[#FAFAF9] border-t border-[#EAE4DA] flex justify-end">
+            <div className="p-4 bg-[#FAFAF9] dark:bg-slate-850 border-t border-[#EAE4DA] dark:border-slate-800 flex justify-end">
               <button 
                 onClick={() => setActiveHistoryRecord(null)}
-                className="flex items-center justify-center px-4 h-9 text-xs font-bold uppercase tracking-wider bg-[#111111] hover:bg-[#262626] text-white rounded-lg transition-all"
+                className="flex items-center justify-center px-4 h-9 text-xs font-bold uppercase tracking-wider bg-[#111111] dark:bg-indigo-600 hover:bg-[#262626] dark:hover:bg-indigo-500 text-white rounded-xl transition-all cursor-pointer"
               >
                 Close
               </button>

@@ -139,9 +139,6 @@ export default function ReportsList() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5 uppercase">
               Reports & Analysis
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-              Access executive funnels, telecaller reports, and custom visual charts.
-            </p>
           </div>
         </div>
 
