@@ -207,16 +207,16 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
     'border-indigo-500/30';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
       {/* Premium dark backdrop */}
-      <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xl" />
+      <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xl" />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-        className="relative bg-gradient-to-b from-[#12141c] to-[#0a0b0f] border border-slate-800/80 p-8 rounded-[2rem] shadow-[0_25px_60px_rgba(0,0,0,0.85)] w-full max-w-sm flex flex-col items-center overflow-hidden"
+        className="relative z-10 bg-gradient-to-b from-[#12141c] to-[#0a0b0f] border border-slate-800/80 p-6 sm:p-8 rounded-[2rem] shadow-[0_25px_60px_rgba(0,0,0,0.85)] w-full max-w-sm flex flex-col items-center overflow-hidden my-auto"
       >
         {/* Top accent glow bar */}
         <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500" />

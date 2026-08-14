@@ -242,7 +242,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
         {/* State 2: Camera Active & Scanning */}
         {!enrollmentComplete && isCameraActive && (
           <div className="text-center flex flex-col items-center">
-            <div className="relative w-72 h-72 rounded-full mb-6 overflow-hidden border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)]">
+            <div className="relative w-56 h-56 sm:w-72 sm:h-72 rounded-full mb-6 overflow-hidden border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)]">
               <video 
                 ref={videoRef}
                 autoPlay 

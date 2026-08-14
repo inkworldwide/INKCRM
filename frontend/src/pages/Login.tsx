@@ -367,12 +367,14 @@ export default function Login() {
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fdfbf7] dark:bg-[#0B0F19] px-4 py-12 relative overflow-hidden font-sans">
+    <div className="min-h-screen w-full flex flex-col justify-center items-center bg-[#fdfbf7] dark:bg-[#0B0F19] px-3.5 sm:px-4 py-6 sm:py-12 relative overflow-x-hidden overflow-y-auto font-sans">
 
       {/* Background grid & blobs */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30 pointer-events-none" />
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[55%] rounded-full bg-indigo-200/40 blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[55%] rounded-full bg-emerald-100/40 blur-[130px] pointer-events-none" />
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[55%] rounded-full bg-indigo-200/40 blur-[130px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[55%] rounded-full bg-emerald-100/40 blur-[130px]" />
+      </div>
 
       {/* Face Verification Overlay (step 3 of login) */}
       <AnimatePresence>
@@ -391,12 +393,12 @@ export default function Login() {
       {/* Face Enrollment Overlay (step 3 of registration) */}
       <AnimatePresence>
         {isSignUpTab && regStep === 'face' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" />
+          <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md" />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="relative z-10 w-full max-w-lg"
+              className="relative z-10 w-full max-w-lg my-auto"
             >
               <FaceEnrollment
                 mode="signup"
@@ -418,7 +420,7 @@ export default function Login() {
       </AnimatePresence>
 
       {/* Main Card */}
-      <div className="w-full max-w-md bg-white border border-slate-200/80 p-8 rounded-2xl shadow-xl shadow-slate-200/50 relative z-10 text-slate-800 transition-all duration-300">
+      <div className="w-full max-w-md bg-white border border-slate-200/80 p-5 sm:p-8 rounded-2xl shadow-xl shadow-slate-200/50 relative z-10 text-slate-800 transition-all duration-300 my-auto">
 
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
