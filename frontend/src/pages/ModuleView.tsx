@@ -957,6 +957,23 @@ export default function ModuleView() {
     return str;
   };
 
+  // Helper to resolve card theme color strictly matching user prompt mapping
+  const getCardThemeColor = (name: string): string => {
+    const upper = (name || '').toUpperCase();
+    if (upper.includes('HOT')) return '#0284C7';
+    if (upper.includes('WARM')) return '#F59E0B';
+    if (upper.includes('CEDIL') || upper.includes('CEBIL')) return '#E11D48';
+    if (upper.includes('DOCUMENT') || upper.includes('DOC')) return '#0284C7';
+    if (upper.includes('APPROVAL') || (upper.includes('APPROV') && upper.includes('PEND'))) return '#EA580C';
+    if (upper.includes('APPROVED')) return '#F59E0B';
+    if (upper.includes('DISBURSED') || upper.includes('DISBURS')) return '#16A34A';
+    if (upper.includes('REJECTED') || upper.includes('REJECT')) return '#E11D48';
+    if (upper.includes('FOLLOWUP') || upper.includes('FOLLOW')) return '#0284C7';
+    if (upper.includes('DROPPED')) return '#EA580C';
+    if (upper.includes('PENDING')) return '#F59E0B';
+    return '#6366F1';
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -1736,59 +1753,140 @@ export default function ModuleView() {
                         ? resolveUserDisplayName(rec.data.assignedBy) 
                         : (createdByName && createdByName !== 'System' && createdByName !== 'N/A' ? createdByName : 'System Router'));
                   const psmName = rec.data?.psmName || resolveUserDisplayName(rec.data?.psm || rec.data?.assignedTo || 'Unassigned');
+                  const statusThemeColor = getCardThemeColor(rec.data?.status || 'HOT');
 
                   return (
-                    <div key={rec._id} className="border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 bg-white dark:bg-slate-800 relative mb-6 last:mb-0 text-left shadow-sm">
-                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-green-500 rounded-t-2xl" />
+                    <div key={rec._id} className="border border-[#EAE4DA] dark:border-slate-800 rounded-2xl p-4 sm:p-6 bg-white dark:bg-slate-900 relative mb-6 last:mb-0 text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                      {/* Status-colored Top Accent Bar */}
+                      <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl" style={{ backgroundColor: statusThemeColor }} />
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-y-6 gap-x-8 text-sm mt-2">
-                        {/* Column 1 */}
-                        <div className="space-y-4">
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Sl No.:</span> <span className="text-slate-600 dark:text-slate-400">{idx + 1}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Lead No.:</span> <span className="text-slate-600 dark:text-slate-400">LND-{leadNo}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Product:</span> <span className="text-slate-600 dark:text-slate-400">{rec.data?.loanType || 'N/A'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Status:</span> <span className="text-slate-600 dark:text-slate-400 uppercase font-semibold">{rec.data?.status || 'New'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Bank Partner:</span> <span className="text-slate-600 dark:text-slate-400">{rec.data?.businessPartner || 'N/A'}</span></div>
+                      {/* True 4-Column CSS Grid - All 20 cells direct children for flawless row-to-row alignment */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 sm:gap-x-8 gap-y-4 sm:gap-y-6 text-sm mt-1">
+                        {/* --- Row 1 --- */}
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Sl No.: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{(page - 1) * (data?.pagination?.limit || 10) + idx + 1}</span>
                         </div>
 
-                        {/* Column 2 */}
-                        <div className="space-y-4">
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Lead Name:</span> <span className="text-slate-600 dark:text-slate-400 font-semibold">{leadName}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Location:</span> <span className="text-slate-600 dark:text-slate-400">{leadLocation}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Mobile No.:</span> <span className="text-slate-600 dark:text-slate-400 font-mono font-bold tracking-widest">{rec.data?.phone || 'N/A'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Amount:</span> <span className="text-emerald-700 dark:text-emerald-400 font-bold">{formattedAmount}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Case Details:</span> <span className="text-slate-600 dark:text-slate-400">{rec.data?.caseDetails || 'N/A'}</span></div>
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Lead Name: </span>
+                          <span className="text-[#1C1917] dark:text-stone-100 font-semibold">{leadName}</span>
                         </div>
 
-                        {/* Column 3 */}
-                        <div className="space-y-4">
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Created On:</span> <span className="text-slate-600 dark:text-slate-400">{formatDate(rec.createdAt)}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Created By:</span> <span className="text-slate-600 dark:text-slate-400 font-medium">{createdByName}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Followup Date:</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold">{rec.data?.followUpDate ? formatDate(rec.data.followUpDate) : 'N/A'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Pending at:</span> <span className="text-slate-600 dark:text-slate-400">{rec.data?.assignToTeam || rec.data?.pendingAt || 'SALES MANAGER'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">PSM:</span> <span className="text-slate-600 dark:text-slate-400">{psmName}</span></div>
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Created On: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{formatDate(rec.createdAt)}</span>
                         </div>
 
-                        {/* Column 4 */}
-                        <div className="space-y-4">
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Firm/Company:</span> <span className="text-slate-600 dark:text-slate-400">{rec.data?.company || 'N/A'}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Modified On:</span> <span className="text-slate-600 dark:text-slate-400">{formatDate(rec.updatedAt)}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Assigned By:</span> <span className="text-slate-600 dark:text-slate-400 font-medium">{assignedByName}</span></div>
-                          <div><span className="font-bold text-slate-700 dark:text-slate-350">Assigned To:</span> <span className="text-indigo-600 dark:text-indigo-400 font-bold">{assignedToName}</span></div>
-                          <div>
-                            <span className="font-bold text-slate-700 dark:text-slate-350">Remarks:</span> 
-                            <span className="text-slate-500 italic ml-1 text-xs">{rec.data?.notes ? rec.data.notes.replace(/<[^>]*>/g, '') : (rec.data?.dataCode || 'N/A')}</span>
-                          </div>
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Firm/Company: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{rec.data?.company || 'N/A'}</span>
+                        </div>
+
+                        {/* --- Row 2 --- */}
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Lead No.: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-mono">LND-{leadNo}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Location: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{leadLocation}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Created By: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-medium">{createdByName}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Modified On: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{formatDate(rec.updatedAt)}</span>
+                        </div>
+
+                        {/* --- Row 3 --- */}
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Product: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase">{rec.data?.loanType || 'N/A'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Mobile No.: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{rec.data?.phone || 'N/A'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug flex items-center flex-wrap gap-1">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Followup Date: </span>
+                          <span className="inline-flex items-center text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 px-2 py-0.5 rounded text-[11px] leading-tight">
+                            {rec.data?.followUpDate ? formatDate(rec.data.followUpDate) : 'N/A'}
+                          </span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Assigned By: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-medium">{assignedByName}</span>
+                        </div>
+
+                        {/* --- Row 4 --- */}
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Status: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase font-semibold">{rec.data?.status || 'NEW'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Amount: </span>
+                          <span className="text-emerald-700 dark:text-emerald-400 font-bold">{formattedAmount}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Pending at: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase">{rec.data?.assignToTeam || rec.data?.pendingAt || 'SALES MANAGER'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Assigned To: </span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-bold">{assignedToName}</span>
+                        </div>
+
+                        {/* --- Row 5 --- */}
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Bank Partner: </span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase">{rec.data?.businessPartner || rec.data?.bankPartner || 'N/A'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Case Details: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{rec.data?.caseDetails || 'N/A'}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">PSM: </span>
+                          <span className="text-[#44403C] dark:text-stone-300">{psmName}</span>
+                        </div>
+
+                        <div className="text-[13px] leading-snug">
+                          <span className="font-semibold text-[#1C1917] dark:text-stone-100">Remarks: </span>
+                          <span className="text-slate-500 dark:text-slate-400 italic text-xs">{rec.data?.notes ? rec.data.notes.replace(/<[^>]*>/g, '') : (rec.data?.dataCode || 'N/A')}</span>
                         </div>
                       </div>
 
-                      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700">
-                        <div className="mb-3 flex items-center gap-2">
-                          <span className="text-[10px] font-[800] uppercase tracking-wider px-3 py-1.5 rounded-lg border bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/30">
-                            {rec.data?.status ? rec.data.status.toUpperCase() : 'NEW'}
+                      {/* Bottom Action / Button Row */}
+                      <div className="mt-6 sm:mt-7 pt-4 sm:pt-5 border-t border-[#EAE4DA] dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="text-[10.5px] font-[800] uppercase tracking-wider px-3 py-1.5 rounded-lg border shadow-3xs flex items-center gap-1.5"
+                            style={{
+                              backgroundColor: `${statusThemeColor}12`,
+                              borderColor: `${statusThemeColor}30`,
+                              color: statusThemeColor
+                            }}
+                          >
+                            <Icons.Flame className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>{rec.data?.status ? `${rec.data.status} LEAD` : 'LEAD INFO'}</span>
                           </span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <button 
                             onClick={() => {
                               const rawPhone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num || '';
@@ -1802,9 +1900,10 @@ export default function ModuleView() {
                                 showToast('No phone number available for this lead.', 'warning');
                               }
                             }}
-                            className="bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-150 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-900/40 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer"
+                            className="h-8 px-3.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-150 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-900/40 text-[10.5px] font-bold uppercase tracking-wider rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-3xs"
                           >
-                            WA Chat
+                            <Icons.MessageCircle className="w-3.5 h-3.5" />
+                            <span>WA Chat</span>
                           </button>
                           
                           <button 
@@ -1819,27 +1918,34 @@ export default function ModuleView() {
                                 showToast('No phone number available for this lead.', 'warning');
                               }
                             }}
-                            className="bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-150 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/30 dark:hover:bg-indigo-900/40 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all duration-200 cursor-pointer"
+                            className="h-8 px-3.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-150 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/30 dark:hover:bg-indigo-900/40 text-[10.5px] font-bold uppercase tracking-wider rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-3xs"
                           >
-                            Call
+                            <Icons.Phone className="w-3.5 h-3.5" />
+                            <span>Call</span>
                           </button>
                           
                           <button 
                             onClick={() => handleUploadClick(rec._id)}
-                            className="bg-amber-50 hover:bg-amber-100 active:bg-amber-150 text-amber-700 border border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-900/40 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all duration-200"
+                            className="h-8 px-3.5 bg-amber-50 hover:bg-amber-100 active:bg-amber-150 text-amber-700 border border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-900/40 text-[10.5px] font-bold uppercase tracking-wider rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-3xs"
                           >
-                            Upload File
+                            <Icons.Upload className="w-3.5 h-3.5" />
+                            <span>Upload File</span>
                           </button>
                           
-                          <Link to={`/modules/leads/${rec._id}`} className="bg-cyan-50 hover:bg-cyan-100 active:bg-cyan-150 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/20 dark:text-cyan-400 dark:border-cyan-900/30 dark:hover:bg-cyan-900/40 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all duration-200">
-                            Edit
+                          <Link 
+                            to={`/modules/leads/${rec._id}`} 
+                            className="h-8 px-3.5 bg-cyan-50 hover:bg-cyan-100 active:bg-cyan-150 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/20 dark:text-cyan-400 dark:border-cyan-900/30 dark:hover:bg-cyan-900/40 text-[10.5px] font-bold uppercase tracking-wider rounded-lg transition-all duration-150 flex items-center gap-1.5 shadow-3xs"
+                          >
+                            <Icons.SquarePen className="w-3.5 h-3.5" />
+                            <span>Edit</span>
                           </Link>
-                          
+
                           <button 
                             onClick={() => openHistory(rec)}
-                            className="bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-600 border border-slate-200 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700/60 dark:hover:bg-slate-700/80 text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg transition-all duration-200"
+                            className="h-8 px-3.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700/60 dark:hover:bg-slate-700/80 text-[10.5px] font-bold uppercase tracking-wider rounded-lg transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-3xs"
                           >
-                            History
+                            <Icons.History className="w-3.5 h-3.5" />
+                            <span>History</span>
                           </button>
                         </div>
                       </div>
