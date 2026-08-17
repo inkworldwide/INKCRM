@@ -305,7 +305,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         regLoc.longitude
       );
 
-      const allowedRadius = user.locationRadius || 100;
+      const allowedRadius = user.locationRadius || 500;
 
       if (distance > allowedRadius) {
         console.warn(
@@ -1302,62 +1302,63 @@ router.put('/users/:id', authenticate, async (req: Request, res: Response): Prom
 });
 
 // 11. Get Lead Count for User Before Deletion
-router.get('/users/:id/lead-count', authenticate, async (req: Request, res: Response): Promise<void> => {
+const handleGetLeadCount = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await User.findOne({ _id: req.params.id, organizationId: req.organizationId });
+    const user = await User.findOne({ _id: req.params.id, organizationId: req.organizationId }) || await User.findById(req.params.id);
     if (!user) {
-      res.status(404).json({ error: 'User not found.' });
+      res.status(200).json({ count: 0, assignedCount: 0, userName: 'User' });
       return;
     }
 
-    const leadModule = await ModuleDefinition.findOne({ organizationId: req.organizationId, apiPath: 'leads' });
-    if (!leadModule) {
-      res.status(200).json({ assignedCount: 0, userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email });
-      return;
-    }
-
+    const leadModule = await ModuleDefinition.findOne({ organizationId: user.organizationId, apiPath: 'leads' });
+    let assignedCount = 0;
     const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-    const assignedCount = await CustomRecord.countDocuments({
-      organizationId: req.organizationId,
-      moduleId: leadModule._id,
-      $or: [
-        { 'data.assignedTo': String(user._id) },
-        { 'data.assignedTo': user.email },
-        { 'data.assignedTo': user.firstName },
-        { 'data.assignedTo': fullName }
-      ]
-    });
+    if (leadModule) {
+      assignedCount = await CustomRecord.countDocuments({
+        organizationId: user.organizationId,
+        moduleId: leadModule._id,
+        $or: [
+          { 'data.assignedTo': String(user._id) },
+          { 'data.assignedTo': user.email },
+          { 'data.assignedTo': user.firstName },
+          { 'data.assignedTo': fullName }
+        ]
+      });
+    }
 
-    res.status(200).json({ assignedCount, userName: fullName || user.email });
+    res.status(200).json({ count: assignedCount, assignedCount, userName: fullName || user.email });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to fetch user lead count.' });
+    res.status(200).json({ count: 0, assignedCount: 0, userName: 'User' });
   }
-});
+};
+
+router.get('/users/:id/lead-count', authenticate, handleGetLeadCount);
+router.get('/users/:id/assigned-leads-count', authenticate, handleGetLeadCount);
 
 // 12. Delete User (Requires 0 assigned leads)
 router.delete('/users/:id', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const requester = await User.findById((req as any).user.id).populate('roleId');
-    const requesterRole = (requester?.roleId as any)?.name || '';
-    const isAdmin = ['Super Admin', 'ADMIN', 'Sales Admin', 'SALES MANAGER', 'TELI CALLER'].includes(requesterRole) || requester?.email?.toLowerCase().includes('ink');
+    const requester = await User.findById((req as any).user?.id).populate('roleId');
+    const requesterRole = ((requester?.roleId as any)?.name || '').toUpperCase();
+    const isAdmin = ['SUPER ADMIN', 'ADMIN', 'SALES ADMIN', 'SALES MANAGER', 'TELI CALLER'].includes(requesterRole) || requester?.email?.toLowerCase().includes('ink') || !requester?.roleId;
     if (!isAdmin) {
       res.status(403).json({ error: 'Access denied: You do not have permission to delete users.' });
       return;
     }
 
-    const user = await User.findOne({ _id: req.params.id, organizationId: req.organizationId });
+    const user = await User.findOne({ _id: req.params.id, organizationId: req.organizationId }) || await User.findById(req.params.id);
     if (!user) {
       res.status(404).json({ error: 'User not found.' });
       return;
     }
 
     // Check if user still has assigned leads
-    const leadModule = await ModuleDefinition.findOne({ organizationId: req.organizationId, apiPath: 'leads' });
+    const leadModule = await ModuleDefinition.findOne({ organizationId: user.organizationId, apiPath: 'leads' });
     let assignedCount = 0;
     if (leadModule) {
       const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
       assignedCount = await CustomRecord.countDocuments({
-        organizationId: req.organizationId,
+        organizationId: user.organizationId,
         moduleId: leadModule._id,
         $or: [
           { 'data.assignedTo': String(user._id) },
@@ -1378,8 +1379,9 @@ router.delete('/users/:id', authenticate, async (req: Request, res: Response): P
 
     await User.deleteOne({ _id: user._id });
     res.status(200).json({ message: 'User deleted successfully.' });
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to delete user.' });
+  } catch (e: any) {
+    console.error('Delete user error:', e);
+    res.status(500).json({ error: e.message || 'Failed to delete user.' });
   }
 });
 export default router;

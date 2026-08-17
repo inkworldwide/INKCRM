@@ -77,6 +77,35 @@
   background: rgba(255, 255, 255, 0.28);
 }
 
+/* High-Visibility Custom Scrollbar for Data Tables */
+.custom-visible-scrollbar::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+.custom-visible-scrollbar::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.9);
+  border-radius: 6px;
+}
+.dark .custom-visible-scrollbar::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.9);
+  border-radius: 6px;
+}
+.custom-visible-scrollbar::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+  border-radius: 6px;
+  border: 1.5px solid #F1F5F9;
+}
+.custom-visible-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+.dark .custom-visible-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border: 1.5px solid #1E293B;
+}
+.dark .custom-visible-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
 /* Lightweight Clean Shimmer for loading states */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

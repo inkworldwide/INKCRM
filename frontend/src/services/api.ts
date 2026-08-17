@@ -70,17 +70,6 @@ api.interceptors.response.use(
           window.location.href = '/login';
         }
       }
-    } else if (
-      error.response?.status === 404 && originalRequest.url?.includes('/auth/')
-    ) {
-      // User/role/tenant context invalid — log out
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('tenantId');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
     }
 
     return Promise.reject(error);

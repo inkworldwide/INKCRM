@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import * as faceapi from 'face-api.js';
-import { Camera, ShieldCheck, Trash2, Loader2, XCircle, CheckCircle } from 'lucide-react';
+import { Camera, ShieldCheck, Trash2, Loader2, XCircle, CheckCircle, Upload } from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import { loadFaceApiModels } from '../utils/faceModelLoader';
@@ -58,17 +58,29 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
     };
   }, []);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const startCamera = async () => {
     setError('');
-    setStatus('Initializing camera...');
+    setStatus('Initializing front camera...');
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('getUserMedia is not supported in this browser.');
+        throw new Error('getUserMedia is not supported in this browser. Please use the Upload Photo option below or use HTTPS.');
       }
-      const stream = await Promise.race([
-        navigator.mediaDevices.getUserMedia({ video: true }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Camera request timed out. Do you have a webcam connected?')), 8000))
-      ]) as MediaStream;
+      
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        });
+      } catch {
+        // Fallback to basic video constraint if specific facingMode fails
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
       
       setIsCameraActive(true);
       
@@ -86,7 +98,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
       }, 100);
     } catch (err: any) {
       console.error('Camera Error:', err);
-      setError(err.message || 'Camera access denied or unavailable.');
+      setError(err.message || 'Camera access denied or unavailable. You can upload a selfie photo instead.');
       setStatus('');
     }
   };
@@ -103,6 +115,51 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError('');
+    setStatus('Analyzing uploaded photo for face features...');
+    try {
+      if (!isModelLoaded) {
+        await initModels();
+      }
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+      });
+
+      const detection = await faceapi
+        .detectSingleFace(img)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!detection) {
+        setError('No clear face detected in the photo. Please upload a clear front-facing selfie.');
+        setStatus('');
+        return;
+      }
+
+      if (detection.detection.score < 0.60) {
+        setError('Face image is not clear enough. Please provide a well-lit front-facing photo.');
+        setStatus('');
+        return;
+      }
+
+      setProgress(100);
+      setStatus('Face detected successfully from photo!');
+      finishEnrollment([detection.descriptor]);
+    } catch (err: any) {
+      console.error('Photo enrollment error:', err);
+      setError('Failed to process image file. Please try a different photo or camera.');
+      setStatus('');
+    }
+  };
+
   const handleVideoPlay = () => {
     if (enrollmentComplete) return;
 
@@ -113,47 +170,51 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
     detectionIntervalRef.current = setInterval(async () => {
       if (!videoRef.current || !isModelLoaded || enrollmentComplete) return;
       
-      const detections = await faceapi.detectAllFaces(videoRef.current)
-        .withFaceLandmarks()
-        .withFaceDescriptors();
+      try {
+        const detections = await faceapi.detectAllFaces(videoRef.current)
+          .withFaceLandmarks()
+          .withFaceDescriptors();
 
-      if (detections.length === 1) {
-        const detection = detections[0];
-        
-        // Strict quality enforcement
-        if (detection.detection.score < 0.85) {
-          setStatus('Face detected but unclear. Please improve lighting and look straight.');
-          return;
-        }
-
-        // Collect descriptors over a few frames to average out noise
-        descriptorsRef.current.push(detection.descriptor);
-        const count = descriptorsRef.current.length;
-        const newProgress = Math.min((count / 4) * 100, 100);
-        setProgress(newProgress);
-        
-        if (count === 4) {
-          if (detectionIntervalRef.current) {
-            clearInterval(detectionIntervalRef.current);
-            detectionIntervalRef.current = null;
+        if (detections.length === 1) {
+          const detection = detections[0];
+          
+          // Quality threshold
+          if (detection.detection.score < 0.65) {
+            setStatus('Face detected. Please hold still and look straight...');
+            return;
           }
-          finishEnrollment(descriptorsRef.current);
+
+          // Collect 2 descriptors to average
+          descriptorsRef.current.push(detection.descriptor);
+          const count = descriptorsRef.current.length;
+          const newProgress = Math.min((count / 2) * 100, 100);
+          setProgress(newProgress);
+          
+          if (count >= 2) {
+            if (detectionIntervalRef.current) {
+              clearInterval(detectionIntervalRef.current);
+              detectionIntervalRef.current = null;
+            }
+            finishEnrollment(descriptorsRef.current);
+          }
+        } else if (detections.length > 1) {
+          setStatus('Multiple faces detected! Only one face is allowed.');
+          descriptorsRef.current = [];
+          setProgress(0);
+        } else {
+          setStatus('No face detected. Center your face.');
         }
-      } else if (detections.length > 1) {
-        setStatus('Multiple faces detected! Only one face is allowed.');
-        descriptorsRef.current = [];
-        setProgress(0);
-      } else {
-        setStatus('No face detected. Center your face.');
+      } catch (err) {
+        console.warn('Face detection frame error:', err);
       }
-    }, 100);
+    }, 150);
   };
 
   const finishEnrollment = async (collectedDescriptors: Float32Array[]) => {
     setStatus('Finalizing mathematical facial mapping...');
     stopCamera();
 
-    // Average the 4 descriptors for a more robust embedding
+    // Average collected descriptors for a robust embedding
     const averagedDescriptor = new Float32Array(128);
     for (let i = 0; i < 128; i++) {
       let sum = 0;
@@ -307,6 +368,26 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
               >
                 {isModelLoading || !isModelLoaded ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
                 {isModelLoaded ? 'Start Camera & Scan Face' : isModelLoading ? 'Loading AI Models...' : 'AI Models Not Ready'}
+              </button>
+
+              {/* Photo Upload alternative (works on all devices/browsers without camera permissions) */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="user"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!isModelLoaded || isModelLoading}
+                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4 text-indigo-500" />
+                <span>Upload Selfie Photo / Snapshot</span>
               </button>
 
               {/* Onboarding / Signup mode: Allow skip if models or camera cannot load */}

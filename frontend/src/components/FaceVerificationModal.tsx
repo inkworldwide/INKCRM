@@ -132,8 +132,8 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
           return;
         }
 
-        if (detection.detection.score < 0.82) {
-          setStatusMsg('Face detected but unclear. Improve lighting and look straight.');
+        if (detection.detection.score < 0.65) {
+          setStatusMsg('Face detected. Please hold still and look straight...');
           setScanProgress(10);
           return;
         }
