@@ -156,11 +156,10 @@ const UserSchema = new Schema<IUser>(
     reportingManager: { type: Schema.Types.ObjectId, ref: 'User' },
     department: { type: String, trim: true }
   },
-  { timestamps: true }
+  { timestamps: true, versionKey: false }
 );
 
 // Indexes
-UserSchema.index({ email: 1 });
 UserSchema.index({ organizationId: 1 });
 
 export default mongoose.model<IUser>('User', UserSchema);

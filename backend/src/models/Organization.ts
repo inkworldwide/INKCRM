@@ -106,10 +106,7 @@ const OrganizationSchema = new Schema<IOrganization>(
       expiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }
     }
   },
-  { timestamps: true }
+  { timestamps: true, versionKey: false }
 );
-
-// Indexes
-OrganizationSchema.index({ subdomain: 1 });
 
 export default mongoose.model<IOrganization>('Organization', OrganizationSchema);

@@ -322,8 +322,6 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    await user.save();
-
     // ── Step 3: Issue face MFA temp token (always required if enrolled) ──────
     if (user.faceRecognition?.enabled && user.faceRecognition.encryptedEmbedding && !user.skipFace) {
       let isMock = false;
