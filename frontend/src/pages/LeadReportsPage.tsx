@@ -333,25 +333,21 @@ export default function LeadReportsPage() {
                 {filteredLeads.map((item, idx) => {
                   const data = item.data || {};
                   
-                  // Clean realistic client name resolver
-                  const rawName = [data.firstName, data.lastName].filter(Boolean).join(' ') || data.fullName || data.name || data.companyName || data.company;
-                  const fallbackNames = ['Rahul Sharma', 'Ananya Patel', 'Vikram Malhotra', 'Priya Nair', 'Amitabh Roy', 'Siddharth Rao', 'Neha Deshmukh', 'Karan Sengupta'];
-                  const name = (rawName && !rawName.toLowerCase().includes('hotlead') && !rawName.toLowerCase().includes('lead #')) 
-                    ? rawName 
-                    : fallbackNames[idx % fallbackNames.length];
+                  // Client name resolver
+                  const rawName = [data.firstName, data.lastName].filter(Boolean).join(' ') || data.customerName || data.customer || data.fullName || data.name || data.companyName || data.company;
+                  const name = rawName || 'N/A';
 
-                  // Clean realistic contact info
+                  // Contact info resolver
+                  const rawPhone = data.phone || data.mobile || data.contactNum || data.contact_num || data.contact || data['CONTACT NUM'] || data['contact num'] || data.phoneNumber || data.mobileNo || '';
+                  const phone = rawPhone || 'N/A';
+
                   const rawEmail = data.email || '';
-                  const email = (rawEmail && !rawEmail.includes('@test.com'))
-                    ? rawEmail
-                    : `${name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`;
+                  const email = rawEmail || 'N/A';
 
-                  const phone = data.phone || data.mobile || `+91 98${76543210 + (idx * 137) % 8999999}`;
-
-                  const loanType = data.loanType || data.serviceType || data.product || 'SALARIED PERSONAL LOAN';
+                  const loanType = data.loanType || data.leadCategory || data.serviceType || data.product || 'SALARIED PERSONAL LOAN';
                   const status = data.status || 'New';
-                  const amount = data.amount || data.loanAmount || (250000 + (idx * 50000) % 500000);
-                  const agent = item.assignedTo?.name || data.assignedTo || data.psm || data.telecaller || 'Rajabaksh Ilyala';
+                  const amount = data.amount || data.loanAmount || data.budget || 'N/A';
+                  const agent = item.assignedTo?.name || data.assignedTo || data.assignedToName || data.psm || data.telecaller || 'Unassigned';
 
                   // Format created date period
                   const dateObj = item.createdAt ? new Date(item.createdAt) : new Date();

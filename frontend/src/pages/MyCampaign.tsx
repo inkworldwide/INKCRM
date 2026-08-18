@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import * as Icons from 'lucide-react';
-import { exportCampaignCSV } from '../utils/exportCampaignCSV';
+import { exportCampaignCSV, exportCampaignXLSX } from '../utils/exportCampaignCSV';
+import { TableHorizontalScrollWrapper } from '../components/TableHorizontalScrollWrapper';
 
 interface CampaignStats {
   campaignName: string;
@@ -41,6 +42,110 @@ const CAMPAIGN_STATUSES = [
   'No Business',
   'Not Reachable'
 ];
+
+// Universal fuzzy case-insensitive field extractor for Excel imports and custom records
+export const getLeadFieldValue = (data: Record<string, any> | undefined, targetKeys: string[], containsKeys: string[] = []): string => {
+  if (!data || typeof data !== 'object') return '';
+  
+  // 1. Direct exact or lowercase match
+  for (const k of targetKeys) {
+    if (data[k] !== undefined && data[k] !== null) {
+      const val = String(data[k]).trim();
+      if (val !== '' && val !== 'N/A' && val !== 'Unnamed') {
+        return val;
+      }
+    }
+  }
+
+  const normKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedTargets = targetKeys.map(normKey);
+  const keys = Object.keys(data);
+
+  // 2. Normalized alphanumeric match
+  for (const k of keys) {
+    const nk = normKey(k);
+    if (normalizedTargets.includes(nk)) {
+      const val = data[k];
+      if (val !== undefined && val !== null) {
+        const sVal = String(val).trim();
+        if (sVal !== '' && sVal !== 'N/A' && sVal !== 'Unnamed') {
+          return sVal;
+        }
+      }
+    }
+  }
+
+  // 3. Substring match
+  if (containsKeys.length > 0) {
+    const normalizedContains = containsKeys.map(normKey);
+    for (const k of keys) {
+      const nk = normKey(k);
+      if (normalizedContains.some(c => nk.includes(c))) {
+        const val = data[k];
+        if (val !== undefined && val !== null) {
+          const sVal = String(val).trim();
+          if (sVal !== '' && sVal !== 'N/A' && sVal !== 'Unnamed') {
+            return sVal;
+          }
+        }
+      }
+    }
+  }
+
+  return '';
+};
+
+export const getLeadPhone = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum', 'callNo', 'whatsappNo', 'phone1', 'phone2'],
+    ['phone', 'mobile', 'contact', 'cell', 'tele']
+  );
+};
+
+export const getLeadCustomer = (data: any): string => {
+  const fullName = `${data?.firstName || ''} ${data?.lastName || ''}`.trim();
+  if (fullName && fullName !== 'Unnamed' && fullName !== '') return fullName;
+  const found = getLeadFieldValue(
+    data,
+    ['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName'],
+    ['customer', 'client']
+  );
+  return found || 'Unnamed';
+};
+
+export const getLeadLocation = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch'],
+    ['location', 'city', 'district', 'address']
+  ) || 'N/A';
+};
+
+export const getLeadFirmName = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization'],
+    ['firm', 'company', 'agency', 'business', 'treader', 'trader']
+  ) || 'N/A';
+};
+
+export const getLeadCategory = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType'],
+    ['category', 'loantype']
+  ) || 'N/A';
+};
+
+export const getLeadDataCode = (lead: any): string => {
+  const code = getLeadFieldValue(
+    lead.data,
+    ['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id'],
+    ['datacode', 'leadcode']
+  );
+  return code || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
+};
 
 export default function MyCampaign() {
   const navigate = useNavigate();
@@ -119,7 +224,7 @@ export default function MyCampaign() {
 
   const handleDownloadCampaign = async (campaignName: string, campaignLeads?: LeadRecord[]) => {
     try {
-      showToast('Exporting campaign CSV report...', 'info');
+      showToast('Exporting Campaign Excel Report...', 'info');
       let targetLeads = campaignLeads && campaignLeads.length > 0 ? campaignLeads : undefined;
       
       if (!targetLeads) {
@@ -132,32 +237,27 @@ export default function MyCampaign() {
         return;
       }
 
-      // Generate CSV rows
-      const headers = ['Sl No', 'Data Code', 'Location', 'Customer', 'Firm Name', 'Contact Number', 'Case Details', 'Lead Category', 'Remarks', 'Agent Assigned To', 'Dial Status', 'Created At'];
-      const rows = targetLeads.map((lead, idx) => [
-        idx + 1,
-        lead.data?.dataCode || lead.data?.data_code || `LND-${lead._id.slice(-6).toUpperCase()}`,
-        lead.data?.city || lead.data?.location || 'N/A',
-        `${lead.data?.firstName || ''} ${lead.data?.lastName || ''}`.trim() || lead.data?.customerName || lead.data?.customer || 'N/A',
-        lead.data?.company || lead.data?.firmName || lead.data?.firm_name || 'N/A',
-        lead.data?.phone || lead.data?.mobile || lead.data?.name_contact_num || 'N/A',
-        leadStates[lead._id]?.caseDetails ?? lead.data?.caseDetails ?? 'N/A',
-        lead.data?.leadCategory || lead.data?.lead_category || lead.data?.loanType || 'N/A',
-        (leadStates[lead._id]?.remarks ?? lead.data?.notes ?? '').toString().replace(/<[^>]*>/g, ''),
-        lead.data?.assignedTo || (lead as any).assignedToName || 'Unassigned',
-        leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call',
-        new Date(lead.createdAt).toLocaleDateString()
-      ]);
+      // Merge current live UI edits into data if available
+      const enrichedLeads = targetLeads.map(lead => {
+        const liveState = leadStates[lead._id];
+        if (liveState) {
+          return {
+            ...lead,
+            data: {
+              ...lead.data,
+              status: liveState.status || lead.data?.status,
+              dialStatus: liveState.status || lead.data?.dialStatus,
+              notes: liveState.remarks !== undefined ? liveState.remarks : lead.data?.notes,
+              remarks: liveState.remarks !== undefined ? liveState.remarks : lead.data?.remarks,
+              caseDetails: liveState.caseDetails !== undefined ? liveState.caseDetails : lead.data?.caseDetails
+            }
+          };
+        }
+        return lead;
+      });
 
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `${campaignName.replace(/\s+/g, '_')}_Leads_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Campaign exported successfully!', 'success');
+      exportCampaignXLSX(campaignName, enrichedLeads);
+      showToast(`Exported ${enrichedLeads.length} leads to Excel!`, 'success');
     } catch (err) {
       console.error(err);
       showToast('Failed to export campaign report.', 'error');
@@ -216,17 +316,17 @@ export default function MyCampaign() {
       // 5. If "Hot Lead" or "Warm Lead" selected, navigate to Create Lead page with pre-populated data
       if (newStatus === 'Hot Lead' || newStatus === 'Warm Lead') {
         const passedStatus = newStatus === 'Hot Lead' ? 'Hot' : 'Warm';
-        const phoneVal = lead.data?.phone || lead.data?.mobile || lead.data?.name_contact_num || '';
+        const phoneVal = getLeadPhone(lead.data);
         
         navigate('/modules/leads/new', {
           state: {
             ...lead.data,
-            firstName: lead.data?.firstName || lead.data?.costomer || lead.data?.customer || '',
-            lastName: lead.data?.lastName || '',
+            firstName: getLeadCustomer(lead.data),
+            lastName: '',
             phone: phoneVal,
-            company: lead.data?.company || lead.data?.firm_name || '',
-            city: lead.data?.city || lead.data?.location || '',
-            dataCode: lead.data?.dataCode || lead.data?.data_code || '',
+            company: getLeadFirmName(lead.data),
+            city: getLeadLocation(lead.data),
+            dataCode: getLeadDataCode(lead),
             status: passedStatus,
             notes: currentRemarks,
             caseDetails: currentCaseDetails,
@@ -241,7 +341,7 @@ export default function MyCampaign() {
   };
 
   const handleWhatsAppChat = (lead: LeadRecord) => {
-    const rawPhone = lead.data?.phone || lead.data?.mobile || lead.data?.contactNumber || lead.data?.contactNum || lead.data?.mobileNo || lead.data?.contact_num || '';
+    const rawPhone = getLeadPhone(lead.data);
     let cleanPhone = String(rawPhone).replace(/\D/g, '').trim();
     if (!cleanPhone) {
       showToast('No phone number available for this lead.', 'warning');
@@ -254,13 +354,13 @@ export default function MyCampaign() {
   };
 
   const handleInitiateCall = async (lead: LeadRecord) => {
-    const rawPhone = lead.data?.phone || lead.data?.mobile || lead.data?.contactNumber || lead.data?.contactNum || lead.data?.mobileNo || lead.data?.contact_num || '';
+    const rawPhone = getLeadPhone(lead.data);
     const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
     if (!cleanPhone) {
       showToast('No phone number available for this lead.', 'warning');
       return;
     }
-    const leadName = `${lead.data?.firstName || ''} ${lead.data?.lastName || ''}`.trim() || lead.data?.fullName || lead.data?.customerName || lead.data?.name || 'Lead';
+    const leadName = getLeadCustomer(lead.data) || getLeadFirmName(lead.data) || 'Lead';
     showToast(`Calling ${leadName} (${cleanPhone})...`, 'info');
 
     // Track dial activity
@@ -590,8 +690,8 @@ export default function MyCampaign() {
                 onClick={() => handleDownloadCampaign(activeCampaign.campaignName, leads)}
                 className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider active:scale-95"
               >
-                <Icons.Download className="w-3.5 h-3.5" />
-                Export CSV
+                <Icons.FileSpreadsheet className="w-3.5 h-3.5" />
+                Export Excel
               </button>
               {(() => {
                 const pct = activeCampaign.totalAssigned > 0 
@@ -656,9 +756,11 @@ export default function MyCampaign() {
               <p className="font-bold">No leads found in this campaign.</p>
             </div>
           ) : viewMode === 'table' ? (
-            /* 12-COLUMN CAMPAIGN DATA TABLE VIEW (EXACT USER SPECIFICATION) */
-            <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto max-h-[75vh]">
+            /* 12-COLUMN CAMPAIGN DATA TABLE VIEW (EXACT USER SPECIFICATION WITH INTERACTIVE SCROLLER) */
+            <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500" />
+              
+              <TableHorizontalScrollWrapper maxHeight="70vh">
                 <table className="w-full text-left text-xs border-collapse min-w-[1300px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-[#17223B] text-white font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-800 shadow-xs">
@@ -678,12 +780,12 @@ export default function MyCampaign() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-200">
                     {leads.map((lead, idx) => {
-                      const dataCode = lead.data?.dataCode || lead.data?.data_code || lead.data?.code || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
-                      const location = lead.data?.city || lead.data?.location || 'N/A';
-                      const customer = `${lead.data?.firstName || ''} ${lead.data?.lastName || ''}`.trim() || lead.data?.customerName || lead.data?.customer || 'N/A';
-                      const firmName = lead.data?.company || lead.data?.firmName || lead.data?.firm_name || 'N/A';
-                      const phoneVal = lead.data?.phone || lead.data?.mobile || lead.data?.name_contact_num || 'N/A';
-                      const leadCategory = lead.data?.leadCategory || lead.data?.lead_category || lead.data?.loanType || 'N/A';
+                      const dataCode = getLeadDataCode(lead);
+                      const location = getLeadLocation(lead.data);
+                      const customer = getLeadCustomer(lead.data);
+                      const firmName = getLeadFirmName(lead.data);
+                      const phoneVal = getLeadPhone(lead.data) || 'N/A';
+                      const leadCategory = getLeadCategory(lead.data);
                       const agentAssigned = lead.data?.assignedTo || (lead as any).assignedToName || 'Unassigned';
                       
                       const dialStatus = leadStates[lead._id]?.status || lead.data?.status || 'Not Called';
@@ -731,7 +833,7 @@ export default function MyCampaign() {
                               <div className="flex gap-1">
                                 <button
                                   onClick={() => handleWhatsAppChat(lead)}
-                                  className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold rounded flex items-center gap-1 transition-all"
+                                  className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer"
                                   title="WhatsApp Chat"
                                 >
                                   <Icons.MessageSquare className="w-3 h-3 text-emerald-600" />
@@ -739,7 +841,7 @@ export default function MyCampaign() {
                                 </button>
                                 <button
                                   onClick={() => handleInitiateCall(lead)}
-                                  className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-bold rounded flex items-center gap-1 transition-all"
+                                  className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-bold rounded flex items-center gap-1 transition-all cursor-pointer"
                                   title="Initiate Call"
                                 >
                                   <Icons.PhoneCall className="w-3 h-3 text-blue-600" />
@@ -754,7 +856,7 @@ export default function MyCampaign() {
                             <input
                               type="text"
                               placeholder="Case Details"
-                              value={leadStates[lead._id]?.caseDetails ?? ''}
+                              value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
                               onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
                               onBlur={() => handleSaveLead(lead._id)}
                               className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-600"
@@ -769,7 +871,7 @@ export default function MyCampaign() {
                             <input
                               type="text"
                               placeholder="Remarks / Notes"
-                              value={(leadStates[lead._id]?.remarks ?? '').replace(/<[^>]*>/g, '')}
+                              value={(leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')).replace(/<[^>]*>/g, '')}
                               onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
                               onBlur={() => handleSaveLead(lead._id)}
                               className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-600"
@@ -782,7 +884,7 @@ export default function MyCampaign() {
                           {/* 11. Dial Status */}
                           <td className="py-2 px-2 border-r border-slate-100 dark:border-slate-800">
                             <select
-                              value={leadStates[lead._id]?.status || 'Yet To Call'}
+                              value={leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call'}
                               onChange={(e) => handleStatusSelect(lead, e.target.value)}
                               className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white cursor-pointer"
                             >
@@ -799,126 +901,136 @@ export default function MyCampaign() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableHorizontalScrollWrapper>
             </div>
           ) : (
             /* CARD VIEW */
             <div className="space-y-5">
-              {leads.map((lead) => (
-                <div 
-                  key={lead._id}
-                  className="bg-white dark:bg-[#111827] rounded-2xl border-l-[4px] border-l-[#17223B] dark:border-l-indigo-500 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs hover:shadow-md transition-all duration-200 space-y-4"
-                >
-                  {/* Lead Row 1 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                    <div>
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Allocated No.</span>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">**********</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Lead Name</span>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">
-                        {`${lead.data?.firstName || ''} ${lead.data?.lastName || ''}`.trim() || 'N/A'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">FirmName</span>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                        {lead.data?.company || 'N/A'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</span>
-                      <select 
-                        value={leadStates[lead._id]?.status || 'Yet To Call'}
-                        onChange={(e) => handleStatusSelect(lead, e.target.value)}
-                        className="w-full text-xs font-bold bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-800 dark:text-white shadow-xs transition-all cursor-pointer"
-                      >
-                        {CAMPAIGN_STATUSES.map(statusOpt => (
-                          <option key={statusOpt} value={statusOpt}>{statusOpt}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+              {leads.map((lead) => {
+                const customer = getLeadCustomer(lead.data);
+                const firmName = getLeadFirmName(lead.data);
+                const location = getLeadLocation(lead.data);
+                const phoneVal = getLeadPhone(lead.data);
+                const dataCode = getLeadDataCode(lead);
 
-                  {/* Lead Row 2 */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <div className="md:col-span-1">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Remarks:</label>
-                      <textarea 
-                        value={leadStates[lead._id]?.remarks ?? ''}
-                        onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
-                        rows={2}
-                        className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-1">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Case Details:</label>
-                      <textarea 
-                        placeholder="case Details"
-                        value={leadStates[lead._id]?.caseDetails ?? ''}
-                        onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
-                        rows={2}
-                        className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
-                      />
-                    </div>
-
-                    <div className="md:col-span-1 flex flex-col justify-between">
+                return (
+                  <div 
+                    key={lead._id}
+                    className="bg-white dark:bg-[#111827] rounded-2xl border-l-[4px] border-l-[#17223B] dark:border-l-indigo-500 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs hover:shadow-md transition-all duration-200 space-y-4"
+                  >
+                    {/* Lead Row 1 */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location </span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white uppercase ml-1">
-                          {lead.data?.city || lead.data?.location || 'N/A'}
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
+                          {phoneVal || 'N/A'}
                         </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer Name</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          {customer}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Firm Name</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
+                          {firmName}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</span>
+                        <select 
+                          value={leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call'}
+                          onChange={(e) => handleStatusSelect(lead, e.target.value)}
+                          className="w-full text-xs font-bold bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-800 dark:text-white shadow-xs transition-all cursor-pointer"
+                        >
+                          {CAMPAIGN_STATUSES.map(statusOpt => (
+                            <option key={statusOpt} value={statusOpt}>{statusOpt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Lead Row 2 */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                      <div className="md:col-span-1">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Remarks:</label>
+                        <textarea 
+                          value={leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')}
+                          onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
+                          rows={2}
+                          className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
+                        />
                       </div>
                       
-                      <div className="flex gap-1.5 mt-2 flex-wrap sm:flex-nowrap">
-                        <button 
-                          onClick={() => handleWhatsAppChat(lead)}
-                          className="flex-1 py-2 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                          title="Open WhatsApp Chat"
-                        >
-                          <Icons.MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          WA Chat
-                        </button>
-                        <button 
-                          onClick={() => handleInitiateCall(lead)}
-                          className="flex-1 py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                          title="Initiate Call"
-                        >
-                          <Icons.PhoneCall className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                          Call
-                        </button>
-                        <button 
-                          onClick={() => handleSaveLead(lead._id)}
-                          className="flex-1 py-2 px-2 bg-[#17223B] hover:bg-[#223050] text-white text-[11px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                          title="Save Lead Update"
-                        >
-                          <Icons.Save className="w-3.5 h-3.5 text-white" />
-                          Save
-                        </button>
-                        <button 
-                          onClick={() => navigate(`/modules/leads/${lead._id}`)}
-                          className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                          title="Edit Lead Details"
-                        >
-                          <Icons.Edit className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                          Edit
-                        </button>
+                      <div className="md:col-span-1">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Case Details:</label>
+                        <textarea 
+                          placeholder="case Details"
+                          value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
+                          onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
+                          rows={2}
+                          className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
+                        />
                       </div>
-                    </div>
 
-                    <div className="md:col-span-1 flex items-start">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data Code </span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white ml-1">
-                          {lead.data?.dataCode || lead.data?.source || 'N/A'}
-                        </span>
+                      <div className="md:col-span-1 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location: </span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white uppercase ml-1">
+                            {location}
+                          </span>
+                        </div>
+                        
+                        <div className="flex gap-1.5 mt-2 flex-wrap sm:flex-nowrap">
+                          <button 
+                            onClick={() => handleWhatsAppChat(lead)}
+                            className="flex-1 py-2 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                            title="Open WhatsApp Chat"
+                          >
+                            <Icons.MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            WA Chat
+                          </button>
+                          <button 
+                            onClick={() => handleInitiateCall(lead)}
+                            className="flex-1 py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                            title="Initiate Call"
+                          >
+                            <Icons.PhoneCall className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                            Call
+                          </button>
+                          <button 
+                            onClick={() => handleSaveLead(lead._id)}
+                            className="flex-1 py-2 px-2 bg-[#17223B] hover:bg-[#223050] text-white text-[11px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                            title="Save Lead Update"
+                          >
+                            <Icons.Save className="w-3.5 h-3.5 text-white" />
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => navigate(`/modules/leads/${lead._id}`)}
+                            className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                            title="Edit Lead Details"
+                          >
+                            <Icons.Edit className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-1 flex items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data Code: </span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white ml-1">
+                            {dataCode}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

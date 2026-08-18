@@ -11,8 +11,11 @@ out/
 .nuxt/
 .cache/
 
-# Local env files
+# Local env files (NEVER COMMIT PRODUCTION CREDENTIALS)
 .env
+.env*
+!.env.example
+*.env
 .env.local
 .env.development.local
 .env.test.local
@@ -39,14 +42,29 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 
-# Backup database directories
+# Backup database directories and dumps (KEEP LIVE DATA ISOLATED)
 db/
 backup/
-uploads/
-
-# Local MongoDB data
+backups/
+dump/
+dumps/
+database-dump/
+*.dump
+*.sql
+*.sqlite
+*.sqlite3
+*.db
 mongodb-data/
+data/
 
-# Scratch scripts
+# User uploads & document storage
+uploads/
+backend/uploads/
+frontend/public/uploads/
+
+# Scratch scripts and temporary files
 scratch/
 backend/scratch/
+frontend/scratch/
+*.tmp
+*.temp

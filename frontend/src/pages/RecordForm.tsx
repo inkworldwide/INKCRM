@@ -274,7 +274,26 @@ export default function RecordForm() {
 
       // Ensure location is loaded from city / state / presentAddress if not set
       if (!recordValues.location) {
-        recordValues.location = [recordValues.city, recordValues.state].filter(Boolean).join(', ') || recordValues.city || recordValues.presentAddress || '';
+        recordValues.location = [recordValues.city, recordValues.state].filter(Boolean).join(', ') || recordValues.city || recordValues.presentAddress || recordValues.district || '';
+      }
+      if (!recordValues.city && recordValues.location) {
+        recordValues.city = recordValues.location;
+      }
+
+      // Ensure phone is loaded from mobile / contact / contactNum if not set
+      if (!recordValues.phone) {
+        recordValues.phone = recordValues.mobile || recordValues.contactNum || recordValues.contact_num || recordValues.contact || recordValues['CONTACT NUM'] || recordValues['contact num'] || recordValues.phoneNumber || recordValues.mobileNo || '';
+      }
+      if (!recordValues.mobile && recordValues.phone) {
+        recordValues.mobile = recordValues.phone;
+      }
+
+      // Ensure company is loaded from firmName / firm_name if not set
+      if (!recordValues.company) {
+        recordValues.company = recordValues.firmName || recordValues.firm_name || recordValues.firm || recordValues['FIRM_NAME'] || recordValues['firm_name'] || '';
+      }
+      if (!recordValues.firmName && recordValues.company) {
+        recordValues.firmName = recordValues.company;
       }
 
       // Default currency
@@ -405,12 +424,27 @@ export default function RecordForm() {
     try {
       const data = { ...formData };
 
-      // Auto-sync fullName, location, and currency
+      // Auto-sync fullName, customerName, customer, location, phone, company, and currency
       if (data.firstName || data.lastName) {
         data.fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+        data.customerName = data.fullName;
+        data.customer = data.fullName;
       }
-      if (!data.location && (data.city || data.presentAddress || data.state)) {
-        data.location = [data.city, data.state].filter(Boolean).join(', ') || data.city || data.presentAddress || '';
+      if (data.phone || data.mobile) {
+        const ph = data.phone || data.mobile;
+        data.phone = ph;
+        data.mobile = ph;
+        data.contactNum = ph;
+        data.contact_num = ph;
+      }
+      if (data.city || data.location || data.presentAddress || data.state) {
+        data.location = data.location || [data.city, data.state].filter(Boolean).join(', ') || data.city || data.presentAddress || '';
+        data.city = data.city || data.location;
+      }
+      if (data.company || data.firmName) {
+        data.company = data.company || data.firmName;
+        data.firmName = data.company;
+        data.firm_name = data.company;
       }
       if (!data.currency) {
         data.currency = 'INR';

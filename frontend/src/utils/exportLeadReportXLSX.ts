@@ -47,6 +47,35 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
     }).replace(',', '');
   };
 
+  const extractField = (dataObj: any, targets: string[], contains: string[] = []): string => {
+    if (!dataObj || typeof dataObj !== 'object') return '';
+    for (const t of targets) {
+      if (dataObj[t] !== undefined && dataObj[t] !== null) {
+        const v = String(dataObj[t]).trim();
+        if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+      }
+    }
+    const norm = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normTargets = targets.map(norm);
+    const keys = Object.keys(dataObj);
+    for (const k of keys) {
+      if (normTargets.includes(norm(k))) {
+        const v = String(dataObj[k] || '').trim();
+        if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+      }
+    }
+    if (contains.length > 0) {
+      const normContains = contains.map(norm);
+      for (const k of keys) {
+        if (normContains.some(c => norm(k).includes(c))) {
+          const v = String(dataObj[k] || '').trim();
+          if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+        }
+      }
+    }
+    return '';
+  };
+
   const dataRows = (leads || []).map((lead: any, idx: number) => {
     const data = lead.data || lead;
     const slNo = idx + 1;
@@ -54,26 +83,30 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
 
     const customerName = String(
       `${data.firstName || ''} ${data.lastName || ''}`.trim() ||
-      data.customerName ||
-      data.fullName ||
-      data.customer ||
-      data.costomer ||
-      data.name ||
+      extractField(data, ['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'costomer', 'leadName'], ['customer', 'client']) ||
       'N/A'
     ).trim();
 
-    const mobileNo = String(data.phone || data.mobile || data.contactNum || data.contact_num || data.mobileNo || 'N/A').trim();
-    const firmCompany = String(data.company || data.firmName || data.firm_name || data.firm || data.firmCompany || '').trim();
-    const turnoverSalary = String(data.turnover || data.salary || data.income || data.turnoverSalary || '').trim();
-    const loanAmount = String(data.loanAmount || data.budget || data.amount || data.requiredLoan || '').trim();
-    const presentAddress = String(data.presentAddress || data.address || data.locationAddress || data.present_address || '').trim();
-    const city = String(data.city || data.location || '').trim();
-    const loanProduct = String(data.loanProduct || data.loanType || data.product || data.serviceType || '').trim();
-    const bankNames = String(data.bankNames || data.bank || data.preferredBank || '').trim();
-    const psm = String(data.psm || data.psmName || data.psm_name || '').trim();
+    const mobileNo = String(
+      extractField(data, ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'cell', 'telephone', 'phNo', 'mobNo'], ['phone', 'mobile', 'contact', 'cell']) ||
+      'N/A'
+    ).trim();
+
+    const firmCompany = String(
+      extractField(data, ['company', 'firmName', 'firm_name', 'firm', 'firmCompany', 'businessName', 'shopName', 'tradeName', 'organization'], ['firm', 'company', 'business']) ||
+      ''
+    ).trim();
+
+    const turnoverSalary = String(extractField(data, ['turnover', 'salary', 'income', 'turnoverSalary', 'turnover_salary']) || '').trim();
+    const loanAmount = String(extractField(data, ['loanAmount', 'budget', 'amount', 'requiredLoan', 'loan_amount']) || '').trim();
+    const presentAddress = String(extractField(data, ['presentAddress', 'address', 'locationAddress', 'present_address', 'fullAddress']) || '').trim();
+    const city = String(extractField(data, ['city', 'location', 'district', 'state', 'place', 'area']) || '').trim();
+    const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || '').trim();
+    const bankNames = String(extractField(data, ['bankNames', 'bank', 'preferredBank', 'bank_name']) || '').trim();
+    const psm = String(extractField(data, ['psm', 'psmName', 'psm_name']) || '').trim();
     const status = String(data.status || 'New').trim();
-    const remarks = String(data.remarks || data.notes || '').trim();
-    const source = String(data.source || data.campaign || data.campaignName || data.campaign_name || '').trim();
+    const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').trim();
+    const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || '').trim();
 
     let assignedTo = 'Unassigned';
     if (data.assignedTo) {

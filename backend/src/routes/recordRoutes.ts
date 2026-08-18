@@ -254,19 +254,130 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       return;
     }
 
+    // Helper for fuzzy case-insensitive, space/symbol-agnostic field extraction
+    const extractFuzzyField = (obj: Record<string, any>, targetKeys: string[], containsKeys: string[] = []): string => {
+      if (!obj || typeof obj !== 'object') return '';
+      // Direct match
+      for (const k of targetKeys) {
+        if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+          return String(obj[k]).trim();
+        }
+      }
+      const normKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalizedTargets = targetKeys.map(normKey);
+      const keys = Object.keys(obj);
+
+      for (const k of keys) {
+        const nk = normKey(k);
+        if (normalizedTargets.includes(nk)) {
+          const val = obj[k];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            return String(val).trim();
+          }
+        }
+      }
+
+      if (containsKeys.length > 0) {
+        const normalizedContains = containsKeys.map(normKey);
+        for (const k of keys) {
+          const nk = normKey(k);
+          if (normalizedContains.some(c => nk.includes(c))) {
+            const val = obj[k];
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+              return String(val).trim();
+            }
+          }
+        }
+      }
+      return '';
+    };
+
     // Distribute leads among agents
     const recordsToCreate: any[] = [];
     leads.forEach((lead: any, idx: number) => {
       const assignedAgent = agentNames[idx % agentNames.length];
       
-      // Parse names — support multiple column name formats
-      let fName = lead.firstName || lead.name || lead.costomer || lead.customer || lead.customer_name || 'Unnamed';
-      let lName = lead.lastName || '';
-      if (!lead.lastName && fName && fName.includes(' ')) {
-        const parts = fName.split(' ');
+      // Extract phone / mobile / contact number
+      const phoneVal = extractFuzzyField(
+        lead,
+        ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum', 'callNo', 'whatsappNo'],
+        ['phone', 'mobile', 'contact', 'cell', 'tele']
+      );
+
+      // Extract customer name
+      let customerVal = extractFuzzyField(
+        lead,
+        ['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName'],
+        ['customer', 'client']
+      );
+      if (!customerVal || customerVal === 'Unnamed') {
+        customerVal = extractFuzzyField(lead, ['name', 'leadName', 'fullName']);
+      }
+      if (!customerVal) customerVal = 'Unnamed';
+
+      let fName = customerVal;
+      let lName = '';
+      if (customerVal && customerVal !== 'Unnamed' && customerVal.includes(' ')) {
+        const parts = customerVal.split(' ');
         fName = parts[0];
         lName = parts.slice(1).join(' ');
       }
+
+      // Extract firm / company name
+      const firmVal = extractFuzzyField(
+        lead,
+        ['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization'],
+        ['firm', 'company', 'agency', 'business', 'treader', 'trader']
+      );
+
+      // Extract location / city
+      const locationVal = extractFuzzyField(
+        lead,
+        ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch'],
+        ['location', 'city', 'district', 'address']
+      );
+
+      // Extract lead category / loan type
+      const categoryVal = extractFuzzyField(
+        lead,
+        ['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType'],
+        ['category', 'loantype']
+      );
+
+      // Extract data code
+      const codeVal = extractFuzzyField(
+        lead,
+        ['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id'],
+        ['datacode', 'leadcode']
+      );
+
+      // Extract case details
+      const caseVal = extractFuzzyField(
+        lead,
+        ['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description', 'statusDetail'],
+        ['case', 'details']
+      );
+
+      // Extract remarks / notes
+      const remarksVal = extractFuzzyField(
+        lead,
+        ['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback'],
+        ['remark', 'note', 'comment']
+      );
+
+      // Extract email
+      const emailVal = extractFuzzyField(
+        lead,
+        ['email', 'emailAddress', 'email_address', 'mail'],
+        ['email', 'mail']
+      );
+
+      // Extract budget
+      const budgetVal = extractFuzzyField(
+        lead,
+        ['budget', 'amount', 'loanAmount', 'loan_amount'],
+        ['budget', 'amount']
+      );
 
       recordsToCreate.push({
         organizationId: orgId,
@@ -274,22 +385,39 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
         createdBy: userId,
         updatedBy: userId,
         data: {
+          ...lead, // Keep all raw excel headers and custom columns
           firstName: fName,
           lastName: lName,
-          phone: lead.phone || lead.mobile || lead.name_contact_num || lead.contact_num || lead.contact || '',
-          email: lead.email || '',
-          loanType: lead.loanType || lead.lead_category || lead.category || '',
-          budget: lead.budget || lead.amount || '',
-          company: lead.company || lead.firm_name || lead.firmName || lead.firm || '',
+          customerName: customerVal,
+          customer: customerVal,
+          phone: phoneVal,
+          mobile: phoneVal,
+          name_contact_num: phoneVal,
+          contactNum: phoneVal,
+          contact_num: phoneVal,
+          contactNumber: phoneVal,
+          email: emailVal,
+          loanType: categoryVal,
+          leadCategory: categoryVal,
+          lead_category: categoryVal,
+          budget: budgetVal,
+          company: firmVal,
+          firmName: firmVal,
+          firm_name: firmVal,
           salary: lead.salary || '',
-          city: lead.city || lead.location || '',
+          city: locationVal,
+          location: locationVal,
           state: lead.state || '',
-          dataCode: lead.dataCode || lead.data_code || '',
-          caseDetails: lead.caseDetails || lead.case_status || lead.case_details || '',
-          notes: lead.notes || lead.remarks || lead.remark || '',
+          dataCode: codeVal,
+          data_code: codeVal,
+          caseDetails: caseVal,
+          case_details: caseVal,
+          notes: remarksVal,
+          remarks: remarksVal,
           status: lead.status || 'New',
           dialStatus: 'Yet To Call',
           source: campaignName, // Set source as campaign name
+          campaignName: campaignName,
           assignedTo: assignedAgent // Set agent name
         }
       });
@@ -780,6 +908,55 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Normalize field synonyms for leads module (phone/mobile, city/location, company/firm, customer/names, loanType/category)
+    if (apiPath.toLowerCase() === 'leads') {
+      const extractedPhone = recordData.phone || recordData.mobile || recordData.contact || recordData.contactNum || recordData.contact_num || recordData['CONTACT NUM'] || recordData['contact num'] || recordData.contactNumber || recordData.phoneNumber || '';
+      if (extractedPhone) {
+        recordData.phone = extractedPhone;
+        recordData.mobile = extractedPhone;
+        recordData.contactNum = extractedPhone;
+        recordData.contact_num = extractedPhone;
+      }
+
+      const extractedLocation = recordData.city || recordData.location || recordData['LOCATION'] || recordData['location'] || recordData.presentAddress || recordData.district || recordData.place || '';
+      if (extractedLocation) {
+        if (!recordData.city) recordData.city = extractedLocation;
+        if (!recordData.location) recordData.location = extractedLocation;
+      }
+
+      const extractedCompany = recordData.company || recordData.firmName || recordData.firm_name || recordData['FIRM_NAME'] || recordData['firm_name'] || recordData.firm || recordData.businessName || '';
+      if (extractedCompany) {
+        if (!recordData.company) recordData.company = extractedCompany;
+        if (!recordData.firmName) recordData.firmName = extractedCompany;
+        if (!recordData.firm_name) recordData.firm_name = extractedCompany;
+      }
+
+      if (!recordData.firstName && (recordData.customer || recordData.customerName || recordData.customer_name || recordData['CUSTOMER'] || recordData['customer'] || recordData.fullName || recordData.name)) {
+        const full = String(recordData.customer || recordData.customerName || recordData.customer_name || recordData['CUSTOMER'] || recordData['customer'] || recordData.fullName || recordData.name).trim();
+        if (full.includes(' ')) {
+          const parts = full.split(' ');
+          recordData.firstName = parts[0];
+          recordData.lastName = parts.slice(1).join(' ');
+        } else {
+          recordData.firstName = full;
+          recordData.lastName = recordData.lastName || '';
+        }
+      }
+      if (recordData.firstName || recordData.lastName) {
+        const full = `${recordData.firstName || ''} ${recordData.lastName || ''}`.trim();
+        recordData.customerName = full;
+        recordData.customer = full;
+        recordData.fullName = full;
+      }
+
+      const extractedCategory = recordData.loanType || recordData.leadCategory || recordData.lead_category || recordData['LEAD_CATEGORY'] || recordData['lead_category'] || recordData.category || recordData.product || '';
+      if (extractedCategory) {
+        if (!recordData.loanType) recordData.loanType = extractedCategory;
+        if (!recordData.leadCategory) recordData.leadCategory = extractedCategory;
+        if (!recordData.lead_category) recordData.lead_category = extractedCategory;
+      }
+    }
+
     // Populate default values for missing fields
     moduleDef.fields.forEach((field) => {
       if (field.defaultValue && (recordData[field.name] === undefined || recordData[field.name] === null || recordData[field.name] === '')) {
@@ -978,7 +1155,55 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const oldValues = record.data instanceof Map ? Object.fromEntries(record.data) : record.data;
+    const oldValues = record.data instanceof Map ? Object.fromEntries(record.data) : (record.data || {});
+
+    // Normalize field synonyms for leads module (phone/mobile, city/location, company/firm, customer/names, loanType/category)
+    if (apiPath.toLowerCase() === 'leads') {
+      const extractedPhone = updateData.phone || updateData.mobile || updateData.contact || updateData.contactNum || updateData.contact_num || updateData['CONTACT NUM'] || updateData['contact num'] || updateData.contactNumber || updateData.phoneNumber || '';
+      if (extractedPhone) {
+        updateData.phone = extractedPhone;
+        updateData.mobile = extractedPhone;
+        updateData.contactNum = extractedPhone;
+        updateData.contact_num = extractedPhone;
+      }
+
+      const extractedLocation = updateData.city || updateData.location || updateData['LOCATION'] || updateData['location'] || updateData.presentAddress || updateData.district || updateData.place || '';
+      if (extractedLocation) {
+        if (!updateData.city) updateData.city = extractedLocation;
+        if (!updateData.location) updateData.location = extractedLocation;
+      }
+
+      const extractedCompany = updateData.company || updateData.firmName || updateData.firm_name || updateData['FIRM_NAME'] || updateData['firm_name'] || updateData.firm || updateData.businessName || '';
+      if (extractedCompany) {
+        if (!updateData.company) updateData.company = extractedCompany;
+        if (!updateData.firmName) updateData.firmName = extractedCompany;
+        if (!updateData.firm_name) updateData.firm_name = extractedCompany;
+      }
+
+      if (updateData.customer || updateData.customerName || updateData.customer_name || updateData['CUSTOMER'] || updateData['customer'] || updateData.fullName) {
+        const full = String(updateData.customer || updateData.customerName || updateData.customer_name || updateData['CUSTOMER'] || updateData['customer'] || updateData.fullName).trim();
+        if (full.includes(' ')) {
+          const parts = full.split(' ');
+          updateData.firstName = parts[0];
+          updateData.lastName = parts.slice(1).join(' ');
+        } else {
+          updateData.firstName = full;
+        }
+      }
+      if (updateData.firstName || updateData.lastName) {
+        const full = `${updateData.firstName || oldValues.firstName || ''} ${updateData.lastName || oldValues.lastName || ''}`.trim();
+        updateData.customerName = full;
+        updateData.customer = full;
+        updateData.fullName = full;
+      }
+
+      const extractedCategory = updateData.loanType || updateData.leadCategory || updateData.lead_category || updateData['LEAD_CATEGORY'] || updateData['lead_category'] || updateData.category || updateData.product || '';
+      if (extractedCategory) {
+        if (!updateData.loanType) updateData.loanType = extractedCategory;
+        if (!updateData.leadCategory) updateData.leadCategory = extractedCategory;
+        if (!updateData.lead_category) updateData.lead_category = extractedCategory;
+      }
+    }
 
     // Validate inputs against the merged data
     const mergedData = {

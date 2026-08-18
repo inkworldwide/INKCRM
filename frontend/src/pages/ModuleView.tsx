@@ -248,12 +248,45 @@ export default function ModuleView() {
       // Normalize keys: trim whitespace
       const cleanRow: Record<string, string> = {};
       keys.forEach((key) => {
-        cleanRow[key.trim()] = String(row[key]).trim();
+        const val = String(row[key] !== undefined && row[key] !== null ? row[key] : '').trim();
+        cleanRow[key.trim()] = val;
       });
+
+      // Enrich with canonical aliases so backend/frontend can instantly find keys
+      const normKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const findVal = (targets: string[]) => {
+        const normTargets = targets.map(normKey);
+        for (const k of keys) {
+          if (normTargets.includes(normKey(k))) {
+            const v = String(cleanRow[k.trim()] || '').trim();
+            if (v) return v;
+          }
+        }
+        return '';
+      };
+
+      const phone = findVal(['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum']);
+      const customer = findVal(['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName']);
+      const company = findVal(['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization']);
+      const location = findVal(['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch']);
+      const leadCategory = findVal(['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType']);
+      const dataCode = findVal(['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id']);
+      const caseDetails = findVal(['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description']);
+      const remarks = findVal(['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback']);
+
+      if (phone) { cleanRow.phone = phone; cleanRow.mobile = phone; cleanRow.contact_num = phone; }
+      if (customer) { cleanRow.customer = customer; cleanRow.customerName = customer; cleanRow.firstName = customer; }
+      if (company) { cleanRow.company = company; cleanRow.firmName = company; cleanRow.firm_name = company; }
+      if (location) { cleanRow.city = location; cleanRow.location = location; }
+      if (leadCategory) { cleanRow.leadCategory = leadCategory; cleanRow.loanType = leadCategory; cleanRow.lead_category = leadCategory; }
+      if (dataCode) { cleanRow.dataCode = dataCode; cleanRow.data_code = dataCode; }
+      if (caseDetails) { cleanRow.caseDetails = caseDetails; cleanRow.case_details = caseDetails; }
+      if (remarks) { cleanRow.notes = remarks; cleanRow.remarks = remarks; }
+
       results.push(cleanRow);
     }
 
-    console.log(`[parseExcelFile] Parsed ${results.length} valid rows from Excel file`);
+    console.log(`[parseExcelFile] Parsed ${results.length} valid rows from Excel file with enriched field mapping`);
     return results;
   };
 
@@ -1736,9 +1769,70 @@ export default function ModuleView() {
             ) : apiPath === 'leads' ? (
               <div className="space-y-6">
                 {data?.records.map((rec: any, idx: number) => {
-                  const leadNo = rec._id.slice(-6).toUpperCase();
-                  const leadName = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || rec.data?.fullName || rec.data?.customerName || rec.data?.name || rec.data?.leadName || 'N/A';
-                  const leadLocation = rec.data?.location || [rec.data?.city, rec.data?.state].filter(Boolean).join(', ') || rec.data?.city || rec.data?.presentAddress || rec.data?.address || 'N/A';
+                  const leadNo = rec.data?.dataCode || rec.data?.data_code || rec.data?.code || rec._id.slice(-6).toUpperCase();
+                  
+                  const extractField = (dataObj: any, targets: string[], contains: string[] = []): string => {
+                    if (!dataObj || typeof dataObj !== 'object') return '';
+                    for (const t of targets) {
+                      if (dataObj[t] !== undefined && dataObj[t] !== null) {
+                        const v = String(dataObj[t]).trim();
+                        if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+                      }
+                    }
+                    const norm = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const normTargets = targets.map(norm);
+                    const keys = Object.keys(dataObj);
+                    for (const k of keys) {
+                      if (normTargets.includes(norm(k))) {
+                        const v = String(dataObj[k] || '').trim();
+                        if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+                      }
+                    }
+                    if (contains.length > 0) {
+                      const normContains = contains.map(norm);
+                      for (const k of keys) {
+                        if (normContains.some(c => norm(k).includes(c))) {
+                          const v = String(dataObj[k] || '').trim();
+                          if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+                        }
+                      }
+                    }
+                    return '';
+                  };
+
+                  const fullName = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim();
+                  const leadName = (fullName && fullName !== 'Unnamed' ? fullName : '') ||
+                    extractField(
+                      rec.data,
+                      ['customer', 'customerName', 'customer_name', 'fullName', 'client', 'clientName', 'leadName', 'name', 'costomer'],
+                      ['customer', 'client']
+                    ) || 'N/A';
+
+                  const leadLocation = extractField(
+                    rec.data,
+                    ['location', 'city', 'district', 'state', 'presentAddress', 'address', 'place', 'area', 'branch'],
+                    ['location', 'city', 'district', 'address']
+                  ) || 'N/A';
+
+                  const rawPhone = extractField(
+                    rec.data,
+                    ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum'],
+                    ['phone', 'mobile', 'contact', 'cell']
+                  );
+                  const leadPhone = rawPhone || 'N/A';
+
+                  const leadCompany = extractField(
+                    rec.data,
+                    ['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'organization'],
+                    ['firm', 'company', 'agency', 'business']
+                  ) || 'N/A';
+
+                  const leadProduct = extractField(
+                    rec.data,
+                    ['loanType', 'loan_type', 'leadCategory', 'lead_category', 'category', 'product', 'serviceType'],
+                    ['category', 'loantype']
+                  ) || 'N/A';
+
                   const amountVal = rec.data?.budget ?? rec.data?.loanAmount ?? rec.data?.amount;
                   const currencySymbol = '₹';
                   const formattedAmount = amountVal != null && amountVal !== '' ? `${currencySymbol}${Number(amountVal).toLocaleString('en-IN')}` : 'N/A';
@@ -1780,7 +1874,7 @@ export default function ModuleView() {
 
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Firm/Company: </span>
-                          <span className="text-[#44403C] dark:text-stone-300">{rec.data?.company || 'N/A'}</span>
+                          <span className="text-[#44403C] dark:text-stone-300">{leadCompany}</span>
                         </div>
 
                         {/* --- Row 2 --- */}
@@ -1807,12 +1901,12 @@ export default function ModuleView() {
                         {/* --- Row 3 --- */}
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Product: </span>
-                          <span className="text-[#44403C] dark:text-stone-300 uppercase">{rec.data?.loanType || 'N/A'}</span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase">{leadProduct}</span>
                         </div>
 
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Mobile No.: </span>
-                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{rec.data?.phone || 'N/A'}</span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{leadPhone}</span>
                         </div>
 
                         <div className="text-[13px] leading-snug flex items-center flex-wrap gap-1">
@@ -1889,8 +1983,7 @@ export default function ModuleView() {
                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <button 
                             onClick={() => {
-                              const rawPhone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num || '';
-                              let cleanPhone = String(rawPhone).replace(/\D/g, '').trim();
+                              let cleanPhone = String(rawPhone || '').replace(/\D/g, '').trim();
                               if (cleanPhone) {
                                 if (cleanPhone.length === 10) {
                                   cleanPhone = `91${cleanPhone}`;
@@ -1908,10 +2001,8 @@ export default function ModuleView() {
                           
                           <button 
                             onClick={() => {
-                              const rawPhone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num || '';
-                              const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
+                              const cleanPhone = String(rawPhone || '').replace(/[^\d+]/g, '').trim();
                               if (cleanPhone) {
-                                const leadName = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || rec.data?.fullName || rec.data?.customerName || rec.data?.name || 'Lead';
                                 showToast(`Calling ${leadName} (${cleanPhone})...`, 'info');
                                 window.location.href = `tel:${cleanPhone}`;
                               } else {
