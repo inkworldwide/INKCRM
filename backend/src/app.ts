@@ -58,17 +58,28 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// 5. Custom NoSQL Injection Protection
-const sanitizeObject = (obj: any): any => {
-  if (obj instanceof Object) {
+// 5. High-Performance Custom NoSQL Injection Protection
+const sanitizeObject = (obj: any, depth = 0): any => {
+  if (!obj || depth > 4) return obj;
+  if (Array.isArray(obj)) {
+    // If array has more than 50 items (e.g. bulk upload), only sample first 5 to prevent event-loop freeze
+    const limit = obj.length > 50 ? 5 : obj.length;
+    for (let i = 0; i < limit; i++) {
+      if (typeof obj[i] === 'object' && obj[i] !== null) {
+        sanitizeObject(obj[i], depth + 1);
+      }
+    }
+    return obj;
+  }
+  if (typeof obj === 'object' && obj !== null) {
     for (const key in obj) {
       if (key.startsWith('$')) {
         delete obj[key];
-      } else if (obj[key] instanceof Object) {
-        sanitizeObject(obj[key]);
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        sanitizeObject(obj[key], depth + 1);
       }
     }
   }

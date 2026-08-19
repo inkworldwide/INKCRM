@@ -49,8 +49,8 @@ const startServer = async () => {
       logger.info(`=================================`);
     });
 
-    // 3. Configure request timeout (30 seconds)
-    server.setTimeout(30000);
+    // 3. Configure request timeout (5 minutes for massive bulk lead operations)
+    server.setTimeout(300000);
 
   } catch (error: any) {
     logger.error('Fatal error starting the server:', error);

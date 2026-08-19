@@ -241,7 +241,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
   try {
     const orgId = req.organizationId;
     const userId = req.user?.id;
-    const { campaignName, agentNames, leads } = req.body;
+    const { campaignName, agentNames, leads, agentOffset = 0, isLastBatch = true } = req.body;
 
     if (!campaignName || !agentNames || !Array.isArray(agentNames) || agentNames.length === 0 || !Array.isArray(leads) || leads.length === 0) {
       res.status(400).json({ error: 'campaignName, agentNames, and leads array are required.' });
@@ -292,10 +292,10 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       return '';
     };
 
-    // Distribute leads among agents
+    // Distribute leads among agents with continuous offset
     const recordsToCreate: any[] = [];
     leads.forEach((lead: any, idx: number) => {
-      const assignedAgent = agentNames[idx % agentNames.length];
+      const assignedAgent = agentNames[(agentOffset + idx) % agentNames.length];
       
       // Extract phone / mobile / contact number
       const phoneVal = extractFuzzyField(
@@ -423,43 +423,50 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       });
     });
 
-    // Bulk insert custom records
-    const result = await CustomRecord.insertMany(recordsToCreate);
-
-    // Create Audit Log
-    await AuditLog.create({
-      organizationId: orgId,
-      userId: userId,
-      action: 'campaign.bulk_assign',
-      resource: 'leads',
-      details: {
-        campaignName,
-        agentCount: agentNames.length,
-        assignedCount: result.length
-      }
-    });
-
-    // Generate notifications for assigned agents
-    const agentCounts: Record<string, number> = {};
-    recordsToCreate.forEach((r: any) => {
-      const agent = r.data?.assignedTo;
-      if (agent) {
-        agentCounts[agent] = (agentCounts[agent] || 0) + 1;
-      }
-    });
-
-    for (const [agentName, count] of Object.entries(agentCounts)) {
-      await createNotification({
-        organizationId: orgId,
-        recipient: agentName,
-        title: 'Campaign Leads Allocated',
-        message: `${count} lead(s) from campaign '${campaignName}' were allocated to you.`,
-        type: 'info',
-        link: '/my-campaign'
-      });
+    // High-throughput chunked insertion (2,500 docs per chunk)
+    const CHUNK_SIZE = 2500;
+    let totalInserted = 0;
+    for (let i = 0; i < recordsToCreate.length; i += CHUNK_SIZE) {
+      const chunk = recordsToCreate.slice(i, i + CHUNK_SIZE);
+      const chunkResult = await CustomRecord.insertMany(chunk, { ordered: false });
+      totalInserted += chunkResult.length;
     }
 
-    res.status(201).json({ message: `Successfully assigned ${result.length} leads to ${agentNames.length} agents.` });
+    // Create Audit Log & notifications
+    if (isLastBatch !== false) {
+      await AuditLog.create({
+        organizationId: orgId,
+        userId: userId,
+        action: 'campaign.bulk_assign',
+        resource: 'leads',
+        details: {
+          campaignName,
+          agentCount: agentNames.length,
+          assignedCount: totalInserted
+        }
+      });
+
+      const agentCounts: Record<string, number> = {};
+      recordsToCreate.forEach((r: any) => {
+        const agent = r.data?.assignedTo;
+        if (agent) {
+          agentCounts[agent] = (agentCounts[agent] || 0) + 1;
+        }
+      });
+
+      for (const [agentName, count] of Object.entries(agentCounts)) {
+        await createNotification({
+          organizationId: orgId,
+          recipient: agentName,
+          title: 'Campaign Leads Allocated',
+          message: `${count} lead(s) from campaign '${campaignName}' were allocated to you.`,
+          type: 'info',
+          link: '/my-campaign'
+        });
+      }
+    }
+
+    res.status(201).json({ message: `Successfully assigned ${totalInserted} leads to ${agentNames.length} agents.`, count: totalInserted });
   } catch (error: any) {
     console.error('Failed to bulk assign leads:', error);
     res.status(500).json({ error: error.message || 'Failed to bulk assign leads.' });

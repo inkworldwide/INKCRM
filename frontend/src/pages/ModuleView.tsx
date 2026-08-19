@@ -129,6 +129,8 @@ export default function ModuleView() {
   const [caDialedStats, setCaDialedStats] = useState<Record<string, number>>({});
   const [caLoadingStats, setCaLoadingStats] = useState(false);
   const [caAssigning, setCaAssigning] = useState(false);
+  const [caProgressStatus, setCaProgressStatus] = useState('');
+  const [caProgressPercent, setCaProgressPercent] = useState(0);
   const [caLoadingAgents, setCaLoadingAgents] = useState(false);
 
   useEffect(() => {
@@ -221,58 +223,64 @@ export default function ModuleView() {
     return results;
   };
 
-  // Parse Excel (XLSX/XLS) files using SheetJS
+  // High-performance Parse Excel (XLSX/XLS) files using SheetJS
   const parseExcelFile = (buffer: ArrayBuffer): any[] => {
     const workbook = XLSX.read(buffer, { type: 'array' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     
-    // Use sheet_to_json in object mode — SheetJS automatically skips truly empty rows
+    // Use sheet_to_json in object mode
     const rawRows: any[] = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: '' });
 
     if (rawRows.length === 0) return [];
 
+    const normKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Pre-calculate column mapping once from first row
+    const firstRowKeys = Object.keys(rawRows[0] || {});
+    const mapCol = (targets: string[]) => {
+      const normTargets = targets.map(normKey);
+      for (const k of firstRowKeys) {
+        if (normTargets.includes(normKey(k))) return k;
+      }
+      return null;
+    };
+
+    const phoneCol = mapCol(['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum']);
+    const customerCol = mapCol(['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName']);
+    const companyCol = mapCol(['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization']);
+    const locationCol = mapCol(['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch']);
+    const categoryCol = mapCol(['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType']);
+    const codeCol = mapCol(['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id']);
+    const caseCol = mapCol(['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description']);
+    const remarksCol = mapCol(['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback']);
+
     const results: any[] = [];
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
-      
-      // Check if this row has at least one non-empty value in a meaningful column
-      const keys = Object.keys(row);
-      const hasContent = keys.some((key) => {
-        const k = key.toLowerCase().trim();
-        // Skip index/serial number columns
-        if (k === 'slno' || k === 'sl no' || k === 'sno' || k === 'id' || k === 's.no' || k === 'sr no' || k === 'srno') return false;
-        return String(row[key]).trim() !== '';
-      });
-      if (!hasContent) continue;
-
-      // Normalize keys: trim whitespace
       const cleanRow: Record<string, string> = {};
-      keys.forEach((key) => {
-        const val = String(row[key] !== undefined && row[key] !== null ? row[key] : '').trim();
-        cleanRow[key.trim()] = val;
-      });
+      let hasMeaningfulContent = false;
 
-      // Enrich with canonical aliases so backend/frontend can instantly find keys
-      const normKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const findVal = (targets: string[]) => {
-        const normTargets = targets.map(normKey);
-        for (const k of keys) {
-          if (normTargets.includes(normKey(k))) {
-            const v = String(cleanRow[k.trim()] || '').trim();
-            if (v) return v;
-          }
+      for (const k in row) {
+        const trimmedKey = k.trim();
+        const val = String(row[k] !== undefined && row[k] !== null ? row[k] : '').trim();
+        cleanRow[trimmedKey] = val;
+        
+        const lowerK = trimmedKey.toLowerCase();
+        if (val && lowerK !== 'slno' && lowerK !== 'sl no' && lowerK !== 'sno' && lowerK !== 'id' && lowerK !== 's.no' && lowerK !== 'sr no') {
+          hasMeaningfulContent = true;
         }
-        return '';
-      };
+      }
 
-      const phone = findVal(['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum']);
-      const customer = findVal(['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName']);
-      const company = findVal(['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization']);
-      const location = findVal(['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch']);
-      const leadCategory = findVal(['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType']);
-      const dataCode = findVal(['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id']);
-      const caseDetails = findVal(['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description']);
-      const remarks = findVal(['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback']);
+      if (!hasMeaningfulContent) continue;
+
+      const phone = phoneCol ? cleanRow[phoneCol] : '';
+      const customer = customerCol ? cleanRow[customerCol] : '';
+      const company = companyCol ? cleanRow[companyCol] : '';
+      const location = locationCol ? cleanRow[locationCol] : '';
+      const leadCategory = categoryCol ? cleanRow[categoryCol] : '';
+      const dataCode = codeCol ? cleanRow[codeCol] : '';
+      const caseDetails = caseCol ? cleanRow[caseCol] : '';
+      const remarks = remarksCol ? cleanRow[remarksCol] : '';
 
       if (phone) { cleanRow.phone = phone; cleanRow.mobile = phone; cleanRow.contact_num = phone; }
       if (customer) { cleanRow.customer = customer; cleanRow.customerName = customer; cleanRow.firstName = customer; }
@@ -286,7 +294,7 @@ export default function ModuleView() {
       results.push(cleanRow);
     }
 
-    console.log(`[parseExcelFile] Parsed ${results.length} valid rows from Excel file with enriched field mapping`);
+    console.log(`[parseExcelFile] Parsed ${results.length} valid rows from Excel file with optimized field mapping`);
     return results;
   };
 
@@ -305,6 +313,9 @@ export default function ModuleView() {
     }
 
     setCaAssigning(true);
+    setCaProgressStatus('Reading and analyzing uploaded file...');
+    setCaProgressPercent(5);
+
     try {
       const fileName = caFile.name.toLowerCase();
       const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
@@ -313,6 +324,9 @@ export default function ModuleView() {
       reader.onload = async (event) => {
         try {
           let parsedLeads: any[];
+
+          setCaProgressStatus('Parsing rows and mapping dataset columns...');
+          setCaProgressPercent(15);
 
           if (isExcel) {
             // Parse XLSX/XLS with SheetJS
@@ -327,6 +341,8 @@ export default function ModuleView() {
           if (parsedLeads.length === 0) {
             showToast('The uploaded file is empty or invalid.', 'warning');
             setCaAssigning(false);
+            setCaProgressStatus('');
+            setCaProgressPercent(0);
             return;
           }
 
@@ -334,13 +350,42 @@ export default function ModuleView() {
             .filter((a: any) => caSelectedAgents.includes(a._id))
             .map((a: any) => `${a.firstName} ${a.lastName}`);
 
-          const res = await api.post('/records/campaigns/bulk-assign', {
-            campaignName: caSelectedCampaign,
-            agentNames,
-            leads: parsedLeads
-          });
+          // Process in sequential chunks of 5,000 leads for seamless throughput and zero socket timeouts
+          const BATCH_SIZE = 5000;
+          const totalLeads = parsedLeads.length;
+          const totalBatches = Math.ceil(totalLeads / BATCH_SIZE);
+          let assignedCount = 0;
 
-          showToast(res.data.message || `Assigned ${parsedLeads.length} leads to ${agentNames.length} agents.`, 'success');
+          for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+            const start = batchIdx * BATCH_SIZE;
+            const chunk = parsedLeads.slice(start, start + BATCH_SIZE);
+            const isLast = batchIdx === totalBatches - 1;
+            const currentPercent = Math.min(95, Math.round(20 + ((batchIdx) / totalBatches) * 75));
+
+            setCaProgressPercent(currentPercent);
+            if (totalBatches > 1) {
+              setCaProgressStatus(`Assigning batch ${batchIdx + 1} of ${totalBatches} (${start.toLocaleString()} - ${Math.min(start + BATCH_SIZE, totalLeads).toLocaleString()} / ${totalLeads.toLocaleString()} leads)...`);
+            } else {
+              setCaProgressStatus(`Assigning ${totalLeads.toLocaleString()} leads to ${agentNames.length} agents...`);
+            }
+
+            await api.post('/records/campaigns/bulk-assign', {
+              campaignName: caSelectedCampaign,
+              agentNames,
+              leads: chunk,
+              agentOffset: start,
+              isLastBatch: isLast
+            }, {
+              timeout: 180000 // 3 minutes timeout per batch
+            });
+
+            assignedCount += chunk.length;
+          }
+
+          setCaProgressPercent(100);
+          setCaProgressStatus('Complete!');
+
+          showToast(`Successfully assigned ${assignedCount.toLocaleString()} leads to ${agentNames.length} agents for '${caSelectedCampaign}'!`, 'success');
           setCaFile(null);
           
           queryClient.invalidateQueries({ queryKey: ['records', 'leads'] });
@@ -350,6 +395,8 @@ export default function ModuleView() {
           showToast(err.response?.data?.error || 'Failed to process bulk assignment.', 'error');
         } finally {
           setCaAssigning(false);
+          setCaProgressStatus('');
+          setCaProgressPercent(0);
         }
       };
 
@@ -362,6 +409,8 @@ export default function ModuleView() {
       console.error(err);
       showToast('Failed to read file.', 'error');
       setCaAssigning(false);
+      setCaProgressStatus('');
+      setCaProgressPercent(0);
     }
   };
 
@@ -639,13 +688,31 @@ export default function ModuleView() {
                 disabled={caAssigning}
               >
                 {caAssigning ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="truncate">{caProgressStatus || 'Assigning Leads...'}</span>
+                  </div>
                 ) : (
                   <>
                     <Icons.CheckCircle2 className="w-4.5 h-4.5" /> Assign Data
                   </>
                 )}
               </button>
+
+              {caAssigning && (
+                <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-2">
+                  <div className="flex justify-between text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                    <span className="truncate max-w-[80%]">{caProgressStatus}</span>
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400">{caProgressPercent}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.max(caProgressPercent, 3)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
