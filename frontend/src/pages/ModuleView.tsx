@@ -371,8 +371,8 @@ export default function ModuleView() {
             return;
           }
 
-          // Process in sequential chunks of 2,500 leads for guaranteed stability
-          const BATCH_SIZE = 2500;
+          // Process in sequential chunks of 500 leads (~150KB payload) to strictly stay below Nginx/proxy 1MB limit
+          const BATCH_SIZE = 500;
           const totalLeads = parsedLeads.length;
           const totalBatches = Math.ceil(totalLeads / BATCH_SIZE);
           let assignedCount = 0;
@@ -381,7 +381,7 @@ export default function ModuleView() {
             const start = batchIdx * BATCH_SIZE;
             const chunk = parsedLeads.slice(start, start + BATCH_SIZE);
             const isLast = batchIdx === totalBatches - 1;
-            const currentPercent = Math.min(95, Math.round(15 + ((batchIdx + 1) / totalBatches) * 80));
+            const currentPercent = Math.min(95, Math.round(10 + ((batchIdx + 1) / totalBatches) * 85));
 
             setCaProgressPercent(currentPercent);
             if (totalBatches > 1) {
@@ -397,13 +397,13 @@ export default function ModuleView() {
               agentOffset: start,
               isLastBatch: isLast
             }, {
-              timeout: 180000 // 3 minutes timeout per batch
+              timeout: 120000 // 2 minutes timeout per batch
             });
 
             assignedCount += (res.data?.count || chunk.length);
 
             if (totalBatches > 1 && !isLast) {
-              await new Promise(r => setTimeout(r, 60));
+              await new Promise(r => setTimeout(r, 20));
             }
           }
 
