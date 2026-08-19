@@ -12,7 +12,7 @@ const MODEL_SOURCES = [
 ];
 
 /**
- * Loads face-api.js models with multi-tiered CDN fallback and caching.
+ * Loads face-api.js models with high-speed TinyFaceDetector + fallback.
  */
 export async function loadFaceApiModels(
   onProgress?: (msg: string) => void
@@ -27,17 +27,18 @@ export async function loadFaceApiModels(
     for (let i = 0; i < MODEL_SOURCES.length; i++) {
       const sourceUrl = MODEL_SOURCES[i];
       try {
-        if (onProgress) onProgress(`Loading AI engine (source ${i + 1}/${MODEL_SOURCES.length})...`);
-        console.log(`[Face-AI] Loading models from: ${sourceUrl}`);
+        if (onProgress) onProgress(i === 0 ? 'Starting Face AI engine...' : `Connecting AI engine (source ${i + 1})...`);
+        console.log(`[Face-AI] Fast-loading models from: ${sourceUrl}`);
 
-        // Try loading all 3 required nets from this source
+        // Load TinyFaceDetector, Landmark, and Recognition nets in parallel
         await Promise.all([
-          faceapi.nets.ssdMobilenetv1.loadFromUri(sourceUrl),
+          faceapi.nets.tinyFaceDetector.loadFromUri(sourceUrl),
           faceapi.nets.faceLandmark68Net.loadFromUri(sourceUrl),
-          faceapi.nets.faceRecognitionNet.loadFromUri(sourceUrl)
+          faceapi.nets.faceRecognitionNet.loadFromUri(sourceUrl),
+          faceapi.nets.ssdMobilenetv1.loadFromUri(sourceUrl).catch(() => {})
         ]);
 
-        console.log(`[Face-AI] Successfully loaded models from: ${sourceUrl}`);
+        console.log(`[Face-AI] Successfully loaded high-speed Face AI models from: ${sourceUrl}`);
         isLoaded = true;
         isLoading = false;
         return true;
@@ -56,6 +57,14 @@ export async function loadFaceApiModels(
   return loadPromise;
 }
 
+export function getFastFaceDetectorOptions(): faceapi.TinyFaceDetectorOptions | faceapi.SsdMobilenetv1Options {
+  if (faceapi.nets.tinyFaceDetector.isLoaded) {
+    return new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+  }
+  return new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
+}
+
 export function isFaceApiLoaded(): boolean {
   return isLoaded;
 }
+

@@ -4,7 +4,7 @@ import * as faceapi from 'face-api.js';
 import { Camera, ShieldCheck, Trash2, Loader2, XCircle, CheckCircle, Upload } from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
-import { loadFaceApiModels } from '../utils/faceModelLoader';
+import { loadFaceApiModels, getFastFaceDetectorOptions } from '../utils/faceModelLoader';
 
 export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel }: { mode?: 'settings' | 'signup', onSuccess?: (embedding: number[]) => void, onCancel?: () => void }) {
   const { showConfirm, showAlertModal } = useToastStore();
@@ -21,6 +21,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
   // Track descriptors and interval using refs to avoid render-stage state update warnings
   const descriptorsRef = useRef<Float32Array[]>([]);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isDetectingRef = useRef(false);
 
   const initModels = async () => {
     setError('');
@@ -95,7 +96,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
           setError('Camera display element failed to load.');
           setStatus('');
         }
-      }, 100);
+      }, 80);
     } catch (err: any) {
       console.error('Camera Error:', err);
       setError(err.message || 'Camera access denied or unavailable. You can upload a selfie photo instead.');
@@ -108,6 +109,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
       clearInterval(detectionIntervalRef.current);
       detectionIntervalRef.current = null;
     }
+    isDetectingRef.current = false;
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
@@ -133,8 +135,9 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
         img.onerror = rej;
       });
 
+      const options = getFastFaceDetectorOptions();
       const detection = await faceapi
-        .detectSingleFace(img)
+        .detectSingleFace(img, options)
         .withFaceLandmarks()
         .withFaceDescriptor();
 
@@ -144,7 +147,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
         return;
       }
 
-      if (detection.detection.score < 0.60) {
+      if (detection.detection.score < 0.50) {
         setError('Face image is not clear enough. Please provide a well-lit front-facing photo.');
         setStatus('');
         return;
@@ -166,48 +169,46 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
     if (detectionIntervalRef.current) {
       clearInterval(detectionIntervalRef.current);
     }
+    isDetectingRef.current = false;
+    descriptorsRef.current = [];
+    setProgress(0);
 
     detectionIntervalRef.current = setInterval(async () => {
-      if (!videoRef.current || !isModelLoaded || enrollmentComplete) return;
+      if (!videoRef.current || videoRef.current.paused || videoRef.current.ended || !isModelLoaded || enrollmentComplete || isDetectingRef.current) return;
       
+      isDetectingRef.current = true;
       try {
-        const detections = await faceapi.detectAllFaces(videoRef.current)
+        const options = getFastFaceDetectorOptions();
+        const detection = await faceapi
+          .detectSingleFace(videoRef.current, options)
           .withFaceLandmarks()
-          .withFaceDescriptors();
+          .withFaceDescriptor();
 
-        if (detections.length === 1) {
-          const detection = detections[0];
-          
-          // Quality threshold
-          if (detection.detection.score < 0.65) {
-            setStatus('Face detected. Please hold still and look straight...');
-            return;
-          }
-
-          // Collect 2 descriptors to average
-          descriptorsRef.current.push(detection.descriptor);
-          const count = descriptorsRef.current.length;
-          const newProgress = Math.min((count / 2) * 100, 100);
-          setProgress(newProgress);
-          
-          if (count >= 2) {
+        if (detection) {
+          if (detection.detection.score >= 0.50) {
+            descriptorsRef.current.push(detection.descriptor);
+            setProgress(100);
+            setStatus('Face recognized! Generating mapping...');
+            
             if (detectionIntervalRef.current) {
               clearInterval(detectionIntervalRef.current);
               detectionIntervalRef.current = null;
             }
             finishEnrollment(descriptorsRef.current);
+            return;
+          } else {
+            setStatus('Face detected. Please hold still and look straight...');
+            setProgress(40);
           }
-        } else if (detections.length > 1) {
-          setStatus('Multiple faces detected! Only one face is allowed.');
-          descriptorsRef.current = [];
-          setProgress(0);
         } else {
-          setStatus('No face detected. Center your face.');
+          setStatus('Position your face in the camera frame...');
         }
       } catch (err) {
         console.warn('Face detection frame error:', err);
+      } finally {
+        isDetectingRef.current = false;
       }
-    }, 150);
+    }, 80);
   };
 
   const finishEnrollment = async (collectedDescriptors: Float32Array[]) => {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as faceapi from 'face-api.js';
 import { ShieldCheck, XCircle, Loader2, RefreshCw, Eye, RotateCcw, KeyRound } from 'lucide-react';
 import api from '../services/api';
-import { loadFaceApiModels } from '../utils/faceModelLoader';
+import { loadFaceApiModels, getFastFaceDetectorOptions } from '../utils/faceModelLoader';
 
 interface Props {
   tempToken: string;
@@ -121,8 +121,9 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
       if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) return;
 
       try {
+        const options = getFastFaceDetectorOptions();
         const detection = await faceapi
-          .detectSingleFace(videoRef.current)
+          .detectSingleFace(videoRef.current, options)
           .withFaceLandmarks()
           .withFaceDescriptor();
 
@@ -132,9 +133,9 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
           return;
         }
 
-        if (detection.detection.score < 0.65) {
+        if (detection.detection.score < 0.50) {
           setStatusMsg('Face detected. Please hold still and look straight...');
-          setScanProgress(10);
+          setScanProgress(20);
           return;
         }
 
@@ -147,18 +148,17 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
 
         let prog = 0;
         const progressInterval = setInterval(() => {
-          prog += 25;
+          prog += 35;
           setScanProgress(Math.min(prog, 100));
           if (prog >= 100) {
             clearInterval(progressInterval);
             submitFaceEmbedding(detection.descriptor);
           }
-        }, 90);
+        }, 50);
       } catch (detectionErr) {
-        // Detection errors can happen transiently — just skip this frame
         console.warn('[FACE] Frame detection error (transient):', detectionErr);
       }
-    }, 250); // 250ms = 4 frames/sec — smooth but not overloaded
+    }, 120);
   }, []);
 
   const submitFaceEmbedding = async (descriptor: Float32Array) => {
