@@ -167,12 +167,18 @@ export default function ModuleView() {
     try {
       const res = await api.get('/auth/users?purpose=dropdown');
       const allUsers = res.data || [];
-      const filtered = allUsers.filter((u: any) => u.roleId?._id === caSelectedRole && u.isActive !== false);
+      const filtered = allUsers.filter((u: any) => {
+        const uRoleId = u.roleId?._id || u.roleId || u.role?._id || u.role;
+        return String(uRoleId) === String(caSelectedRole) && u.isActive !== false;
+      });
       setCaAgents(filtered);
       setCaSelectedAgents(filtered.map((u: any) => u._id));
-    } catch (err) {
+      if (filtered.length === 0) {
+        showToast('No active agents found for this role.', 'info');
+      }
+    } catch (err: any) {
       console.error('Failed to load agents:', err);
-      showToast('Failed to load agents.', 'error');
+      showToast(err.response?.data?.error || 'Failed to load agents.', 'error');
     } finally {
       setCaLoadingAgents(false);
     }
@@ -346,12 +352,27 @@ export default function ModuleView() {
             return;
           }
 
-          const agentNames = caAgents
-            .filter((a: any) => caSelectedAgents.includes(a._id))
-            .map((a: any) => `${a.firstName} ${a.lastName}`);
+          const validSelectedAgents = caAgents.filter((a: any) =>
+            caSelectedAgents.some((id: string) => String(id) === String(a._id))
+          );
 
-          // Process in sequential chunks of 5,000 leads for seamless throughput and zero socket timeouts
-          const BATCH_SIZE = 5000;
+          const agentNames = validSelectedAgents.map((a: any) => {
+            const fn = (a.firstName || '').trim();
+            const ln = (a.lastName || '').trim();
+            const full = `${fn} ${ln}`.trim();
+            return full || a.name || a.username || a.email || 'Agent';
+          }).filter(Boolean);
+
+          if (agentNames.length === 0) {
+            showToast('Please check at least one employee in the table.', 'warning');
+            setCaAssigning(false);
+            setCaProgressStatus('');
+            setCaProgressPercent(0);
+            return;
+          }
+
+          // Process in sequential chunks of 2,500 leads for guaranteed stability
+          const BATCH_SIZE = 2500;
           const totalLeads = parsedLeads.length;
           const totalBatches = Math.ceil(totalLeads / BATCH_SIZE);
           let assignedCount = 0;
@@ -360,7 +381,7 @@ export default function ModuleView() {
             const start = batchIdx * BATCH_SIZE;
             const chunk = parsedLeads.slice(start, start + BATCH_SIZE);
             const isLast = batchIdx === totalBatches - 1;
-            const currentPercent = Math.min(95, Math.round(20 + ((batchIdx) / totalBatches) * 75));
+            const currentPercent = Math.min(95, Math.round(15 + ((batchIdx + 1) / totalBatches) * 80));
 
             setCaProgressPercent(currentPercent);
             if (totalBatches > 1) {
@@ -369,7 +390,7 @@ export default function ModuleView() {
               setCaProgressStatus(`Assigning ${totalLeads.toLocaleString()} leads to ${agentNames.length} agents...`);
             }
 
-            await api.post('/records/campaigns/bulk-assign', {
+            const res = await api.post('/records/campaigns/bulk-assign', {
               campaignName: caSelectedCampaign,
               agentNames,
               leads: chunk,
@@ -379,7 +400,11 @@ export default function ModuleView() {
               timeout: 180000 // 3 minutes timeout per batch
             });
 
-            assignedCount += chunk.length;
+            assignedCount += (res.data?.count || chunk.length);
+
+            if (totalBatches > 1 && !isLast) {
+              await new Promise(r => setTimeout(r, 60));
+            }
           }
 
           setCaProgressPercent(100);
@@ -391,8 +416,12 @@ export default function ModuleView() {
           queryClient.invalidateQueries({ queryKey: ['records', 'leads'] });
           loadCampaignAssignmentsData();
         } catch (err: any) {
-          console.error(err);
-          showToast(err.response?.data?.error || 'Failed to process bulk assignment.', 'error');
+          console.error('[Bulk Assignment Error]', err);
+          const serverError = err.response?.data?.error || err.response?.data?.message;
+          const status = err.response?.status;
+          const netMsg = err.message;
+          const errorMsg = serverError || (status ? `Error (HTTP ${status}): ${err.response?.statusText || 'Server Error'}` : netMsg) || 'Failed to process bulk assignment.';
+          showToast(errorMsg, 'error');
         } finally {
           setCaAssigning(false);
           setCaProgressStatus('');
@@ -400,14 +429,21 @@ export default function ModuleView() {
         }
       };
 
+      reader.onerror = () => {
+        showToast('Error reading the uploaded file. Please check file permissions.', 'error');
+        setCaAssigning(false);
+        setCaProgressStatus('');
+        setCaProgressPercent(0);
+      };
+
       if (isExcel) {
         reader.readAsArrayBuffer(caFile);
       } else {
         reader.readAsText(caFile);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('Failed to read file.', 'error');
+      showToast(err.message || 'Failed to read file.', 'error');
       setCaAssigning(false);
       setCaProgressStatus('');
       setCaProgressPercent(0);
