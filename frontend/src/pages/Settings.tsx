@@ -8,6 +8,7 @@ import FaceEnrollment from '../components/FaceEnrollment';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { useQueryClient } from '@tanstack/react-query';
+import { isBankMatch, filterBanksFuzzy } from '../utils/bankFuzzyMatcher';
 
 const PRESET_COLORS = [
   { name: 'Indigo', rgb: '79 70 229', hex: '#4F46E5' },
@@ -145,18 +146,21 @@ export default function Settings() {
 
   const checkBpConflict = (banks: string[], loanType: string, excludeId?: string) => {
     for (const bank of banks) {
-      const targetBank = bank.trim().toLowerCase();
       const targetLoan = loanType.trim().toLowerCase();
       
       const conflict = moduleRecords.find((rec: any) => {
         if (excludeId && rec._id === excludeId) return false;
         
-        const bpLoanType = rec.data?.loanType || rec.loanType || '';
+        const bpLoanType = (rec.data?.loanType || rec.loanType || '').trim().toLowerCase();
         const bpBanks = (rec.data?.bank || rec.bank || '')
           .split(',')
-          .map((s: string) => s.trim().toLowerCase());
+          .map((s: string) => s.trim())
+          .filter(Boolean);
           
-        return bpLoanType.trim().toLowerCase() === targetLoan && bpBanks.includes(targetBank);
+        const loanMatched = bpLoanType === targetLoan || targetLoan.includes(bpLoanType) || bpLoanType.includes(targetLoan);
+        const bankMatched = bpBanks.some((b: string) => isBankMatch(b, bank));
+
+        return loanMatched && bankMatched;
       });
       
       if (conflict) {
@@ -184,9 +188,11 @@ export default function Settings() {
           return; // Do not check the box
         }
       }
-      setSelectedBanks([...selectedBanks, bankName]);
+      if (!selectedBanks.some((b) => isBankMatch(b, bankName))) {
+        setSelectedBanks([...selectedBanks, bankName]);
+      }
     } else {
-      setSelectedBanks(selectedBanks.filter((b) => b !== bankName));
+      setSelectedBanks(selectedBanks.filter((b) => !isBankMatch(b, bankName)));
     }
   };
 
@@ -204,9 +210,11 @@ export default function Settings() {
           return; // Do not check the box
         }
       }
-      setSelectedEditBanks([...selectedEditBanks, bankName]);
+      if (!selectedEditBanks.some((b) => isBankMatch(b, bankName))) {
+        setSelectedEditBanks([...selectedEditBanks, bankName]);
+      }
     } else {
-      setSelectedEditBanks(selectedEditBanks.filter((b) => b !== bankName));
+      setSelectedEditBanks(selectedEditBanks.filter((b) => !isBankMatch(b, bankName)));
     }
   };
 
@@ -1816,80 +1824,78 @@ export default function Settings() {
                           </div>
 
                           {/* Quick Action Bar (Select All / Clear All) */}
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1 text-[11px] font-bold">
-                            <span className="text-slate-400">
-                              {bankMastersList.filter(b => b.toLowerCase().includes(bpBankSearchQuery.toLowerCase())).length} Banks Found
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const filtered = bankMastersList.filter(b => b.toLowerCase().includes(bpBankSearchQuery.toLowerCase()));
-                                  const combined = Array.from(new Set([...selectedBanks, ...filtered]));
-                                  setSelectedBanks(combined);
-                                }}
-                                className="text-indigo-600 hover:text-indigo-800"
-                              >
-                                Select All Filtered
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedBanks([])}
-                                className="text-rose-500 hover:text-rose-700"
-                              >
-                                Clear All
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Scrollable Bank List */}
-                          <div className="space-y-1 overflow-y-auto pr-1 flex-1 max-h-52">
-                            {(() => {
-                              const filteredBanks = bankMastersList.filter(b => 
-                                b.toLowerCase().includes(bpBankSearchQuery.toLowerCase())
-                              );
-
-                              if (filteredBanks.length === 0) {
-                                return (
-                                  <div className="py-6 text-center text-slate-400 text-xs font-medium">
-                                    No banks matching "{bpBankSearchQuery}"
+                          {(() => {
+                            const filteredBanks = filterBanksFuzzy(bankMastersList, bpBankSearchQuery);
+                            return (
+                              <>
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1 text-[11px] font-bold">
+                                  <span className="text-slate-400">
+                                    {filteredBanks.length} Banks Found
+                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const combined = Array.from(new Set([...selectedBanks, ...filteredBanks]));
+                                        setSelectedBanks(combined);
+                                      }}
+                                      className="text-indigo-600 hover:text-indigo-800"
+                                    >
+                                      Select All Filtered
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedBanks([])}
+                                      className="text-rose-500 hover:text-rose-700"
+                                    >
+                                      Clear All
+                                    </button>
                                   </div>
-                                );
-                              }
+                                </div>
 
-                              return filteredBanks.map((bankName) => {
-                                const isChecked = selectedBanks.includes(bankName);
-                                return (
-                                  <button
-                                    key={bankName}
-                                    type="button"
-                                    onClick={() => handleBankCheckboxChange(bankName, !isChecked)}
-                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-left transition-all ${
-                                      isChecked
-                                        ? 'bg-indigo-50 text-indigo-800 font-bold border border-indigo-200'
-                                        : 'hover:bg-slate-50 text-slate-700 border border-transparent'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2.5">
-                                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                                        isChecked
-                                          ? 'bg-indigo-600 border-indigo-600 text-white'
-                                          : 'border-slate-300 bg-white'
-                                      }`}>
-                                        {isChecked && <Icons.Check className="w-3 h-3 stroke-[3]" />}
-                                      </div>
-                                      <span>{bankName}</span>
+                                {/* Scrollable Bank List */}
+                                <div className="space-y-1 overflow-y-auto pr-1 flex-1 max-h-52">
+                                  {filteredBanks.length === 0 ? (
+                                    <div className="py-6 text-center text-slate-400 text-xs font-medium">
+                                      No banks matching "{bpBankSearchQuery}"
                                     </div>
-                                    {isChecked && (
-                                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
-                                        Selected
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              });
-                            })()}
-                          </div>
+                                  ) : (
+                                    filteredBanks.map((bankName) => {
+                                      const isChecked = selectedBanks.some(b => isBankMatch(b, bankName));
+                                      return (
+                                        <button
+                                          key={bankName}
+                                          type="button"
+                                          onClick={() => handleBankCheckboxChange(bankName, !isChecked)}
+                                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-left transition-all ${
+                                            isChecked
+                                              ? 'bg-indigo-50 text-indigo-800 font-bold border border-indigo-200'
+                                              : 'hover:bg-slate-50 text-slate-700 border border-transparent'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2.5">
+                                            <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                                              isChecked
+                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                                                : 'border-slate-300 bg-white'
+                                            }`}>
+                                              {isChecked && <Icons.Check className="w-3 h-3 stroke-[3]" />}
+                                            </div>
+                                            <span>{bankName}</span>
+                                          </div>
+                                          {isChecked && (
+                                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
+                                              Selected
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </>
                     )}
@@ -2312,22 +2318,24 @@ export default function Settings() {
 
                         // 1. Bank filter
                         if (bpFilterBank) {
-                          const recBanks = rec.data?.bank ? rec.data.bank.split(',').map((s: string) => s.trim().toLowerCase()) : [];
-                          if (!recBanks.includes(bpFilterBank.toLowerCase())) {
+                          const recBanks = rec.data?.bank ? rec.data.bank.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                          if (!recBanks.some((b: string) => isBankMatch(bpFilterBank, b))) {
                             return false;
                           }
                         }
                         // 2. PSM filter
                         if (bpFilterPsm) {
                           const recPsm = (rec.data?.psm || '').trim().toLowerCase();
-                          if (recPsm !== bpFilterPsm.trim().toLowerCase()) {
+                          const searchPsm = bpFilterPsm.trim().toLowerCase();
+                          if (!recPsm.includes(searchPsm) && !searchPsm.includes(recPsm)) {
                             return false;
                           }
                         }
                         // 3. Loan Type filter
                         if (bpFilterLoanType) {
                           const recLoanType = (rec.data?.loanType || '').trim().toLowerCase();
-                          if (recLoanType !== bpFilterLoanType.trim().toLowerCase()) {
+                          const searchLoan = bpFilterLoanType.trim().toLowerCase();
+                          if (!recLoanType.includes(searchLoan) && !searchLoan.includes(recLoanType)) {
                             return false;
                           }
                         }
@@ -2364,7 +2372,7 @@ export default function Settings() {
                                 .filter(Boolean)
                                 .filter((bankName: string) => {
                                   if (!bpFilterBank) return true;
-                                  return bankName.toLowerCase() === bpFilterBank.toLowerCase();
+                                  return isBankMatch(bpFilterBank, bankName);
                                 })
                                 .map((bankName: string) => (
                                   <div key={bankName} className="flex items-center gap-2 text-[11px] text-slate-850 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 w-max font-bold shadow-sm shadow-slate-100/50">

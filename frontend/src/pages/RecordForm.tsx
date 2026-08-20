@@ -10,6 +10,7 @@ import api, { FILE_BASE_URL } from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
+import { isBankMatch, filterBanksFuzzy, normalizeBankName } from '../utils/bankFuzzyMatcher';
 
 // Normalization helper for bank names
 const normalizeBankForSubmit = (bankName: string): string => {
@@ -372,18 +373,20 @@ export default function RecordForm() {
     const resolvedPsms: string[] = [];
     const unmappedBanks: string[] = [];
 
-    // Find mapping for each selected bank
+    // Find mapping for each selected bank with fuzzy matching
     for (const bank of selectedBanksList) {
-      const targetBank = normalizeBankForSubmit(bank);
       const match = bankPartnerMappings.find((bp: any) => {
         const bpLoanType = bp.data?.loanType || bp.loanType;
         const bpBanks = (bp.data?.bank || bp.bank || '')
           .split(',')
-          .map((s: string) => normalizeBankForSubmit(s));
+          .map((s: string) => s.trim())
+          .filter(Boolean);
         
         const bpNormLoan = normalizeLoanForSubmit(bpLoanType || '');
-        
-        return bpNormLoan === targetLoan && bpBanks.includes(targetBank);
+        const loanMatched = bpNormLoan === targetLoan || targetLoan.includes(bpNormLoan) || bpNormLoan.includes(targetLoan);
+        const bankMatched = bpBanks.some((b: string) => isBankMatch(b, bank));
+
+        return loanMatched && bankMatched;
       });
 
       if (match) {
@@ -640,13 +643,16 @@ export default function RecordForm() {
 
       const toggleBank = (bank: string) => {
         let newList: string[];
-        if (selectedList.includes(bank)) {
-          newList = selectedList.filter((x: string) => x !== bank);
+        const isCurrentlyChecked = selectedList.some((x: string) => isBankMatch(x, bank));
+        if (isCurrentlyChecked) {
+          newList = selectedList.filter((x: string) => !isBankMatch(x, bank));
         } else {
           newList = [...selectedList, bank];
         }
         setValue(field.name, newList.join(', '), { shouldValidate: true });
       };
+
+      const filteredOpts = filterBanksFuzzy(opts, bpSearchQuery);
 
       return (
         <div key={field.name} className="space-y-1.5 text-left relative">
@@ -679,7 +685,7 @@ export default function RecordForm() {
                       type="text"
                       value={bpSearchQuery}
                       onChange={(e) => setBpSearchQuery(e.target.value)}
-                      placeholder={`Search out of ${opts.length} banks...`}
+                      placeholder={`Search out of ${opts.length} banks (e.g. SBI, HDFC, Kotak)...`}
                       className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       autoFocus
                     />
@@ -697,14 +703,13 @@ export default function RecordForm() {
                   {/* Quick Action Bar */}
                   <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 px-1 text-[11px] font-bold">
                     <span className="text-slate-400">
-                      {opts.filter(b => b.toLowerCase().includes(bpSearchQuery.toLowerCase())).length} Banks Found
+                      {filteredOpts.length} Banks Found
                     </span>
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => {
-                          const filtered = opts.filter(b => b.toLowerCase().includes(bpSearchQuery.toLowerCase()));
-                          const combined = Array.from(new Set([...selectedList, ...filtered]));
+                          const combined = Array.from(new Set([...selectedList, ...filteredOpts]));
                           setValue(field.name, combined.join(', '), { shouldValidate: true });
                         }}
                         className="text-emerald-600 hover:text-emerald-800"
@@ -723,17 +728,13 @@ export default function RecordForm() {
 
                   {/* Scrollable list */}
                   <div className="space-y-1 overflow-y-auto pr-1 flex-1 max-h-48">
-                    {(() => {
-                      const filteredOpts = opts.filter(b => b.toLowerCase().includes(bpSearchQuery.toLowerCase()));
-                      if (filteredOpts.length === 0) {
-                        return (
-                          <div className="py-4 text-center text-slate-400 text-xs font-medium">
-                            No banks matching "{bpSearchQuery}"
-                          </div>
-                        );
-                      }
-                      return filteredOpts.map((opt) => {
-                        const isChecked = selectedList.includes(opt);
+                    {filteredOpts.length === 0 ? (
+                      <div className="py-4 text-center text-slate-400 text-xs font-medium">
+                        No banks matching "{bpSearchQuery}"
+                      </div>
+                    ) : (
+                      filteredOpts.map((opt) => {
+                        const isChecked = selectedList.some((x: string) => isBankMatch(x, opt));
                         return (
                           <button
                             key={opt}
@@ -762,8 +763,8 @@ export default function RecordForm() {
                             )}
                           </button>
                         );
-                      });
-                    })()}
+                      })
+                    )}
                   </div>
                 </div>
               </>
