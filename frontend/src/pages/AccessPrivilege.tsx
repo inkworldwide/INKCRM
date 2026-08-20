@@ -56,6 +56,14 @@ const SYSTEM_MENU_CONFIG: MenuItemDefinition[] = [
     isRecordModule: true,
     moduleName: 'campaignassignments'
   },
+  {
+    key: 'export_campaigns',
+    label: 'Export Campaign Data',
+    category: 'Main Menu',
+    path: '/my-campaign',
+    icon: 'Download',
+    description: 'Permission to export campaign lead records and Excel reports in My Campaign.'
+  },
 
   // 2. REPORTS & ANALYTICS
   {

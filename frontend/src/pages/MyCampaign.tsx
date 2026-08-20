@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { useAuthStore } from '../store/authStore';
 import * as Icons from 'lucide-react';
 import { exportCampaignCSV, exportCampaignXLSX } from '../utils/exportCampaignCSV';
 import { TableHorizontalScrollWrapper } from '../components/TableHorizontalScrollWrapper';
@@ -150,13 +151,15 @@ export const getLeadDataCode = (lead: any): string => {
 export default function MyCampaign() {
   const navigate = useNavigate();
   const { showToast } = useToastStore();
+  const { canExportCampaigns } = useAuthStore();
+  const allowExport = canExportCampaigns();
   const [campaigns, setCampaigns] = useState<CampaignStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCampaign, setActiveCampaign] = useState<CampaignStats | null>(null);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [statuses, setStatuses] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Track inputs for each lead ID
@@ -614,14 +617,16 @@ export default function MyCampaign() {
                             <Icons.Eye className="w-4 h-4" />
                             <span>View Details</span>
                           </button>
-                          <button 
-                            onClick={() => handleDownloadCampaign(campaign.campaignName)}
-                            className="h-9 px-3.5 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
-                            title="Download Campaign Excel/CSV"
-                          >
-                            <Icons.Download className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Export</span>
-                          </button>
+                          {allowExport && (
+                            <button 
+                              onClick={() => handleDownloadCampaign(campaign.campaignName)}
+                              className="h-9 px-3.5 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                              title="Download Campaign Excel/CSV"
+                            >
+                              <Icons.Download className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Export</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -686,13 +691,15 @@ export default function MyCampaign() {
                 </button>
               </div>
 
-              <button
-                onClick={() => handleDownloadCampaign(activeCampaign.campaignName, leads)}
-                className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider active:scale-95"
-              >
-                <Icons.FileSpreadsheet className="w-3.5 h-3.5" />
-                Export Excel
-              </button>
+              {allowExport && (
+                <button
+                  onClick={() => handleDownloadCampaign(activeCampaign.campaignName, leads)}
+                  className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider active:scale-95"
+                >
+                  <Icons.FileSpreadsheet className="w-3.5 h-3.5" />
+                  Export Excel
+                </button>
+              )}
               {(() => {
                 const pct = activeCampaign.totalAssigned > 0 
                   ? Math.round((activeCampaign.dialed / activeCampaign.totalAssigned) * 100)
@@ -904,128 +911,156 @@ export default function MyCampaign() {
               </TableHorizontalScrollWrapper>
             </div>
           ) : (
-            /* CARD VIEW */
-            <div className="space-y-5">
-              {leads.map((lead) => {
+            /* CARD VIEW MATCHING EXACT DESIGN IN MEDIA USER IMAGE */
+            <div className="space-y-4">
+              {leads.map((lead, idx) => {
                 const customer = getLeadCustomer(lead.data);
                 const firmName = getLeadFirmName(lead.data);
                 const location = getLeadLocation(lead.data);
-                const phoneVal = getLeadPhone(lead.data);
+                const phoneVal = getLeadPhone(lead.data) || 'N/A';
                 const dataCode = getLeadDataCode(lead);
+                const leadCategory = getLeadCategory(lead.data);
+                const agentAssigned = lead.data?.assignedTo || (lead as any).assignedToName || 'Unassigned';
+                const createdOnStr = lead.createdAt 
+                  ? new Date(lead.createdAt).toLocaleDateString('en-GB') 
+                  : 'N/A';
+                const currentStatus = leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call';
 
                 return (
                   <div 
                     key={lead._id}
-                    className="bg-white dark:bg-[#111827] rounded-2xl border-l-[4px] border-l-[#17223B] dark:border-l-indigo-500 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs hover:shadow-md transition-all duration-200 space-y-4"
+                    className="bg-white dark:bg-[#111827] rounded-2xl border-l-[4px] border-l-indigo-600 dark:border-l-indigo-500 border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all duration-200 space-y-4"
                   >
-                    {/* Lead Row 1 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Number</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
-                          {phoneVal || 'N/A'}
+                    {/* Header Row: SI No & Data Code */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3 pl-1 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <span className="px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-black rounded-lg">
+                          SI No.: {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-mono tracking-wide">
+                          {dataCode}
                         </span>
                       </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer Name</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">
-                          {customer}
-                        </span>
+                      <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-400">
+                        Created: {createdOnStr}
+                      </span>
+                    </div>
+
+                    {/* 4-Column Grid of Details (Responsive 1-col mobile, 2-col tablet, 4-col desktop) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pl-1 text-xs">
+                      {/* Col 1 */}
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">LEAD NAME:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white text-sm block">{customer}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">LEAD NO. / CODE:</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">{dataCode}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">CATEGORY / PRODUCT:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white">{leadCategory}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Firm Name</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                          {firmName}
-                        </span>
+
+                      {/* Col 2 */}
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">FIRM / COMPANY:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white block truncate">{firmName}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">LOCATION:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white">{location}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">MOBILE NO.:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white font-mono text-xs">{phoneVal}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</span>
-                        <select 
-                          value={leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call'}
-                          onChange={(e) => handleStatusSelect(lead, e.target.value)}
-                          className="w-full text-xs font-bold bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-800 dark:text-white shadow-xs transition-all cursor-pointer"
-                        >
-                          {CAMPAIGN_STATUSES.map(statusOpt => (
-                            <option key={statusOpt} value={statusOpt}>{statusOpt}</option>
-                          ))}
-                        </select>
+
+                      {/* Col 3 */}
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">ASSIGNED TO:</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white">{agentAssigned}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1">DIAL STATUS:</span>
+                          <select
+                            value={currentStatus}
+                            onChange={(e) => handleStatusSelect(lead, e.target.value)}
+                            className="w-full text-xs font-extrabold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                          >
+                            {CAMPAIGN_STATUSES.map(statusOpt => (
+                              <option key={statusOpt} value={statusOpt}>{statusOpt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Col 4 - Inputs for Case Details & Remarks */}
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1">CASE DETAILS:</span>
+                          <input
+                            type="text"
+                            placeholder="Case Details"
+                            value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
+                            onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
+                            onBlur={() => handleSaveLead(lead._id)}
+                            className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl px-3.5 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1">REMARKS:</span>
+                          <input
+                            type="text"
+                            placeholder="Remarks / Notes"
+                            value={(leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')).replace(/<[^>]*>/g, '')}
+                            onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
+                            onBlur={() => handleSaveLead(lead._id)}
+                            className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl px-3.5 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-semibold"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Lead Row 2 */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                      <div className="md:col-span-1">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Remarks:</label>
-                        <textarea 
-                          value={leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')}
-                          onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
-                          rows={2}
-                          className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
-                        />
-                      </div>
-                      
-                      <div className="md:col-span-1">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Case Details:</label>
-                        <textarea 
-                          placeholder="case Details"
-                          value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
-                          onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
-                          rows={2}
-                          className="w-full text-xs bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 dark:focus:border-indigo-400 text-slate-850 dark:text-white resize-none shadow-xs transition-all"
-                        />
+                    {/* Action Buttons Footer (Mobile Wrapped Flex Layout) */}
+                    <div className="flex flex-wrap gap-2 justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800/80 pl-1">
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+                        <button
+                          onClick={() => handleWhatsAppChat(lead)}
+                          className="flex-1 sm:flex-initial h-9 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Icons.MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>WA CHAT</span>
+                        </button>
+                        <button
+                          onClick={() => handleInitiateCall(lead)}
+                          className="flex-1 sm:flex-initial h-9 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Icons.PhoneCall className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span>CALL</span>
+                        </button>
                       </div>
 
-                      <div className="md:col-span-1 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location: </span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-white uppercase ml-1">
-                            {location}
-                          </span>
-                        </div>
-                        
-                        <div className="flex gap-1.5 mt-2 flex-wrap sm:flex-nowrap">
-                          <button 
-                            onClick={() => handleWhatsAppChat(lead)}
-                            className="flex-1 py-2 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                            title="Open WhatsApp Chat"
-                          >
-                            <Icons.MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            WA Chat
-                          </button>
-                          <button 
-                            onClick={() => handleInitiateCall(lead)}
-                            className="flex-1 py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 dark:border-blue-800 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                            title="Initiate Call"
-                          >
-                            <Icons.PhoneCall className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                            Call
-                          </button>
-                          <button 
-                            onClick={() => handleSaveLead(lead._id)}
-                            className="flex-1 py-2 px-2 bg-[#17223B] hover:bg-[#223050] text-white text-[11px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                            title="Save Lead Update"
-                          >
-                            <Icons.Save className="w-3.5 h-3.5 text-white" />
-                            Save
-                          </button>
-                          <button 
-                            onClick={() => navigate(`/modules/leads/${lead._id}`)}
-                            className="flex-1 py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                            title="Edit Lead Details"
-                          >
-                            <Icons.Edit className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="md:col-span-1 flex items-start">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data Code: </span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-white ml-1">
-                            {dataCode}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={() => handleSaveLead(lead._id)}
+                          className="flex-1 sm:flex-initial h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
+                        >
+                          <Icons.Save className="w-3.5 h-3.5" />
+                          <span>SAVE</span>
+                        </button>
+                        <button
+                          onClick={() => navigate(`/modules/leads/${lead._id}`)}
+                          className="flex-1 sm:flex-initial h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
+                        >
+                          <Icons.Edit className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                          <span>EDIT</span>
+                        </button>
                       </div>
                     </div>
                   </div>

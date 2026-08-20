@@ -43,6 +43,7 @@ interface AuthState {
   initialize: () => void;
   canAccessMenu: (menuKey: string) => boolean;
   canAccessModule: (moduleName: string, action?: 'create' | 'read' | 'update' | 'delete') => boolean;
+  canExportCampaigns: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -194,5 +195,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (action === 'delete') return mod.delete !== 'none';
 
     return true;
+  },
+
+  canExportCampaigns: () => {
+    const state = get();
+    const role = state.role;
+    const user = state.user;
+
+    let roleName = '';
+    if (role && role.name) {
+      roleName = role.name.toLowerCase();
+    } else if (user && typeof user.roleId === 'object' && (user.roleId as any)?.name) {
+      roleName = (user.roleId as any).name.toLowerCase();
+    }
+
+    // 1. Admin and Super Admin always have export permission
+    if (roleName.includes('super admin') || roleName.includes('admin')) {
+      return true;
+    }
+
+    // 2. Check if role has explicit export_campaigns permission in allowedMenus
+    if (!role) return false;
+    const allowedMenus = role.permissions?.menus;
+    if (!Array.isArray(allowedMenus)) return false;
+
+    return allowedMenus.some((m: string) => {
+      const norm = (m || '').toLowerCase().replace(/[-_\s]/g, '');
+      return norm === 'exportcampaigns' || norm === 'exportcampaign' || norm === 'export_campaigns';
+    });
   }
 }));

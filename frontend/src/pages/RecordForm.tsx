@@ -588,9 +588,9 @@ export default function RecordForm() {
       }
     }
 
-    const inputBase = 'w-full h-11 px-4 text-xs font-semibold bg-white border border-[#EAE4DA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#17223B]/10 focus:border-[#17223B] transition-all text-[#111827] placeholder-slate-400';
+    const inputBase = 'w-full h-11 px-4 text-xs font-semibold bg-white dark:bg-slate-900 border border-[#EAE4DA] dark:border-slate-700 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#17223B]/10 focus:border-[#17223B] transition-all text-[#111827] dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-400';
 
-    const labelClass = 'text-[11px] font-bold text-[#1F2937] uppercase tracking-wider block mb-1.5';
+    const labelClass = 'text-[11px] font-bold text-[#1F2937] dark:text-slate-200 uppercase tracking-wider block mb-1.5';
 
     if (field.name === 'source' && apiPath === 'leads') {
       return (

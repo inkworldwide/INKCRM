@@ -178,7 +178,7 @@
 }
 
 .table-header-premium {
-  @apply border-b border-[#EAE4DA] dark:border-slate-800 text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider h-10 bg-[#FAFAF9] dark:bg-slate-800/90;
+  @apply border-b border-[#EAE4DA] dark:border-slate-800 text-[10px] font-bold text-[#6B7280] dark:text-slate-300 uppercase tracking-wider h-10 bg-[#FAFAF9] dark:bg-slate-800/90;
 }
 
 .checkbox-premium {
@@ -189,3 +189,60 @@
   --sidebar-bg: #FFFFFF;
   --sidebar-border: #EAE4DA;
 }
+
+/* ==========================================================================
+   GLOBAL HIGH-CONTRAST DARK MODE OVERRIDES (EVERY PAGE)
+   ========================================================================== */
+html.dark,
+.dark {
+  color-scheme: dark;
+}
+
+/* 1. Labels, Helper Text & Captions in Dark Mode */
+.dark label,
+.dark .label-premium {
+  color: #CBD5E1 !important; /* High contrast Slate-300 */
+}
+
+/* 2. Body Text & Muted Texts in Dark Mode */
+.dark .text-slate-400,
+.dark .text-slate-455,
+.dark .text-slate-500,
+.dark .text-slate-600,
+.dark .text-slate-700,
+.dark .text-slate-800,
+.dark .text-slate-850 {
+  color: #CBD5E1 !important;
+}
+
+/* 3. Titles, Headings & Bold Text in Dark Mode */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6,
+.dark .text-slate-900,
+.dark .text-slate-950 {
+  color: #F8FAFC !important;
+}
+
+/* 4. Form Inputs, Selects & Textareas in Dark Mode */
+.dark input[type="text"],
+.dark input[type="number"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="date"],
+.dark select,
+.dark textarea,
+.dark .input-premium {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+  border-color: #334155 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+.dark select option {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
