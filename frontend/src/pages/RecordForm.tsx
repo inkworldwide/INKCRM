@@ -1086,20 +1086,25 @@ export default function RecordForm() {
       });
 
       // Maintain order to match the request layout:
-      // Loan Details
+      // SL No & Created Date top metadata, followed by:
+      // Data Code -> Customer Name -> Firm Name -> Status -> Case Details -> Lead Category -> Remarks -> Mobile Number -> Assigned To
       const orderedLoan = [
+        loanFields.find(f => f.name === 'dataCode'),
+        persFields.find(f => f.name === 'firstName'),
+        persFields.find(f => f.name === 'lastName'),
+        persFields.find(f => f.name === 'company'),
+        loanFields.find(f => f.name === 'status'),
+        loanFields.find(f => f.name === 'caseDetails'),
+        loanFields.find(f => f.name === 'loanType'),
+        loanFields.find(f => f.name === 'notes'),
+        persFields.find(f => f.name === 'phone'),
+        loanFields.find(f => f.name === 'assignedTo'),
         loanFields.find(f => f.name === 'source'),
         loanFields.find(f => f.name === 'budget'),
-        loanFields.find(f => f.name === 'loanType'),
         loanFields.find(f => f.name === 'businessPartner'),
         loanFields.find(f => f.name === 'psm'),
-        loanFields.find(f => f.name === 'status'),
         loanFields.find(f => f.name === 'assignToTeam'),
-        loanFields.find(f => f.name === 'assignedTo'),
-        loanFields.find(f => f.name === 'followUpDate'),
-        loanFields.find(f => f.name === 'dataCode'),
-        loanFields.find(f => f.name === 'caseDetails'),
-        loanFields.find(f => f.name === 'notes')
+        loanFields.find(f => f.name === 'followUpDate')
       ].filter(Boolean) as FieldDefinition[];
 
       // Personal Details
