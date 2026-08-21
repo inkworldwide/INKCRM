@@ -294,7 +294,7 @@ export default function ModuleView() {
       if (company) { cleanRow.company = company; cleanRow.firmName = company; cleanRow.firm_name = company; }
       if (location) { cleanRow.city = location; cleanRow.location = location; }
       if (leadCategory) { cleanRow.leadCategory = leadCategory; cleanRow.loanType = leadCategory; cleanRow.lead_category = leadCategory; }
-      if (dataCode) { cleanRow.dataCode = dataCode; cleanRow.data_code = dataCode; }
+      if (dataCode) { cleanRow.dataCode = dataCode; cleanRow.data_code = dataCode; cleanRow['Data Code'] = dataCode; }
       if (caseDetails) { cleanRow.caseDetails = caseDetails; cleanRow.case_details = caseDetails; }
       if (remarks) { cleanRow.notes = remarks; cleanRow.remarks = remarks; }
 
@@ -1873,7 +1873,7 @@ export default function ModuleView() {
             ) : apiPath === 'leads' ? (
               <div className="space-y-6">
                 {data?.records.map((rec: any, idx: number) => {
-                  const leadNo = rec.data?.dataCode || rec.data?.data_code || rec.data?.code || rec._id.slice(-6).toUpperCase();
+                  const leadNo = rec.data?.['Data Code'] || rec.data?.dataCode || rec.data?.data_code || rec.data?.code || rec._id.slice(-6).toUpperCase();
                   
                   const extractField = (dataObj: any, targets: string[], contains: string[] = []): string => {
                     if (!dataObj || typeof dataObj !== 'object') return '';

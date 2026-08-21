@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lead_Report') => {
   const headers = [
     'Sl.No.',
+    'Data Code',
     'Createddate',
     'Customer Name',
     'Mobile No',
@@ -79,6 +80,11 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
   const dataRows = (leads || []).map((lead: any, idx: number) => {
     const data = lead.data || lead;
     const slNo = idx + 1;
+    const dataCode = extractField(
+      data,
+      ['Data Code', 'dataCode', 'data_code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
+      ['datacode', 'leadcode']
+    ) || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
     const createdDate = formatDateShort(lead.createdAt || data.createdAt || data.createddate);
 
     const customerName = String(
@@ -126,6 +132,7 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
 
     return {
       'Sl.No.': slNo,
+      'Data Code': dataCode,
       'Createddate': createdDate,
       'Customer Name': customerName,
       'Mobile No': mobileNo,

@@ -435,6 +435,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
           state: lead.state || '',
           dataCode: codeVal,
           data_code: codeVal,
+          'Data Code': codeVal,
           caseDetails: caseVal,
           case_details: caseVal,
           notes: remarksVal,
