@@ -930,61 +930,61 @@ export default function MyCampaign() {
                 return (
                   <div 
                     key={lead._id}
-                    className="bg-white dark:bg-[#111827] rounded-2xl border-l-[4px] border-l-indigo-600 dark:border-l-indigo-500 border border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all duration-200 space-y-4 text-left"
+                    className="bg-white dark:bg-[#111827] rounded-xl border-l-[4px] border-l-indigo-600 dark:border-l-indigo-500 border border-slate-200/90 dark:border-slate-800 p-3 sm:p-3.5 shadow-xs hover:shadow-md transition-all duration-200 space-y-2.5 text-left"
                   >
                     {/* TOP METADATA SECTION: 1. SL No & 2. Created Date */}
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3 flex-wrap">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-2 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 text-xs font-black rounded-lg">
+                        <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 text-[11px] font-black rounded-md">
                           SL No.: {idx + 1}
                         </span>
                       </div>
-                      <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-400">
+                      <span className="text-[10.5px] font-extrabold text-slate-600 dark:text-slate-400">
                         Created Date: <strong className="text-slate-900 dark:text-white font-black">{createdOnStr}</strong>
                       </span>
                     </div>
 
                     {/* MAIN DETAILS SECTION - EXACT SEQUENCE: 3. Data Code -> 4. Customer Name -> 5. Firm Name -> 6. Status -> 7. Case Details -> 8. Lead Category -> 9. Remarks -> 10. Mobile Number -> 11. Assigned To */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pl-1 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pl-0.5 text-xs">
                       {/* 3. Data Code */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Data Code:
                         </span>
-                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs sm:text-sm block">
+                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs block leading-tight">
                           {dataCode}
                         </span>
                       </div>
 
                       {/* 4. Customer Name */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Customer Name:
                         </span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm block truncate">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
                           {customer}
                         </span>
                       </div>
 
                       {/* 5. Firm Name */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Firm Name:
                         </span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm block truncate">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
                           {firmName}
                         </span>
                       </div>
 
                       {/* 6. Status */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Status:
                         </span>
                         <select
                           value={currentStatus}
                           onChange={(e) => handleStatusSelect(lead, e.target.value)}
-                          className="w-full text-xs font-extrabold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                          className="w-full h-7 text-xs font-extrabold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-0.5 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs leading-tight"
                         >
                           {CAMPAIGN_STATUSES.map(statusOpt => (
                             <option key={statusOpt} value={statusOpt}>{statusOpt}</option>
@@ -993,8 +993,8 @@ export default function MyCampaign() {
                       </div>
 
                       {/* 7. Case Details */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Case Details:
                         </span>
                         <input
@@ -1003,23 +1003,23 @@ export default function MyCampaign() {
                           value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
                           onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
                           onBlur={() => handleSaveLead(lead._id)}
-                          className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-1.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-semibold"
+                          className="w-full h-7 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-0.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs font-semibold leading-tight"
                         />
                       </div>
 
                       {/* 8. Lead Category */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Lead Category:
                         </span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm block">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs block leading-tight">
                           {leadCategory}
                         </span>
                       </div>
 
                       {/* 9. Remarks */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Remarks:
                         </span>
                         <input
@@ -1028,63 +1028,63 @@ export default function MyCampaign() {
                           value={(leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')).replace(/<[^>]*>/g, '')}
                           onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
                           onBlur={() => handleSaveLead(lead._id)}
-                          className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-1.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs font-semibold"
+                          className="w-full h-7 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-0.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs font-semibold leading-tight"
                         />
                       </div>
 
                       {/* 10. Mobile Number */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Mobile Number:
                         </span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-white text-xs sm:text-sm block">
+                        <span className="font-mono font-bold text-slate-900 dark:text-white text-xs block leading-tight">
                           {maskPhoneNumber(phoneVal)}
                         </span>
                       </div>
 
                       {/* 11. Assigned To */}
-                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                      <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                        <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
                           Assigned To:
                         </span>
-                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-xs sm:text-sm block truncate">
+                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-xs block truncate leading-tight">
                           {agentAssigned}
                         </span>
                       </div>
                     </div>
 
                     {/* Action Buttons Footer (Group 1: WA CHAT + CALL left, Group 2: SAVE + EDIT right) */}
-                    <div className="flex flex-wrap gap-2 justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800/80 pl-1">
-                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-2 justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80 pl-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
                         <button
                           onClick={() => handleWhatsAppChat(lead)}
-                          className="flex-1 sm:flex-initial h-9 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-3xs"
+                          className="flex-1 sm:flex-initial h-8 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-3xs"
                         >
-                          <Icons.MessageSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <Icons.MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                           <span>WA CHAT</span>
                         </button>
                         <button
                           onClick={() => handleInitiateCall(lead)}
-                          className="flex-1 sm:flex-initial h-9 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-3xs"
+                          className="flex-1 sm:flex-initial h-8 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-3xs"
                         >
-                          <Icons.PhoneCall className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <Icons.PhoneCall className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                           <span>CALL</span>
                         </button>
                       </div>
 
-                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                         <button
                           onClick={() => handleSaveLead(lead._id)}
-                          className="flex-1 sm:flex-initial h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
+                          className="flex-1 sm:flex-initial h-8 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
                         >
-                          <Icons.Save className="w-3.5 h-3.5" />
+                          <Icons.Save className="w-3 h-3" />
                           <span>SAVE</span>
                         </button>
                         <button
                           onClick={() => navigate(`/modules/leads/${lead._id}`)}
-                          className="flex-1 sm:flex-initial h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
+                          className="flex-1 sm:flex-initial h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
                         >
-                          <Icons.Edit className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                          <Icons.Edit className="w-3 h-3 text-slate-600 dark:text-slate-300" />
                           <span>EDIT</span>
                         </button>
                       </div>
