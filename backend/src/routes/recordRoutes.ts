@@ -372,7 +372,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       // Extract data code
       const codeVal = extractFuzzyField(
         lead,
-        ['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id'],
+        ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
         ['datacode', 'leadcode']
       );
 

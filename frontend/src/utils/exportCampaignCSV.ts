@@ -84,7 +84,7 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
     // 1. Data Code
     const dataCode = extractField(
       data,
-      ['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id'],
+      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
       ['datacode', 'leadcode']
     ) || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
 

@@ -7,6 +7,7 @@ import { DynamicIcon } from '../components/Layout';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../utils/dateFormatter';
 import { useToastStore } from '../store/toastStore';
+import { maskPhoneNumber } from '../utils/phoneUtils';
 import SalesFunnel3D from '../components/SalesFunnel3D';
 
 export default function Dashboard() {
@@ -963,7 +964,9 @@ export default function Dashboard() {
 
                     <div className="text-[13px] leading-snug">
                       <span className="font-semibold text-[#1C1917] dark:text-stone-100">Mobile No.: </span>
-                      <span className="text-[#44403C] dark:text-stone-300 font-mono">{rec.data?.phone || 'N/A'}</span>
+                      <span className="text-[#44403C] dark:text-stone-300 font-mono">
+                        {maskPhoneNumber(rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num)}
+                      </span>
                     </div>
 
                     <div className="text-[13px] leading-snug flex items-center flex-wrap gap-1">
@@ -1063,7 +1066,7 @@ export default function Dashboard() {
                           const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
                           if (cleanPhone) {
                             const leadName = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || rec.data?.fullName || rec.data?.customerName || rec.data?.name || 'Lead';
-                            showToast(`Calling ${leadName} (${cleanPhone})...`, 'info');
+                            showToast(`Calling ${leadName}...`, 'info');
                             window.location.href = `tel:${cleanPhone}`;
                           } else {
                             showToast('No phone number available for this lead.', 'warning');

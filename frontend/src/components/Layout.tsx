@@ -260,7 +260,7 @@ export default function Layout({ children }: LayoutProps) {
             
             {/* Group 1: Quick Actions */}
             <SidebarGroup title="QUICK ACTIONS" isCollapsed={isCollapsed}>
-              {(!branding || branding.enabledModules.includes('leads')) && (
+              {canAccessMenu('leads') && (
                 <SidebarItem 
                   to="/modules/leads/new" 
                   label="CREATE LEAD" 
@@ -306,7 +306,8 @@ export default function Layout({ children }: LayoutProps) {
                   const hiddenSettingsModules = ['departments', 'products', 'bankmasters', 'bankingpartners', 'companies', 'deals'];
                   if (hiddenSettingsModules.includes(m.apiPath.toLowerCase())) return false;
                   if (!canAccessMenu(m.apiPath.toLowerCase())) return false;
-                  if (!branding) return true;
+                  if (['leads', 'campaigns'].includes(m.apiPath.toLowerCase())) return true;
+                  if (!branding || !branding.enabledModules || branding.enabledModules.length === 0) return true;
                   return branding.enabledModules.includes(m.apiPath.toLowerCase());
                 }).map(m => {
                   let icon = Icons.FileText;
@@ -474,7 +475,7 @@ export default function Layout({ children }: LayoutProps) {
                 })}
 
                 {/* Campaigns accordion */}
-                {modules.some(m => m.apiPath === 'campaigns') && (!branding || branding.enabledModules.includes('leads') || branding.enabledModules.includes('campaigns')) && (canAccessMenu('campaigns') || canAccessMenu('campaignassignments')) && (
+                {(canAccessMenu('campaigns') || canAccessMenu('campaignassignments')) && (
                   <SidebarAccordion label="CAMPAIGNS" icon={Icons.Megaphone} colorClass="text-[#EA580C]" isCollapsed={isCollapsed}>
                     {canAccessMenu('campaigns') && (
                       <SidebarItem to="/modules/campaigns" label="CAMPAIGN LIST" icon={Icons.Target} colorClass="text-[#EA580C]" indent isCollapsed={isCollapsed} />

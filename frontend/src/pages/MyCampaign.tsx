@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import * as Icons from 'lucide-react';
 import { exportCampaignCSV, exportCampaignXLSX } from '../utils/exportCampaignCSV';
 import { TableHorizontalScrollWrapper } from '../components/TableHorizontalScrollWrapper';
+import { maskPhoneNumber } from '../utils/phoneUtils';
 
 interface CampaignStats {
   campaignName: string;
@@ -142,7 +143,7 @@ export const getLeadCategory = (data: any): string => {
 export const getLeadDataCode = (lead: any): string => {
   const code = getLeadFieldValue(
     lead.data,
-    ['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id'],
+    ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
     ['datacode', 'leadcode']
   );
   return code || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
@@ -364,7 +365,7 @@ export default function MyCampaign() {
       return;
     }
     const leadName = getLeadCustomer(lead.data) || getLeadFirmName(lead.data) || 'Lead';
-    showToast(`Calling ${leadName} (${cleanPhone})...`, 'info');
+    showToast(`Calling ${leadName}...`, 'info');
 
     // Track dial activity
     try {
@@ -836,7 +837,7 @@ export default function MyCampaign() {
                           {/* 6. contact num */}
                           <td className="py-3 px-3 border-r border-slate-100 dark:border-slate-800">
                             <div className="space-y-1">
-                              <span className="font-bold text-slate-900 dark:text-white block">{phoneVal}</span>
+                              <span className="font-bold text-slate-900 dark:text-white block">{maskPhoneNumber(phoneVal)}</span>
                               <div className="flex gap-1">
                                 <button
                                   onClick={() => handleWhatsAppChat(lead)}
@@ -976,7 +977,7 @@ export default function MyCampaign() {
                         </div>
                         <div>
                           <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">MOBILE NO.:</span>
-                          <span className="font-extrabold text-slate-900 dark:text-white font-mono text-xs">{phoneVal}</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white font-mono text-xs">{maskPhoneNumber(phoneVal)}</span>
                         </div>
                       </div>
 

@@ -12,6 +12,7 @@ import { useThemeStore } from '../store/themeStore';
 import { formatDate } from '../utils/dateFormatter';
 import { exportCampaignCSV } from '../utils/exportCampaignCSV';
 import { exportLeadReportXLSX } from '../utils/exportLeadReportXLSX';
+import { maskPhoneNumber } from '../utils/phoneUtils';
 
 type ViewMode = 'table' | 'kanban' | 'calendar' | 'timeline';
 
@@ -256,7 +257,7 @@ export default function ModuleView() {
     const companyCol = mapCol(['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization']);
     const locationCol = mapCol(['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch']);
     const categoryCol = mapCol(['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType']);
-    const codeCol = mapCol(['dataCode', 'data_code', 'code', 'leadCode', 'lead_code', 'slNo', 'sl_no', 'serialNo', 'id']);
+    const codeCol = mapCol(['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code']);
     const caseCol = mapCol(['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description']);
     const remarksCol = mapCol(['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback']);
 
@@ -2009,7 +2010,7 @@ export default function ModuleView() {
 
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Mobile No.: </span>
-                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{leadPhone}</span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{maskPhoneNumber(leadPhone)}</span>
                         </div>
 
                         <div className="text-[13px] leading-snug flex items-center flex-wrap gap-1">
@@ -2106,7 +2107,7 @@ export default function ModuleView() {
                             onClick={() => {
                               const cleanPhone = String(rawPhone || '').replace(/[^\d+]/g, '').trim();
                               if (cleanPhone) {
-                                showToast(`Calling ${leadName} (${cleanPhone})...`, 'info');
+                                showToast(`Calling ${leadName}...`, 'info');
                                 window.location.href = `tel:${cleanPhone}`;
                               } else {
                                 showToast('No phone number available for this lead.', 'warning');

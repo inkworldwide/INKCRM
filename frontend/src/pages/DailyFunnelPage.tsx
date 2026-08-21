@@ -4,6 +4,7 @@ import * as Icons from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import { exportLeadReportXLSX } from '../utils/exportLeadReportXLSX';
+import { maskPhoneNumber } from '../utils/phoneUtils';
 import {
   PieChart,
   Pie,
@@ -489,7 +490,7 @@ export default function DailyFunnelPage() {
                           <span>{custName}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono">{mobile}</td>
+                      <td className="py-3 px-4 font-mono">{maskPhoneNumber(mobile)}</td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold text-[11px]">
                           {camp}

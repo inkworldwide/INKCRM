@@ -6,6 +6,7 @@ import { useToastStore } from '../store/toastStore';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
 
 import { exportLeadReportXLSX } from '../utils/exportLeadReportXLSX';
+import { maskPhoneNumber } from '../utils/phoneUtils';
 
 export default function LeadReportsPage() {
   const [searchParams] = useSearchParams();
@@ -369,7 +370,7 @@ export default function LeadReportsPage() {
                         </div>
                       </td>
                       <td className="py-3.5 px-6">
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">{phone}</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">{maskPhoneNumber(phone)}</div>
                         <div className="text-[10px] text-slate-400 font-mono">{email}</div>
                       </td>
                       <td className="py-3.5 px-6">

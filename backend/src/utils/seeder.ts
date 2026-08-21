@@ -53,7 +53,7 @@ async function seed() {
       fontFamily: 'Inter',
       mode: 'dark'
     },
-    enabledModules: ['dashboard', 'leads', 'deals', 'companies', 'tasks', 'settings', 'reports', 'workflows'],
+    enabledModules: ['dashboard', 'leads', 'campaigns', 'deals', 'companies', 'tasks', 'settings', 'reports', 'workflows'],
     subscription: { plan: 'enterprise', status: 'active', expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) }
   });
 
@@ -69,7 +69,7 @@ async function seed() {
       fontFamily: 'Outfit',
       mode: 'light'
     },
-    enabledModules: ['dashboard', 'students', 'courses', 'tasks', 'settings', 'reports'],
+    enabledModules: ['dashboard', 'leads', 'campaigns', 'students', 'courses', 'tasks', 'settings', 'reports'],
     subscription: { plan: 'growth', status: 'active', expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000) }
   });
 
@@ -85,7 +85,7 @@ async function seed() {
       fontFamily: 'Roboto',
       mode: 'light'
     },
-    enabledModules: ['dashboard', 'patients', 'appointments', 'tasks', 'settings', 'reports'],
+    enabledModules: ['dashboard', 'leads', 'campaigns', 'patients', 'appointments', 'tasks', 'settings', 'reports'],
     subscription: { plan: 'enterprise', status: 'active', expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) }
   });
 
