@@ -447,6 +447,20 @@ async function seed() {
         defaultValue: 'SALARIED PERSONAL LOAN',
         options: ['SALARIED PERSONAL LOAN', 'BUSINESS LOAN', 'HOME LOAN', 'LAP']
       },
+      {
+        name: 'caseCategory',
+        label: 'Case Category',
+        type: 'text',
+        required: false,
+        unique: false
+      },
+      {
+        name: 'leadCategory',
+        label: 'Lead Category',
+        type: 'text',
+        required: false,
+        unique: false
+      },
       { name: 'budget', label: 'Loan Amount', type: 'currency', required: false, unique: false },
       { name: 'dataCode', label: 'Data Code', type: 'text', required: false, unique: false },
       {

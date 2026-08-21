@@ -1057,7 +1057,7 @@ export default function RecordForm() {
   // Group fields into Loan Details / Personal Details sections
   const groupFields = (fields: FieldDefinition[]) => {
     const loanDetailNames = [
-      'source', 'loanType', 'budget', 'dataCode', 'businessPartner', 'psm', 'status', 'caseDetails', 'assignToTeam', 'assignedTo', 'followUpDate', 'notes'
+      'source', 'loanType', 'caseCategory', 'leadCategory', 'budget', 'dataCode', 'businessPartner', 'psm', 'status', 'caseDetails', 'assignToTeam', 'assignedTo', 'followUpDate', 'notes'
     ];
     const personalNames = [
       'firstName', 'lastName', 'company', 'salary', 'phone', 'email', 'presentAddress', 'city', 'pinCode', 'state', 'country'
@@ -1066,9 +1066,39 @@ export default function RecordForm() {
     const sections: { title: string; fields: FieldDefinition[] }[] = [];
 
     if (apiPath === 'leads') {
-      const loanFields = fields.filter(f => loanDetailNames.includes(f.name));
-      const persFields = fields.filter(f => personalNames.includes(f.name));
-      const remaining = fields.filter(f => !loanDetailNames.includes(f.name) && !personalNames.includes(f.name) && f.name !== 'leadScore');
+      let fieldsCopy = [...fields];
+
+      // Ensure Case Category field is present for edit form (Text Input)
+      let caseCatField = fieldsCopy.find(f => f.name === 'caseCategory');
+      if (!caseCatField) {
+        fieldsCopy.push({
+          name: 'caseCategory',
+          label: 'Case Category',
+          type: 'text',
+          required: false,
+          unique: false
+        });
+      } else {
+        caseCatField.type = 'text';
+      }
+
+      // Ensure Lead Category field is present for edit form (Text Input)
+      let leadCatField = fieldsCopy.find(f => f.name === 'leadCategory');
+      if (!leadCatField) {
+        fieldsCopy.push({
+          name: 'leadCategory',
+          label: 'Lead Category',
+          type: 'text',
+          required: false,
+          unique: false
+        });
+      } else {
+        leadCatField.type = 'text';
+      }
+
+      const loanFields = fieldsCopy.filter(f => loanDetailNames.includes(f.name));
+      const persFields = fieldsCopy.filter(f => personalNames.includes(f.name));
+      const remaining = fieldsCopy.filter(f => !loanDetailNames.includes(f.name) && !personalNames.includes(f.name) && f.name !== 'leadScore');
 
       // Map labels specifically for Leads module
       loanFields.forEach(f => {
@@ -1077,6 +1107,8 @@ export default function RecordForm() {
         if (f.name === 'assignedTo') f.label = 'Assign To Agent';
         if (f.name === 'leadScore') f.label = 'Data Code';
         if (f.name === 'notes') f.label = 'Remarks';
+        if (f.name === 'caseCategory') f.label = 'Case Category';
+        if (f.name === 'leadCategory') f.label = 'Lead Category';
       });
 
       persFields.forEach(f => {
@@ -1087,7 +1119,7 @@ export default function RecordForm() {
 
       // Maintain order to match the request layout:
       // SL No & Created Date top metadata, followed by:
-      // Data Code -> Customer Name -> Firm Name -> Status -> Case Details -> Lead Category -> Remarks -> Mobile Number -> Assigned To
+      // Data Code -> Customer Name -> Firm Name -> Status -> Case Details -> Case Category -> Lead Category -> Loan Type -> Remarks -> Mobile Number -> Assigned To
       const orderedLoan = [
         loanFields.find(f => f.name === 'dataCode'),
         persFields.find(f => f.name === 'firstName'),
@@ -1095,6 +1127,8 @@ export default function RecordForm() {
         persFields.find(f => f.name === 'company'),
         loanFields.find(f => f.name === 'status'),
         loanFields.find(f => f.name === 'caseDetails'),
+        loanFields.find(f => f.name === 'caseCategory'),
+        loanFields.find(f => f.name === 'leadCategory'),
         loanFields.find(f => f.name === 'loanType'),
         loanFields.find(f => f.name === 'notes'),
         persFields.find(f => f.name === 'phone'),
