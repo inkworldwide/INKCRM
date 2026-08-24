@@ -189,7 +189,16 @@ export default function RecordForm() {
 
       let zField: any;
 
-      if (field.type === 'number' || field.type === 'currency') {
+      if (field.name === 'lastName' && apiPath === 'leads') {
+        zField = z.string().optional().or(z.literal(''));
+      } else if (field.type === 'email') {
+        zField = z.preprocess(
+          (val) => (val === '' || val === undefined || val === null ? undefined : String(val).trim()),
+          field.required 
+            ? z.string().email('Invalid email address.') 
+            : z.string().email('Invalid email address.').optional().or(z.literal(''))
+        );
+      } else if (field.type === 'number' || field.type === 'currency') {
         zField = z.preprocess(
           (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
           field.required 
@@ -197,11 +206,7 @@ export default function RecordForm() {
             : z.number().optional()
         );
       } else if (field.required) {
-        if (field.type === 'email') {
-          zField = z.string().email('Invalid email address.');
-        } else {
-          zField = z.string().min(1, `${field.label} is required.`);
-        }
+        zField = z.string().min(1, `${field.label} is required.`);
       } else {
         zField = z.string().optional().or(z.literal(''));
       }
@@ -416,11 +421,17 @@ export default function RecordForm() {
     }
   }, [watchedValues.loanType, watchedValues.businessPartner, bankPartnerMappings, loading]);
 
-  useEffect(() => {
-    if (Object.keys(errors).length > 0) {
-      console.log('RecordForm Validation Errors:', errors);
+  const onFormError = (formErrors: any) => {
+    console.log('RecordForm Validation Errors:', formErrors);
+    const errorKeys = Object.keys(formErrors);
+    if (errorKeys.length > 0) {
+      const firstKey = errorKeys[0];
+      const err = formErrors[firstKey];
+      const fieldDef = activeModule?.fields.find(f => f.name === firstKey);
+      const label = fieldDef?.label || firstKey;
+      showToast(`Please check field "${label}": ${err?.message || 'Invalid value'}`, 'error');
     }
-  }, [errors]);
+  };
 
   const onSubmitForm = async (formData: any) => {
     setSaving(true);
@@ -1117,43 +1128,36 @@ export default function RecordForm() {
         if (f.name === 'email') f.label = 'E-Mail';
       });
 
-      // Maintain order to match the request layout:
-      // SL No & Created Date top metadata, followed by:
-      // Data Code -> Customer Name -> Firm Name -> Status -> Case Details -> Case Category -> Lead Category -> Loan Type -> Remarks -> Mobile Number -> Assigned To
+      // Loan Details contains ONLY loan-specific fields (No duplicates with Personal Details)
       const orderedLoan = [
         loanFields.find(f => f.name === 'dataCode'),
-        persFields.find(f => f.name === 'firstName'),
-        persFields.find(f => f.name === 'lastName'),
-        persFields.find(f => f.name === 'company'),
         loanFields.find(f => f.name === 'status'),
         loanFields.find(f => f.name === 'caseDetails'),
-        loanFields.find(f => f.name === 'caseCategory'),
         loanFields.find(f => f.name === 'leadCategory'),
         loanFields.find(f => f.name === 'loanType'),
         loanFields.find(f => f.name === 'notes'),
-        persFields.find(f => f.name === 'phone'),
+        loanFields.find(f => f.name === 'budget'),
         loanFields.find(f => f.name === 'assignedTo'),
         loanFields.find(f => f.name === 'source'),
-        loanFields.find(f => f.name === 'budget'),
         loanFields.find(f => f.name === 'businessPartner'),
         loanFields.find(f => f.name === 'psm'),
         loanFields.find(f => f.name === 'assignToTeam'),
         loanFields.find(f => f.name === 'followUpDate')
       ].filter(Boolean) as FieldDefinition[];
 
-      // Personal Details
+      // Personal Details contains ONLY personal fields (First Name, Last Name, Company, Mobile, Email, Location, etc.)
       const orderedPers = [
         persFields.find(f => f.name === 'firstName'),
         persFields.find(f => f.name === 'lastName'),
         persFields.find(f => f.name === 'company'),
-        persFields.find(f => f.name === 'salary'),
         persFields.find(f => f.name === 'phone'),
         persFields.find(f => f.name === 'email'),
-        persFields.find(f => f.name === 'presentAddress'),
         persFields.find(f => f.name === 'city'),
+        persFields.find(f => f.name === 'presentAddress'),
         persFields.find(f => f.name === 'pinCode'),
         persFields.find(f => f.name === 'state'),
-        persFields.find(f => f.name === 'country')
+        persFields.find(f => f.name === 'country'),
+        persFields.find(f => f.name === 'salary')
       ].filter(Boolean) as FieldDefinition[];
 
       sections.push({ title: 'Loan Details', fields: orderedLoan });
@@ -1205,7 +1209,7 @@ export default function RecordForm() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmitForm)} autoComplete="off">
+        <form onSubmit={handleSubmit(onSubmitForm, onFormError)} autoComplete="off">
           
           {sections.map((section) => (
             <div key={section.title} className="p-4 sm:p-6 md:p-8 border-b border-[#EAE4DA] dark:border-slate-800 last:border-b-0 space-y-5 sm:space-y-6">

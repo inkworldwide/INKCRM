@@ -140,13 +140,18 @@ export default function ModuleView() {
     }
   }, [apiPath]);
 
-  const loadCampaignAssignmentsData = async () => {
+  const loadCampaignAssignmentsData = async (targetCampaign?: string) => {
     try {
       setCaLoadingStats(true);
+      const activeCamp = targetCampaign !== undefined ? targetCampaign : caSelectedCampaign;
+      const statsUrl = activeCamp
+        ? `/records/campaigns/allocation-stats?campaignName=${encodeURIComponent(activeCamp)}`
+        : '/records/campaigns/allocation-stats';
+
       const [campaignsRes, rolesRes, statsRes] = await Promise.all([
         api.get('/records/campaigns?limit=100'),
         api.get('/auth/roles'),
-        api.get('/records/campaigns/allocation-stats')
+        api.get(statsUrl)
       ]);
       setCaCampaigns(campaignsRes.data?.records || []);
       setCaRoles(rolesRes.data || []);
@@ -158,6 +163,12 @@ export default function ModuleView() {
       setCaLoadingStats(false);
     }
   };
+
+  useEffect(() => {
+    if (apiPath === 'campaignassignments' && caSelectedCampaign) {
+      loadCampaignAssignmentsData(caSelectedCampaign);
+    }
+  }, [caSelectedCampaign, apiPath]);
 
   const handleLoadAgents = async () => {
     if (!caSelectedRole) {
@@ -285,16 +296,46 @@ export default function ModuleView() {
       const company = companyCol ? cleanRow[companyCol] : '';
       const location = locationCol ? cleanRow[locationCol] : '';
       const leadCategory = categoryCol ? cleanRow[categoryCol] : '';
-      const dataCode = codeCol ? cleanRow[codeCol] : '';
-      const caseDetails = caseCol ? cleanRow[caseCol] : '';
-      const remarks = remarksCol ? cleanRow[remarksCol] : '';
+      let dataCode = codeCol ? cleanRow[codeCol] : '';
+      if (!dataCode) {
+        // Search row keys directly for data code
+        for (const k in cleanRow) {
+          const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
+            const v = cleanRow[k];
+            if (v && v !== 'N/A' && v !== 'Unnamed') {
+              dataCode = v;
+              break;
+            }
+          }
+        }
+        // Fallback to 2nd column (Column B in Excel) if dataCode was not found by name
+        if (!dataCode && firstRowKeys.length >= 2) {
+          const colBKey = firstRowKeys[1].trim();
+          const v = cleanRow[colBKey];
+          if (v && v !== 'N/A' && v !== 'Unnamed' && !v.startsWith('http')) {
+            dataCode = v;
+          }
+        }
+      }
 
       if (phone) { cleanRow.phone = phone; cleanRow.mobile = phone; cleanRow.contact_num = phone; }
       if (customer) { cleanRow.customer = customer; cleanRow.customerName = customer; cleanRow.firstName = customer; }
       if (company) { cleanRow.company = company; cleanRow.firmName = company; cleanRow.firm_name = company; }
       if (location) { cleanRow.city = location; cleanRow.location = location; }
       if (leadCategory) { cleanRow.leadCategory = leadCategory; cleanRow.loanType = leadCategory; cleanRow.lead_category = leadCategory; }
-      if (dataCode) { cleanRow.dataCode = dataCode; cleanRow.data_code = dataCode; cleanRow['Data Code'] = dataCode; }
+      if (dataCode) {
+        cleanRow.dataCode = dataCode;
+        cleanRow.data_code = dataCode;
+        cleanRow['Data Code'] = dataCode;
+        cleanRow['data code'] = dataCode;
+        cleanRow.datacode = dataCode;
+        cleanRow.DataCode = dataCode;
+        cleanRow.code = dataCode;
+      }
+      const caseDetails = caseCol ? cleanRow[caseCol] : '';
+      const remarks = remarksCol ? cleanRow[remarksCol] : '';
+
       if (caseDetails) { cleanRow.caseDetails = caseDetails; cleanRow.case_details = caseDetails; }
       if (remarks) { cleanRow.notes = remarks; cleanRow.remarks = remarks; }
 
@@ -415,7 +456,7 @@ export default function ModuleView() {
           setCaFile(null);
           
           queryClient.invalidateQueries({ queryKey: ['records', 'leads'] });
-          loadCampaignAssignmentsData();
+          loadCampaignAssignmentsData(caSelectedCampaign);
         } catch (err: any) {
           console.error('[Bulk Assignment Error]', err);
           const serverError = err.response?.data?.error || err.response?.data?.message;
@@ -1039,8 +1080,7 @@ export default function ModuleView() {
       const res = await api.get(`/records/${apiPath}`, { params });
       return res.data;
     },
-    enabled: !!apiPath,
-    refetchInterval: (query) => (query.state.error ? false : 5000)
+    enabled: !!apiPath
   });
 
   const campaignSummaryStats = useMemo(() => {

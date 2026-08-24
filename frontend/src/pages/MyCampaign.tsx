@@ -141,12 +141,17 @@ export const getLeadCategory = (data: any): string => {
 };
 
 export const getLeadDataCode = (lead: any): string => {
+  const data = lead?.data || lead;
   const code = getLeadFieldValue(
-    lead.data,
+    data,
     ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
-    ['datacode', 'leadcode']
-  );
-  return code || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
+    ['datacode', 'leadcode', 'code']
+  ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code;
+
+  if (code && String(code).trim() !== '' && String(code).trim() !== 'N/A' && String(code).trim() !== 'Unnamed') {
+    return String(code).trim();
+  }
+  return lead?._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A';
 };
 
 export default function MyCampaign() {
@@ -234,7 +239,7 @@ export default function MyCampaign() {
       let targetLeads = campaignLeads && campaignLeads.length > 0 ? campaignLeads : undefined;
       
       if (!targetLeads) {
-        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}`);
+        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?export=true`);
         targetLeads = res.data.leads || [];
       }
 
@@ -1107,6 +1112,16 @@ export default function MyCampaign() {
                               </span>
                               <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs block leading-tight">
                                 {dataCode}
+                              </span>
+                            </div>
+
+                            {/* Location */}
+                            <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                              <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                                Location:
+                              </span>
+                              <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
+                                {getLeadLocation(lead.data)}
                               </span>
                             </div>
 

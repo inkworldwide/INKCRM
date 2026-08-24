@@ -120,6 +120,7 @@ const validateFields = (fields: any[], data: Record<string, any>, oldValues?: Re
 router.get('/campaigns/allocation-stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const orgId = req.organizationId;
+    const campaignName = (req.query.campaignName as string || '').trim();
     
     // Find Lead Module Definition
     const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
@@ -128,25 +129,60 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
       return;
     }
 
+    let matchCriteria: any = { organizationId: orgId, moduleId: leadModule._id };
+    
+    if (campaignName) {
+      matchCriteria.$or = [
+        { 'data.source': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+        { 'data.campaignName': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+        { 'data.campaign': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+        { 'data.campaign_name': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
+      ];
+    }
+
     // Aggregate count of leads grouped by assignedTo
     const stats = await CustomRecord.aggregate([
-      { $match: { organizationId: orgId, moduleId: leadModule._id } },
+      { $match: matchCriteria },
       { $group: { _id: '$data.assignedTo', count: { $sum: 1 } } }
     ]);
 
+    let dialedMatchCriteria: any = {
+      organizationId: orgId,
+      moduleId: leadModule._id,
+      $and: [
+        {
+          $or: [
+            { 'data.dialedAt': { $exists: true, $ne: null } },
+            { 'data.lastCallDate': { $exists: true, $ne: null } },
+            { 'data.callAttempts': { $gt: 0 } },
+            { 
+              'data.dialStatus': { 
+                $in: [
+                  'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
+                  'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
+                  'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
+                ] 
+              } 
+            }
+          ]
+        }
+      ]
+    };
+
+    if (campaignName) {
+      dialedMatchCriteria.$and.push({
+        $or: [
+          { 'data.source': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+          { 'data.campaignName': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+          { 'data.campaign': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+          { 'data.campaign_name': new RegExp(`^${campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
+        ]
+      });
+    }
+
     // Aggregate count of dialed leads
     const dialedStats = await CustomRecord.aggregate([
-      { 
-        $match: { 
-          organizationId: orgId, 
-          moduleId: leadModule._id,
-          $or: [
-            { 'data.dialStatus': { $exists: true, $nin: ['Yet To Call', ''] } },
-            { 'data.status': { $nin: ['New', 'Yet To Call', ''] } },
-            { 'data.callAttempts': { $gt: 0 } }
-          ]
-        } 
-      },
+      { $match: dialedMatchCriteria },
       { $group: { _id: '$data.assignedTo', count: { $sum: 1 } } }
     ]);
 
@@ -158,70 +194,95 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
     });
 
     const dialedMap: Record<string, number> = {};
-    dialedStats.forEach(item => {
-      if (item._id) {
-        dialedMap[item._id.toString()] = item.count;
-      }
-    });
-
-    // Campaign-level stats (by campaign name) - only include registered campaigns in org
-    const campaignModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'campaigns' });
-    let campaignRecords: any[] = [];
-    if (campaignModule) {
-      campaignRecords = await CustomRecord.find({
-        organizationId: orgId,
-        moduleId: campaignModule._id
-      }).lean();
+    if (campaignName) {
+      dialedStats.forEach(item => {
+        if (item._id) {
+          dialedMap[item._id.toString()] = item.count;
+        }
+      });
     }
 
-    const registeredCampaignNames = new Set(
-      campaignRecords.map((c: any) => {
-        const d = c.data || {};
-        return (d.campaignName || d.name || d.source || '').toString().trim().toLowerCase();
-      }).filter(Boolean)
-    );
-
-    const allLeads = await CustomRecord.find({
-      organizationId: orgId,
-      moduleId: leadModule._id,
-      $or: [
-        { 'data.source': { $exists: true, $ne: '' } },
-        { 'data.campaignName': { $exists: true, $ne: '' } },
-        { 'data.campaign': { $exists: true, $ne: '' } },
-        { 'data.campaign_name': { $exists: true, $ne: '' } }
-      ]
-    }).lean();
-
+    // Aggregated campaign-level stats via fast MongoDB pipeline
     const campaignAllocatedStats: Record<string, number> = {};
     const campaignDialedStats: Record<string, number> = {};
 
-    allLeads.forEach((lead: any) => {
-      const d = lead.data || {};
-      const campName = (
-        d.campaignName ||
-        d.campaign ||
-        d.campaign_name ||
-        d.source
-      )?.toString().trim();
-
-      if (campName) {
-        const lower = campName.toLowerCase();
-        const genericSources = ['website', 'referral', 'cold call', 'social media', 'google ads', 'facebook ads', 'walk-in', 'direct'];
-        const isRegistered = registeredCampaignNames.size === 0 || registeredCampaignNames.has(lower);
-        
-        if (isRegistered && (registeredCampaignNames.has(lower) || !genericSources.includes(lower))) {
-          campaignAllocatedStats[lower] = (campaignAllocatedStats[lower] || 0) + 1;
-
-          const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
-          const st = (d.status || '').toString().trim().toLowerCase();
-          const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
-          const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
-          const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
-          
-          if (hasDialedStatus || (hasCalls && hasDialStatus)) {
-            campaignDialedStats[lower] = (campaignDialedStats[lower] || 0) + 1;
+    const campAllocAgg = await CustomRecord.aggregate([
+      {
+        $match: {
+          organizationId: orgId,
+          moduleId: leadModule._id,
+          $or: [
+            { 'data.campaignName': { $exists: true, $ne: '' } },
+            { 'data.source': { $exists: true, $ne: '' } },
+            { 'data.campaign': { $exists: true, $ne: '' } }
+          ]
+        }
+      },
+      {
+        $project: {
+          campName: {
+            $toLower: {
+              $ifNull: ['$data.campaignName', { $ifNull: ['$data.source', '$data.campaign'] }]
+            }
           }
         }
+      },
+      { $group: { _id: '$campName', count: { $sum: 1 } } }
+    ]);
+
+    campAllocAgg.forEach(item => {
+      if (item._id) {
+        campaignAllocatedStats[item._id.toString().trim()] = item.count;
+      }
+    });
+
+    const campDialedAgg = await CustomRecord.aggregate([
+      {
+        $match: {
+          organizationId: orgId,
+          moduleId: leadModule._id,
+          $and: [
+            {
+              $or: [
+                { 'data.campaignName': { $exists: true, $ne: '' } },
+                { 'data.source': { $exists: true, $ne: '' } },
+                { 'data.campaign': { $exists: true, $ne: '' } }
+              ]
+            },
+            {
+              $or: [
+                { 'data.dialedAt': { $exists: true, $ne: null } },
+                { 'data.lastCallDate': { $exists: true, $ne: null } },
+                { 'data.callAttempts': { $gt: 0 } },
+                { 
+                  'data.dialStatus': { 
+                    $in: [
+                      'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
+                      'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
+                      'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
+                    ] 
+                  } 
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        $project: {
+          campName: {
+            $toLower: {
+              $ifNull: ['$data.campaignName', { $ifNull: ['$data.source', '$data.campaign'] }]
+            }
+          }
+        }
+      },
+      { $group: { _id: '$campName', count: { $sum: 1 } } }
+    ]);
+
+    campDialedAgg.forEach(item => {
+      if (item._id) {
+        campaignDialedStats[item._id.toString().trim()] = item.count;
       }
     });
 
@@ -370,11 +431,33 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       );
 
       // Extract data code
-      const codeVal = extractFuzzyField(
+      let codeVal = extractFuzzyField(
         lead,
         ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
-        ['datacode', 'leadcode']
+        ['datacode', 'leadcode', 'code']
       );
+
+      if (!codeVal) {
+        // Direct property check on raw lead object
+        const leadKeys = Object.keys(lead || {});
+        for (const k of leadKeys) {
+          const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
+            const v = String(lead[k] || '').trim();
+            if (v && v !== 'N/A' && v !== 'Unnamed') {
+              codeVal = v;
+              break;
+            }
+          }
+        }
+        // Fallback to Column B (2nd property in row) if data code column header was customized
+        if (!codeVal && leadKeys.length >= 2) {
+          const colBVal = String(lead[leadKeys[1]] || '').trim();
+          if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http')) {
+            codeVal = colBVal;
+          }
+        }
+      }
 
       // Extract case details
       const caseVal = extractFuzzyField(
@@ -403,6 +486,8 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
         ['budget', 'amount', 'loanAmount', 'loan_amount'],
         ['budget', 'amount']
       );
+
+      const finalDataCode = codeVal || lead.dataCode || lead.data_code || lead['Data Code'] || lead['data code'] || lead.datacode || '';
 
       recordsToCreate.push({
         organizationId: orgId,
@@ -433,15 +518,21 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
           city: locationVal,
           location: locationVal,
           state: lead.state || '',
-          dataCode: codeVal,
-          data_code: codeVal,
-          'Data Code': codeVal,
+          dataCode: finalDataCode,
+          data_code: finalDataCode,
+          'Data Code': finalDataCode,
+          'data code': finalDataCode,
+          datacode: finalDataCode,
+          DataCode: finalDataCode,
           caseDetails: caseVal,
           case_details: caseVal,
           notes: remarksVal,
           remarks: remarksVal,
-          status: lead.status || 'New',
+          status: 'New',
           dialStatus: 'Yet To Call',
+          callAttempts: 0,
+          dialedAt: null,
+          lastCallDate: null,
           source: campaignName, // Set source as campaign name
           campaignName: campaignName,
           assignedTo: assignedAgent // Set agent name
@@ -653,6 +744,10 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     const orgId = req.organizationId;
     const userId = req.user?.id;
     const { campaignName } = req.params;
+    const pageNum = parseInt(req.query.page as string || '1', 10);
+    const limitNum = parseInt(req.query.limit as string || '50', 10);
+    const skipNum = (pageNum - 1) * limitNum;
+    const isExport = req.query.export === 'true';
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized.' });
@@ -688,27 +783,59 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     // Filter by reporting hierarchy
     await HierarchyService.modifyRecordQuery(query, req.user as any, orgId!);
 
-    let leads = await CustomRecord.find(query).sort({ createdAt: -1 }).lean();
+    // Calculate total allocated and dialed counts fast via MongoDB
+    const [totalAllocated, totalDialed] = await Promise.all([
+      CustomRecord.countDocuments(query),
+      CustomRecord.countDocuments({
+        ...query,
+        $or: [
+          { 'data.dialedAt': { $exists: true, $ne: null } },
+          { 'data.lastCallDate': { $exists: true, $ne: null } },
+          { 'data.callAttempts': { $gt: 0 } },
+          { 
+            'data.dialStatus': { 
+              $in: [
+                'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
+                'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
+                'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
+              ] 
+            } 
+          }
+        ]
+      })
+    ]);
+
+    let leadsQuery = CustomRecord.find(query).sort({ createdAt: -1 });
+    if (!isExport) {
+      leadsQuery = leadsQuery.skip(skipNum).limit(limitNum);
+    }
+    let leads = await leadsQuery.lean();
 
     // Fallback: If hierarchy query returns 0, try org-wide lookup for this campaign
-    if (leads.length === 0) {
+    if (leads.length === 0 && totalAllocated === 0) {
       const fallbackQuery: Record<string, any> = {
         organizationId: orgId,
         moduleId: leadModule._id,
         ...matchFilter
       };
-      leads = await CustomRecord.find(fallbackQuery).sort({ createdAt: -1 }).lean();
+      let fbQuery = CustomRecord.find(fallbackQuery).sort({ createdAt: -1 });
+      if (!isExport) {
+        fbQuery = fbQuery.skip(skipNum).limit(limitNum);
+      }
+      leads = await fbQuery.lean();
     }
 
-    // Ultimate Fallback: Try across all modules in organization matching campaign name
-    if (leads.length === 0) {
-      leads = await CustomRecord.find({
-        organizationId: orgId,
-        ...matchFilter
-      }).sort({ createdAt: -1 }).lean();
-    }
-
-    res.status(200).json({ leads });
+    res.status(200).json({ 
+      leads,
+      pagination: {
+        total: totalAllocated,
+        dialed: totalDialed,
+        yetToDial: Math.max(0, totalAllocated - totalDialed),
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(totalAllocated / limitNum) || 1
+      }
+    });
   } catch (error) {
     console.error('Failed to get my campaign details:', error);
     res.status(500).json({ error: 'Failed to retrieve campaign details.' });

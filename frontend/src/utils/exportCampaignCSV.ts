@@ -81,12 +81,16 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
     const data = lead.data || lead;
     const slNo = idx + 1;
 
-    // 1. Data Code
-    const dataCode = extractField(
+    // 1. Data Code - Extract exact value from raw excel / lead data without forcing synthetic fallback
+    const rawDataCode = extractField(
       data,
       ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
-      ['datacode', 'leadcode']
-    ) || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
+      ['datacode', 'leadcode', 'code']
+    ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code || lead?.dataCode || lead?.data_code || lead?.['Data Code'];
+
+    const dataCode = (rawDataCode && String(rawDataCode).trim() !== '' && String(rawDataCode).trim() !== 'N/A' && String(rawDataCode).trim() !== 'Unnamed')
+      ? String(rawDataCode).trim()
+      : (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
 
     // 2. Location
     const location = extractField(

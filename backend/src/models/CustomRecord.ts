@@ -21,9 +21,15 @@ const CustomRecordSchema = new Schema<ICustomRecord>(
   { timestamps: true, strict: false } // strict: false allows saving unstructured sub-fields directly
 );
 
-// Indexes for fast querying & multi-tenant isolation
-CustomRecordSchema.index({ organizationId: 1, moduleId: 1 });
-CustomRecordSchema.index({ 'data.email': 1 }); // Useful for indexing general identifiers
+// Indexes for fast querying, aggregations, sorting & multi-tenant isolation
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedTo': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaignName': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.source': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaign': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dataCode': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.phone': 1 });
+CustomRecordSchema.index({ 'data.email': 1 });
 CustomRecordSchema.index({ createdAt: -1 });
 
 export default mongoose.model<ICustomRecord>('CustomRecord', CustomRecordSchema);
