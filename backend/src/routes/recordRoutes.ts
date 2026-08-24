@@ -158,6 +158,9 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
             { 
               'data.dialStatus': { 
                 $in: [
+                  'HOT LEAD', 'WARM LEAD', 'COOL LEAD', 'CAL BACK', 'GIVEN LOGIN', 
+                  'FOLLOWUP', 'not intrested', 'no answer', 'call reject', 'call not connect', 
+                  'wrong num', 'NUM NOT EXIT', 'repeated num', 'no business',
                   'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
                   'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
                   'Disbursed', 'Approved', 'Rejected', 'Wrong Number'

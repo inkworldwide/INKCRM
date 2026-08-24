@@ -29,20 +29,22 @@ interface LeadState {
   caseDetails?: string;
 }
 
-const CAMPAIGN_STATUSES = [
-  'Yet To Call',
-  'Hot Lead',
-  'Warm Lead',
-  'Not Intested',
-  'Call Rejected',
-  'Not Connected',
-  'Cool Lead',
-  'No Answer',
-  'Wrong Number',
-  'Not Exists',
-  'Repeated Number',
-  'No Business',
-  'Not Reachable'
+export const CAMPAIGN_STATUSES = [
+  'YET TO CALL',
+  'HOT LEAD',
+  'WARM LEAD',
+  'COOL LEAD',
+  'CAL BACK',
+  'GIVEN LOGIN',
+  'FOLLOWUP',
+  'not intrested',
+  'no answer',
+  'call reject',
+  'call not connect',
+  'wrong num',
+  'NUM NOT EXIT',
+  'repeated num',
+  'no business'
 ];
 
 // Universal fuzzy case-insensitive field extractor for Excel imports and custom records
@@ -199,7 +201,7 @@ export default function MyCampaign() {
         const rawRemarks = lead.data?.notes || lead.data?.remarks || '';
         const cleanRemarks = String(rawRemarks).replace(/<[^>]*>/g, '').trim();
         initialStates[lead._id] = {
-          status: lead.data?.status || lead.data?.dialStatus || 'Yet To Call',
+          status: lead.data?.status || lead.data?.dialStatus || 'YET TO CALL',
           remarks: cleanRemarks,
           caseDetails: lead.data?.caseDetails || ''
         };
@@ -955,8 +957,8 @@ export default function MyCampaign() {
                             const leadCategory = getLeadCategory(lead.data);
                             const agentAssigned = lead.data?.assignedTo || (lead as any).assignedToName || 'Unassigned';
                             
-                            const dialStatus = leadStates[lead._id]?.status || lead.data?.status || 'Not Called';
-                            const isDialed = dialStatus && dialStatus !== 'Yet To Call' && dialStatus !== 'Not Called';
+                            const dialStatus = leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL';
+                            const isDialed = dialStatus && dialStatus !== 'Yet To Call' && dialStatus !== 'YET TO CALL' && dialStatus !== 'Not Called';
 
                             let dialedDatetime = 'Not Called';
                             if (isDialed || lead.data?.dialedAt || lead.data?.lastCallDate) {
@@ -1051,7 +1053,7 @@ export default function MyCampaign() {
                                 {/* 11. Dial Status */}
                                 <td className="py-2 px-2 border-r border-slate-100 dark:border-slate-800">
                                   <select
-                                    value={leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call'}
+                                    value={leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL'}
                                     onChange={(e) => handleStatusSelect(lead, e.target.value)}
                                     className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white cursor-pointer"
                                   >
@@ -1084,7 +1086,7 @@ export default function MyCampaign() {
                       const createdOnStr = lead.createdAt 
                         ? new Date(lead.createdAt).toLocaleDateString('en-GB') 
                         : 'N/A';
-                      const currentStatus = leadStates[lead._id]?.status || lead.data?.status || 'Yet To Call';
+                      const currentStatus = leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL';
 
                       return (
                         <div 
