@@ -159,7 +159,7 @@ export const getLeadDataCode = (lead: any): string => {
 export default function MyCampaign() {
   const navigate = useNavigate();
   const { showToast } = useToastStore();
-  const { canExportCampaigns } = useAuthStore();
+  const { canExportCampaigns, user } = useAuthStore();
   const allowExport = canExportCampaigns();
   const [campaigns, setCampaigns] = useState<CampaignStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -359,7 +359,7 @@ export default function MyCampaign() {
       if (isHot || isWarm) {
         const passedStatus = isHot ? 'Hot' : 'Warm';
         const phoneVal = getLeadPhone(lead.data);
-        const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.name || user.email : '';
+        const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : '';
         const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
 
         navigate('/modules/leads/new', {
