@@ -313,7 +313,7 @@ export default function MyCampaign() {
     window.open(`https://wa.me/${cleanPhone}`, '_blank');
   };
 
-  const handleInitiateCall = async (lead: LeadRecord) => {
+  const handleInitiateCall = (lead: LeadRecord) => {
     const rawPhone = getLeadPhone(lead.data);
     const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
     if (!cleanPhone) {
@@ -322,16 +322,8 @@ export default function MyCampaign() {
     }
     const leadName = getLeadCustomer(lead.data) || getLeadFirmName(lead.data) || 'Lead';
     
-    // Show in-app website calling pop-up modal
+    // Show in-app website calling pop-up modal without auto-saving until explicit SAVE click
     setCallModalLead({ lead, phone: cleanPhone, name: leadName });
-
-    // Track dial activity
-    try {
-      await api.put(`/records/leads/${lead._id}`, {
-        dialedAt: new Date(),
-        callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
-      });
-    } catch (e) {}
   };
 
   const handleSaveLead = async (lead: LeadRecord) => {
@@ -759,8 +751,9 @@ export default function MyCampaign() {
           {/* ACTIVE CAMPAIGN METRICS GRID & LEADS LIST */}
           {(() => {
             const isLeadDialed = (lead: LeadRecord) => {
-              const liveSt = leadStates[lead._id]?.status || lead.data?.status || lead.data?.dialStatus || '';
-              const st = String(liveSt).trim().toLowerCase();
+              // Check SAVED database status only so un-saved transient UI selections do not prematurely move or hide the card
+              const savedSt = lead.data?.status || lead.data?.dialStatus || '';
+              const st = String(savedSt).trim().toLowerCase();
               const notDialed = ['yet to call', 'not called', 'new', ''];
               const hasDialedStatus = st && !notDialed.includes(st);
               const hasCallAttempts = (Number(lead.data?.callAttempts) > 0) || !!lead.data?.dialedAt;
