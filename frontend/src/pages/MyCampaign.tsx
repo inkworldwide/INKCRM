@@ -37,14 +37,14 @@ export const CAMPAIGN_STATUSES = [
   'CAL BACK',
   'GIVEN LOGIN',
   'FOLLOWUP',
-  'not intrested',
-  'no answer',
-  'call reject',
-  'call not connect',
-  'wrong num',
+  'NOT INTRESTED',
+  'NO ANSWER',
+  'CALL REJECT',
+  'CALL NOT CONNECT',
+  'WRONG NUM',
   'NUM NOT EXIT',
-  'repeated num',
-  'no business'
+  'REPEATED NUM',
+  'NO BUSINESS'
 ];
 
 // Universal fuzzy case-insensitive field extractor for Excel imports and custom records
@@ -158,7 +158,7 @@ export const getLeadDataCode = (lead: any): string => {
 
 export default function MyCampaign() {
   const navigate = useNavigate();
-  const { showToast } = useToastStore();
+  const { showToast, showAlertModal } = useToastStore();
   const { canExportCampaigns, user } = useAuthStore();
   const allowExport = canExportCampaigns();
   const [campaigns, setCampaigns] = useState<CampaignStats[]>([]);
@@ -173,6 +173,8 @@ export default function MyCampaign() {
   
   // Track inputs for each lead ID
   const [leadStates, setLeadStates] = useState<Record<string, LeadState>>({});
+  // Website In-App Call Popup Modal state
+  const [callModalLead, setCallModalLead] = useState<{ lead: LeadRecord; phone: string; name: string } | null>(null);
 
   // Fetch campaigns
   const fetchCampaigns = async () => {
@@ -319,7 +321,9 @@ export default function MyCampaign() {
       return;
     }
     const leadName = getLeadCustomer(lead.data) || getLeadFirmName(lead.data) || 'Lead';
-    showToast(`Calling ${leadName}...`, 'info');
+    
+    // Show in-app website calling pop-up modal
+    setCallModalLead({ lead, phone: cleanPhone, name: leadName });
 
     // Track dial activity
     try {
@@ -328,8 +332,6 @@ export default function MyCampaign() {
         callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
       });
     } catch (e) {}
-
-    window.location.href = `tel:${cleanPhone}`;
   };
 
   const handleSaveLead = async (lead: LeadRecord) => {
@@ -350,7 +352,31 @@ export default function MyCampaign() {
       };
 
       await api.put(`/records/leads/${lead._id}`, payload);
-      showToast('Lead updated successfully!', 'success');
+      
+      showAlertModal({
+        title: 'LEAD SAVED SUCCESSFULLY',
+        message: 'Lead updated and moved to next lead.',
+        buttonText: 'CONTINUE CALLING',
+        type: 'success'
+      });
+
+      // 1. Immediately update lead.data in local state so it is marked as dialed and hides from Yet To Dial list instantly!
+      setLeads(prevLeads => prevLeads.map(l => l._id === lead._id ? {
+        ...l,
+        data: {
+          ...l.data,
+          status: newStatus,
+          dialStatus: newStatus,
+          notes: currentRemarks,
+          remarks: currentRemarks,
+          caseDetails: currentCaseDetails,
+          callAttempts: ((l.data?.callAttempts as number) || 0) + 1,
+          dialedAt: new Date().toISOString()
+        }
+      } : l));
+
+      // 2. Smoothly scroll to the top of the next lead
+      window.scrollTo({ top: 0, behavior: 'smooth' });
 
       // Check if Hot Lead or Warm Lead is selected
       const isHot = newStatus.toUpperCase().includes('HOT');
@@ -1257,6 +1283,60 @@ export default function MyCampaign() {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* WEBSITE IN-APP CALL POPUP MODAL */}
+      {callModalLead && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/60">
+                  <Icons.PhoneCall className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Initiate Lead Call</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">{callModalLead.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCallModalLead(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <Icons.X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 text-center space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Contact Phone Number</span>
+              <span className="font-mono text-xl font-black text-slate-900 dark:text-white block tracking-wide">{callModalLead.phone}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(callModalLead.phone);
+                  showToast('Phone number copied to clipboard!', 'success');
+                }}
+                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icons.Copy className="w-3.5 h-3.5" />
+                <span>Copy Number</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.location.href = `tel:${callModalLead.phone}`;
+                  setCallModalLead(null);
+                }}
+                className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icons.Phone className="w-3.5 h-3.5" />
+                <span>Call Now</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
