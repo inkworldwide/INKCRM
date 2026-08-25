@@ -415,9 +415,16 @@ export default function RecordForm() {
         setPsmWarningMessage('');
       }
     } else {
-      setValue('psm', '');
-      setPsmAutoFilled(false);
-      setPsmWarningMessage('No PSM has been assigned for any of the selected Banks and Loan Type. Please configure it in Settings → Bank Partner.');
+      const passedPsm = location.state?.psm || location.state?.psmName || location.state?.leadOwner || location.state?.created_by_user;
+      if (passedPsm) {
+        setValue('psm', passedPsm);
+        setPsmAutoFilled(true);
+        setPsmWarningMessage('');
+      } else {
+        setValue('psm', '');
+        setPsmAutoFilled(false);
+        setPsmWarningMessage('No PSM has been assigned for any of the selected Banks and Loan Type. Please configure it in Settings → Bank Partner.');
+      }
     }
   }, [watchedValues.loanType, watchedValues.businessPartner, bankPartnerMappings, loading]);
 

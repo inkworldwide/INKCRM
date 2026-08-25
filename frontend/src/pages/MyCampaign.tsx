@@ -287,8 +287,8 @@ export default function MyCampaign() {
     }));
   };
 
-  const handleStatusSelect = async (lead: LeadRecord, newStatus: string) => {
-    // 1. Update state first
+  const handleStatusSelect = (lead: LeadRecord, newStatus: string) => {
+    // ONLY update local form state. Do NOT auto-save or navigate away until user clicks SAVE button!
     setLeadStates(prev => ({
       ...prev,
       [lead._id]: {
@@ -296,61 +296,6 @@ export default function MyCampaign() {
         status: newStatus
       }
     }));
-
-    // 2. Prepare payload for saving
-    const currentRemarks = leadStates[lead._id]?.remarks || '';
-    const currentCaseDetails = leadStates[lead._id]?.caseDetails || '';
-
-    try {
-      const payload = {
-        status: newStatus,
-        dialStatus: newStatus,
-        dialedAt: new Date(),
-        callAttempts: ((lead.data?.callAttempts as number) || 0) + 1,
-        notes: currentRemarks,
-        caseDetails: currentCaseDetails
-      };
-
-      // 3. Save to database immediately
-      await api.put(`/records/leads/${lead._id}`, payload);
-      showToast('Status updated successfully!', 'success');
-
-      // 4. Refresh stats in background
-      const res = await api.get('/records/campaigns/my-campaigns');
-      const updatedCampaigns: CampaignStats[] = res.data.campaigns || [];
-      setCampaigns(updatedCampaigns);
-      if (activeCampaign) {
-        const found = updatedCampaigns.find(c => c.campaignName === activeCampaign.campaignName);
-        if (found) {
-          setActiveCampaign(found);
-        }
-      }
-
-      // 5. If "Hot Lead" or "Warm Lead" selected, navigate to Create Lead page with pre-populated data
-      if (newStatus === 'Hot Lead' || newStatus === 'Warm Lead') {
-        const passedStatus = newStatus === 'Hot Lead' ? 'Hot' : 'Warm';
-        const phoneVal = getLeadPhone(lead.data);
-        
-        navigate('/modules/leads/new', {
-          state: {
-            ...lead.data,
-            firstName: getLeadCustomer(lead.data),
-            lastName: '',
-            phone: phoneVal,
-            company: getLeadFirmName(lead.data),
-            city: getLeadLocation(lead.data),
-            dataCode: getLeadDataCode(lead),
-            status: passedStatus,
-            notes: currentRemarks,
-            caseDetails: currentCaseDetails,
-            source: activeCampaign?.campaignName || lead.data?.source || ''
-          }
-        });
-      }
-    } catch (err: any) {
-      console.error(err);
-      showToast(err.response?.data?.error || 'Failed to update status.', 'error');
-    }
   };
 
   const handleWhatsAppChat = (lead: LeadRecord) => {
@@ -387,25 +332,71 @@ export default function MyCampaign() {
     window.location.href = `tel:${cleanPhone}`;
   };
 
-  const handleSaveLead = async (leadId: string) => {
+  const handleSaveLead = async (lead: LeadRecord) => {
     try {
-      const state = leadStates[leadId];
-      if (!state) {
-        showToast('No changes to save.', 'warning');
+      const state = leadStates[lead._id];
+      const newStatus = state?.status || lead.data?.status || 'YET TO CALL';
+      const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
+      const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+
+      const payload: Record<string, any> = {
+        status: newStatus,
+        dialStatus: newStatus,
+        notes: currentRemarks,
+        remarks: currentRemarks,
+        caseDetails: currentCaseDetails,
+        dialedAt: new Date(),
+        callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
+      };
+
+      await api.put(`/records/leads/${lead._id}`, payload);
+      showToast('Lead updated successfully!', 'success');
+
+      // Check if Hot Lead or Warm Lead is selected
+      const isHot = newStatus.toUpperCase().includes('HOT');
+      const isWarm = newStatus.toUpperCase().includes('WARM');
+
+      if (isHot || isWarm) {
+        const passedStatus = isHot ? 'Hot' : 'Warm';
+        const phoneVal = getLeadPhone(lead.data);
+        const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.name || user.email : '';
+        const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
+
+        navigate('/modules/leads/new', {
+          state: {
+            ...lead.data,
+            firstName: getLeadCustomer(lead.data),
+            lastName: '',
+            customerName: getLeadCustomer(lead.data),
+            customer: getLeadCustomer(lead.data),
+            fullName: getLeadCustomer(lead.data),
+            phone: phoneVal,
+            mobile: phoneVal,
+            company: getLeadFirmName(lead.data),
+            firmName: getLeadFirmName(lead.data),
+            firm_name: getLeadFirmName(lead.data),
+            city: getLeadLocation(lead.data),
+            location: getLeadLocation(lead.data),
+            leadCategory: getLeadCategory(lead.data),
+            loanType: getLeadCategory(lead.data),
+            dataCode: getLeadDataCode(lead),
+            data_code: getLeadDataCode(lead),
+            'Data Code': getLeadDataCode(lead),
+            status: passedStatus,
+            notes: currentRemarks,
+            remarks: currentRemarks,
+            caseDetails: currentCaseDetails,
+            source: activeCampaign?.campaignName || lead.data?.source || lead.data?.campaignName || '',
+            psm: creatorName,
+            psmName: creatorName,
+            leadOwner: creatorName,
+            created_by_user: creatorName
+          }
+        });
         return;
       }
 
-      const payload: Record<string, any> = {
-        status: state.status,
-        dialStatus: state.status,
-        notes: state.remarks,
-        caseDetails: state.caseDetails
-      };
-
-      await api.put(`/records/leads/${leadId}`, payload);
-      showToast('Lead details updated successfully!', 'success');
-
-      // Refresh list in background to maintain sync
+      // Refresh list in background to maintain sync for other statuses
       const res = await api.get('/records/campaigns/my-campaigns');
       const updatedCampaigns: CampaignStats[] = res.data.campaigns || [];
       setCampaigns(updatedCampaigns);
@@ -1027,7 +1018,6 @@ export default function MyCampaign() {
                                     placeholder="Case Details"
                                     value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
                                     onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
-                                    onBlur={() => handleSaveLead(lead._id)}
                                     className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-600"
                                   />
                                 </td>
@@ -1042,7 +1032,6 @@ export default function MyCampaign() {
                                     placeholder="Remarks / Notes"
                                     value={(leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')).replace(/<[^>]*>/g, '')}
                                     onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
-                                    onBlur={() => handleSaveLead(lead._id)}
                                     className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-600"
                                   />
                                 </td>
@@ -1100,40 +1089,42 @@ export default function MyCampaign() {
                                 SL No.: {idx + 1}
                               </span>
                             </div>
-                            <span className="text-[10.5px] font-extrabold text-slate-600 dark:text-slate-400">
-                              Created Date: <strong className="text-slate-900 dark:text-white font-black">{createdOnStr}</strong>
-                            </span>
+
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                              <span>Created Date:</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-200">{createdOnStr}</span>
+                            </div>
                           </div>
 
-                          {/* MAIN DETAILS SECTION */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pl-0.5 text-xs">
-                            {/* 3. Data Code */}
+                          {/* 6-GRID CARD MAIN BODY */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                            {/* 1. Data Code */}
                             <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
                               <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
-                                Data Code:
+                                DATA CODE:
                               </span>
-                              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs block leading-tight">
+                              <span className="font-mono font-extrabold text-indigo-600 dark:text-indigo-400 text-xs block leading-tight">
                                 {dataCode}
                               </span>
                             </div>
 
-                            {/* Location */}
+                            {/* 2. Customer Name */}
                             <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
                               <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
-                                Location:
-                              </span>
-                              <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
-                                {getLeadLocation(lead.data)}
-                              </span>
-                            </div>
-
-                            {/* 4. Customer Name */}
-                            <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
-                              <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
-                                Customer Name:
+                                CUSTOMER NAME:
                               </span>
                               <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
                                 {customer}
+                              </span>
+                            </div>
+
+                            {/* 3. Location */}
+                            <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
+                              <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
+                                LOCATION:
+                              </span>
+                              <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
+                                {getLeadLocation(lead.data)}
                               </span>
                             </div>
 
@@ -1173,7 +1164,6 @@ export default function MyCampaign() {
                                 placeholder="Case Details"
                                 value={leadStates[lead._id]?.caseDetails ?? (lead.data?.caseDetails || lead.data?.case_details || '')}
                                 onChange={(e) => handleFieldChange(lead._id, 'caseDetails', e.target.value)}
-                                onBlur={() => handleSaveLead(lead._id)}
                                 className="w-full h-7 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-0.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs font-semibold leading-tight"
                               />
                             </div>
@@ -1198,7 +1188,6 @@ export default function MyCampaign() {
                                 placeholder="Remarks / Notes"
                                 value={(leadStates[lead._id]?.remarks ?? (lead.data?.notes || lead.data?.remarks || '')).replace(/<[^>]*>/g, '')}
                                 onChange={(e) => handleFieldChange(lead._id, 'remarks', e.target.value)}
-                                onBlur={() => handleSaveLead(lead._id)}
                                 className="w-full h-7 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-0.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs font-semibold leading-tight"
                               />
                             </div>
@@ -1245,7 +1234,7 @@ export default function MyCampaign() {
 
                             <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                               <button
-                                onClick={() => handleSaveLead(lead._id)}
+                                onClick={() => handleSaveLead(lead)}
                                 className="flex-1 sm:flex-initial h-8 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
                               >
                                 <Icons.Save className="w-3 h-3" />
