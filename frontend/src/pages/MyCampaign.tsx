@@ -289,8 +289,8 @@ export default function MyCampaign() {
     }));
   };
 
-  const handleStatusSelect = (lead: LeadRecord, newStatus: string) => {
-    // ONLY update local form state. Do NOT auto-save or navigate away until user clicks SAVE button!
+  const handleStatusSelect = async (lead: LeadRecord, newStatus: string) => {
+    // 1. Update local form state for this lead
     setLeadStates(prev => ({
       ...prev,
       [lead._id]: {
@@ -298,6 +298,67 @@ export default function MyCampaign() {
         status: newStatus
       }
     }));
+
+    // Check if HOT LEAD or WARM LEAD is selected directly from dropdown
+    const isHot = newStatus.toUpperCase().includes('HOT');
+    const isWarm = newStatus.toUpperCase().includes('WARM');
+
+    if (isHot || isWarm) {
+      const state = leadStates[lead._id];
+      const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
+      const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+
+      // Save status update to database
+      try {
+        await api.put(`/records/leads/${lead._id}`, {
+          status: newStatus,
+          dialStatus: newStatus,
+          notes: currentRemarks,
+          remarks: currentRemarks,
+          caseDetails: currentCaseDetails,
+          dialedAt: new Date(),
+          callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
+        });
+      } catch (e) {}
+
+      const passedStatus = isHot ? 'Hot' : 'Warm';
+      const phoneVal = getLeadPhone(lead.data);
+      const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : '';
+      const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
+
+      // Immediately navigate to Create Lead page (/modules/leads/new) with all exact pre-filled lead details & PSM
+      navigate('/modules/leads/new', {
+        state: {
+          ...lead.data,
+          firstName: getLeadCustomer(lead.data),
+          lastName: '',
+          customerName: getLeadCustomer(lead.data),
+          customer: getLeadCustomer(lead.data),
+          fullName: getLeadCustomer(lead.data),
+          phone: phoneVal,
+          mobile: phoneVal,
+          company: getLeadFirmName(lead.data),
+          firmName: getLeadFirmName(lead.data),
+          firm_name: getLeadFirmName(lead.data),
+          city: getLeadLocation(lead.data),
+          location: getLeadLocation(lead.data),
+          leadCategory: getLeadCategory(lead.data),
+          loanType: getLeadCategory(lead.data),
+          dataCode: getLeadDataCode(lead),
+          data_code: getLeadDataCode(lead),
+          'Data Code': getLeadDataCode(lead),
+          status: passedStatus,
+          notes: currentRemarks,
+          remarks: currentRemarks,
+          caseDetails: currentCaseDetails,
+          source: activeCampaign?.campaignName || lead.data?.source || lead.data?.campaignName || '',
+          psm: creatorName,
+          psmName: creatorName,
+          leadOwner: creatorName,
+          created_by_user: creatorName
+        }
+      });
+    }
   };
 
   const handleWhatsAppChat = (lead: LeadRecord) => {
