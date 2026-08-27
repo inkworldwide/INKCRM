@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
+import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
@@ -214,25 +215,128 @@ export default function TelecallerMonthlyPage() {
     return rows;
   }, [allAgentsList, leads, selectedMonths, selectedYears]);
 
+  // Date-wise Monthly Telecaller Matrix (Caller Name | 01-MM-YYYY | 02-MM-YYYY | ... | Total Calls)
+  const dateWiseMatrix = React.useMemo(() => {
+    const targetMonthName = selectedMonths[0] || months[new Date().getMonth()];
+    const targetYearStr = selectedYears[0] || new Date().getFullYear().toString();
+    const monthIndex = months.findIndex(m => m.toLowerCase() === targetMonthName.toLowerCase());
+    const yearNum = parseInt(targetYearStr, 10);
+
+    const safeMonth = monthIndex >= 0 ? monthIndex : new Date().getMonth();
+    const safeYear = !isNaN(yearNum) ? yearNum : new Date().getFullYear();
+
+    const daysInMonth = new Date(safeYear, safeMonth + 1, 0).getDate();
+
+    const dateHeaders: { key: string; label: string; dayNum: number }[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = String(d).padStart(2, '0');
+      const monthStr = String(safeMonth + 1).padStart(2, '0');
+      const isoKey = `${safeYear}-${monthStr}-${dayStr}`;
+      const headerLabel = `${dayStr}-${monthStr}-${safeYear}`;
+      dateHeaders.push({ key: isoKey, label: headerLabel, dayNum: d });
+    }
+
+    const agentCallCounts = new Map<string, Map<string, number>>();
+    allAgentsList.forEach(agent => {
+      agentCallCounts.set(agent.id, new Map<string, number>());
+    });
+
+    leads.forEach(l => {
+      const data = l.data || {};
+      const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
+      const notDialed = ['yet to call', 'not called', 'new', ''];
+      const isDialed = (st && !notDialed.includes(st)) || Number(data.callAttempts) > 0 || !!data.dialedAt;
+
+      if (!isDialed) return;
+
+      const dateVal = data.dialedAt || data.lastCallDate || l.updatedAt || l.createdAt;
+      if (!dateVal) return;
+
+      const leadDate = new Date(dateVal);
+      if (isNaN(leadDate.getTime())) return;
+
+      if (leadDate.getMonth() !== safeMonth || leadDate.getFullYear() !== safeYear) return;
+
+      const isoKey = leadDate.toISOString().slice(0, 10);
+
+      const agent = allAgentsList.find(a => (
+        l.assignedTo?._id === a.id ||
+        String(l.assignedTo?.name || '').toLowerCase() === a.name.toLowerCase() ||
+        String(data.telecaller || '').toLowerCase() === a.name.toLowerCase() ||
+        String(data.assignedAgent || '').toLowerCase() === a.name.toLowerCase() ||
+        String(data.assignedTo || '').toLowerCase() === a.name.toLowerCase() ||
+        String(l.assignedToName || '').toLowerCase() === a.name.toLowerCase()
+      ));
+
+      if (agent) {
+        const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
+        countsMap.set(isoKey, (countsMap.get(isoKey) || 0) + 1);
+        agentCallCounts.set(agent.id, countsMap);
+      }
+    });
+
+    const matrixRows = allAgentsList.map(agent => {
+      const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
+      let totalCalls = 0;
+      const dailyCounts: Record<string, number> = {};
+
+      dateHeaders.forEach(dh => {
+        const cnt = countsMap.get(dh.key) || 0;
+        dailyCounts[dh.label] = cnt;
+        totalCalls += cnt;
+      });
+
+      return {
+        agentId: agent.id,
+        callerName: agent.name,
+        dailyCounts,
+        totalCalls
+      };
+    });
+
+    return {
+      monthName: targetMonthName,
+      yearStr: targetYearStr,
+      dateHeaders,
+      matrixRows
+    };
+  }, [allAgentsList, leads, selectedMonths, selectedYears]);
+
   const exportCSV = () => {
-    const headers = ['Date', 'Telecaller Agent', 'Role', 'Assigned Leads', 'Dialed', 'Yet To Dial', 'Target Progress %'];
-    const rows = liveMonthlyAgents.map((ag) => [
-      ag.dateStr,
-      ag.name,
-      ag.role,
-      ag.assigned,
-      ag.dialed,
-      ag.yetToDial,
-      `${ag.progressPct}%`
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Monthly_Telecaller_Daily_Breakdown_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const { monthName, yearStr, dateHeaders, matrixRows } = dateWiseMatrix;
+    
+    // Headers matching exact design in user screenshot: Caller Name | 01-MM-YYYY | 02-MM-YYYY | ... | Total Calls
+    const headers = ['Caller Name', ...dateHeaders.map(dh => dh.label), 'Total Calls'];
+
+    const dataRows = matrixRows.map(row => {
+      const rowObj: Record<string, any> = {
+        'Caller Name': row.callerName
+      };
+
+      dateHeaders.forEach(dh => {
+        const cnt = row.dailyCounts[dh.label];
+        rowObj[dh.label] = cnt > 0 ? cnt : '';
+      });
+
+      rowObj['Total Calls'] = row.totalCalls;
+      return rowObj;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataRows, { header: headers });
+
+    const colWidths = headers.map(h => {
+      if (h === 'Caller Name') return { wch: 26 };
+      if (h === 'Total Calls') return { wch: 14 };
+      return { wch: 13 };
+    });
+    worksheet['!cols'] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    const sheetName = `${monthName}_${yearStr}`.slice(0, 31);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    XLSX.writeFile(workbook, `Telecaller_Monthly_DateWise_Report_${monthName}_${yearStr}.xlsx`);
+    showToast(`Exported monthly date-wise report for ${monthName} ${yearStr}!`, 'success');
   };
 
   // Compute summary stats for hero cards
@@ -483,6 +587,102 @@ export default function TelecallerMonthlyPage() {
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       No monthly telecaller records found matching the selected parameters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* DATE-WISE TELECALLER CALL MATRIX TABLE (Matching Image 1 Exact Layout) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
+        
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+              <Icons.CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              Date-Wise Telecaller Call Performance Matrix ({dateWiseMatrix.monthName} {dateWiseMatrix.yearStr})
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Daily dial breakdown matrix from Day 1 to Day {dateWiseMatrix.dateHeaders.length}
+            </p>
+          </div>
+
+          <button
+            onClick={exportCSV}
+            className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer self-start sm:self-auto"
+          >
+            <Icons.FileSpreadsheet className="w-4 h-4" />
+            Export Date-Wise Excel
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-14 text-center text-xs text-slate-400">Loading daily call matrix...</div>
+        ) : (
+          <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
+              <thead>
+                <tr className="bg-[#000080] text-white text-[11px] font-black uppercase tracking-wider h-11">
+                  <th className="py-3 px-4 sticky left-0 z-10 bg-[#000080] border-r border-indigo-900 min-w-[200px] shadow-sm">
+                    Caller Name
+                  </th>
+                  {dateWiseMatrix.dateHeaders.map(dh => (
+                    <th key={dh.key} className="py-3 px-3 text-center border-r border-indigo-900 min-w-[90px] whitespace-nowrap font-mono">
+                      {dh.label}
+                    </th>
+                  ))}
+                  <th className="py-3 px-4 text-center bg-indigo-950 min-w-[100px] whitespace-nowrap">
+                    Total Calls
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {dateWiseMatrix.matrixRows.map((row, idx) => (
+                  <tr 
+                    key={row.agentId || idx} 
+                    className={`${idx % 2 === 0 ? 'bg-slate-50/70 dark:bg-slate-900/60' : 'bg-white dark:bg-slate-900'} hover:bg-indigo-50/50 dark:hover:bg-slate-800/60 transition-colors h-11`}
+                  >
+                    {/* Sticky Caller Name Column */}
+                    <td className={`py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100 sticky left-0 z-10 border-r border-slate-200 dark:border-slate-800 shadow-sm ${idx % 2 === 0 ? 'bg-slate-100/90 dark:bg-slate-850' : 'bg-slate-50 dark:bg-slate-900'}`}>
+                      <span className="capitalize block truncate max-w-[190px]" title={row.callerName}>
+                        {row.callerName}
+                      </span>
+                    </td>
+
+                    {/* Daily Call Counts */}
+                    {dateWiseMatrix.dateHeaders.map(dh => {
+                      const count = row.dailyCounts[dh.label];
+                      return (
+                        <td 
+                          key={dh.key} 
+                          className="py-2.5 px-3 text-center border-r border-slate-200/60 dark:border-slate-800/60 font-mono text-xs"
+                        >
+                          {count > 0 ? (
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                              {count}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-700">-</span>
+                          )}
+                        </td>
+                      );
+                    })}
+
+                    {/* Total Calls Column */}
+                    <td className="py-2.5 px-4 text-center font-mono font-black text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40">
+                      {row.totalCalls > 0 ? row.totalCalls : 0}
+                    </td>
+                  </tr>
+                ))}
+
+                {dateWiseMatrix.matrixRows.length === 0 && (
+                  <tr>
+                    <td colSpan={dateWiseMatrix.dateHeaders.length + 2} className="py-12 text-center text-slate-400">
+                      No telecaller data available for the selected month and year.
                     </td>
                   </tr>
                 )}
