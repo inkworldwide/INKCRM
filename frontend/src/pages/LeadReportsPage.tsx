@@ -51,7 +51,7 @@ export default function LeadReportsPage() {
     setLoading(true);
     try {
       const [leadsRes, campRes] = await Promise.all([
-        api.get('/records/leads?limit=1000').catch(() => ({ data: [] })),
+        api.get('/records/leads?limit=100000').catch(() => ({ data: [] })),
         api.get('/records/campaigns?limit=1000').catch(() => ({ data: [] }))
       ]);
 
@@ -77,6 +77,20 @@ export default function LeadReportsPage() {
   // Filter leads based on selected criteria
   const filteredLeads = leads.filter((item) => {
     const data = item.data || {};
+
+    // Month & Year match
+    const dateVal = data.dialedAt || data.lastCallDate || item.createdAt || item.updatedAt || data.createdAt || data.date;
+    if (dateVal) {
+      const dateObj = new Date(dateVal);
+      if (!isNaN(dateObj.getTime())) {
+        const monthName = months[dateObj.getMonth()];
+        const yearStr = dateObj.getFullYear().toString();
+        
+        if (selectedMonths.length > 0 && !selectedMonths.includes(monthName)) return false;
+        if (selectedYears.length > 0 && !selectedYears.includes(yearStr)) return false;
+      }
+    }
+
     const statusMatch = selectedStatuses.length === 0 || selectedStatuses.some(s => (data.status || '').toLowerCase() === s.toLowerCase());
     
     // Campaign match
@@ -392,7 +406,12 @@ export default function LeadReportsPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-6 font-bold text-slate-900 dark:text-white font-mono">
-                        ₹{Number(amount).toLocaleString('en-IN')}
+                        {(() => {
+                          const numAmt = Number(amount);
+                          return (amount !== 'N/A' && amount !== undefined && amount !== null && !isNaN(numAmt) && numAmt > 0)
+                            ? `₹${numAmt.toLocaleString('en-IN')}`
+                            : 'N/A';
+                        })()}
                       </td>
                       <td className="py-3.5 px-6 font-medium text-slate-500 dark:text-slate-400 text-[11px]">
                         {period}

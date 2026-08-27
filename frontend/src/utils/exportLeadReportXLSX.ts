@@ -4,22 +4,18 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
   const headers = [
     'Sl.No.',
     'Data Code',
-    'Createddate',
+    'firm_name',
+    'contact num',
+    'Location',
     'Customer Name',
-    'Mobile No',
-    'Firm / Company',
-    'Turnover / Salary',
-    'Loan Amount',
-    'present address',
-    'City',
     'Loan Product',
-    'Bank Names',
-    'PSM',
+    'Loan Amount',
+    'Case Details',
     'Status',
     'Remarks',
     'Source',
     'Assigned To',
-    'FollowUp Date',
+    'Createddate',
     'Modified Date'
   ];
 
@@ -77,14 +73,44 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
     return '';
   };
 
-  const dataRows = (leads || []).map((lead: any, idx: number) => {
+  // Helper to extract Data Code string for sorting
+  const getDataCodeStr = (lead: any) => {
     const data = lead.data || lead;
-    const slNo = idx + 1;
-    const dataCode = extractField(
+    const raw = extractField(
       data,
-      ['Data Code', 'dataCode', 'data_code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
-      ['datacode', 'leadcode']
-    ) || (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
+      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
+      ['datacode', 'leadcode', 'code']
+    ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code || lead?.dataCode || lead?.data_code || lead?.['Data Code'] || '';
+    return String(raw || '').trim();
+  };
+
+  // Sort leads naturally by Data Code serial number (e.g. A1 CATE B 3695, A1 CATE B 3696...)
+  const sortedLeads = [...(leads || [])].sort((a, b) => {
+    const codeA = getDataCodeStr(a);
+    const codeB = getDataCodeStr(b);
+    
+    // Extract numeric suffix digits if present
+    const matchA = codeA.match(/\d+/g);
+    const matchB = codeB.match(/\d+/g);
+    const numA = matchA ? parseInt(matchA[matchA.length - 1], 10) : 0;
+    const numB = matchB ? parseInt(matchB[matchB.length - 1], 10) : 0;
+
+    if (numA !== numB && !isNaN(numA) && !isNaN(numB) && numA > 0 && numB > 0) {
+      return numA - numB;
+    }
+
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const dataRows = sortedLeads.map((lead: any, idx: number) => {
+    const data = lead.data || lead;
+    const slNo = idx + 1; // Strict sequential numbering 1, 2, 3, 4 ... N
+    
+    const rawDataCode = getDataCodeStr(lead);
+    const dataCode = (rawDataCode && String(rawDataCode).trim() !== '' && String(rawDataCode).trim() !== 'N/A' && String(rawDataCode).trim() !== 'Unnamed')
+      ? String(rawDataCode).trim()
+      : (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
+
     const createdDate = formatDateShort(lead.createdAt || data.createdAt || data.createddate);
 
     const customerName = String(
@@ -100,19 +126,19 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
 
     const firmCompany = String(
       extractField(data, ['company', 'firmName', 'firm_name', 'firm', 'firmCompany', 'businessName', 'shopName', 'tradeName', 'organization'], ['firm', 'company', 'business']) ||
-      ''
+      'N/A'
     ).trim();
 
-    const turnoverSalary = String(extractField(data, ['turnover', 'salary', 'income', 'turnoverSalary', 'turnover_salary']) || '').trim();
-    const loanAmount = String(extractField(data, ['loanAmount', 'budget', 'amount', 'requiredLoan', 'loan_amount']) || '').trim();
-    const presentAddress = String(extractField(data, ['presentAddress', 'address', 'locationAddress', 'present_address', 'fullAddress']) || '').trim();
-    const city = String(extractField(data, ['city', 'location', 'district', 'state', 'place', 'area']) || '').trim();
-    const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || '').trim();
-    const bankNames = String(extractField(data, ['bankNames', 'bank', 'preferredBank', 'bank_name']) || '').trim();
-    const psm = String(extractField(data, ['psm', 'psmName', 'psm_name']) || '').trim();
+    const loanAmountRaw = extractField(data, ['loanAmount', 'budget', 'amount', 'requiredLoan', 'loan_amount']);
+    const numAmt = Number(loanAmountRaw);
+    const loanAmount = (!isNaN(numAmt) && numAmt > 0) ? `₹${numAmt.toLocaleString('en-IN')}` : (loanAmountRaw || 'N/A');
+
+    const city = String(extractField(data, ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'presentAddress', 'fullAddress']) || 'N/A').trim();
+    const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || 'SALARIED PERSONAL LOAN').trim();
+    const caseDetails = String(extractField(data, ['caseDetails', 'case_details', 'caseStatus', 'details', 'description']) || 'N/A').trim();
     const status = String(data.status || 'New').trim();
-    const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').trim();
-    const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || '').trim();
+    const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').replace(/<[^>]*>/g, '').trim();
+    const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || 'N/A').trim();
 
     let assignedTo = 'Unassigned';
     if (data.assignedTo) {
@@ -127,28 +153,23 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
       assignedTo = String(lead.assignedToName);
     }
 
-    const followUpDate = formatDateTimeFull(data.followUpDate || data.nextFollowup || data.dialedAt || data.lastCallDate);
     const modifiedDate = formatDateTimeFull(lead.updatedAt || data.updatedAt);
 
     return {
       'Sl.No.': slNo,
       'Data Code': dataCode,
-      'Createddate': createdDate,
+      'firm_name': firmCompany,
+      'contact num': mobileNo,
+      'Location': city,
       'Customer Name': customerName,
-      'Mobile No': mobileNo,
-      'Firm / Company': firmCompany,
-      'Turnover / Salary': turnoverSalary,
-      'Loan Amount': loanAmount,
-      'present address': presentAddress,
-      'City': city,
       'Loan Product': loanProduct,
-      'Bank Names': bankNames,
-      'PSM': psm,
+      'Loan Amount': loanAmount,
+      'Case Details': caseDetails,
       'Status': status,
       'Remarks': remarks,
       'Source': source,
       'Assigned To': assignedTo,
-      'FollowUp Date': followUpDate,
+      'Createddate': createdDate,
       'Modified Date': modifiedDate
     };
   });
@@ -167,9 +188,9 @@ export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lea
     return { wch: Math.max(maxLen + 4, 14) };
   });
 
-  // Explicit string formatting for Mobile No to prevent scientific notation (9.6E+09)
+  // Explicit string formatting for contact num to prevent scientific notation (9.6E+09)
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-  const mobileColIdx = headers.indexOf('Mobile No');
+  const mobileColIdx = headers.indexOf('contact num');
 
   if (mobileColIdx !== -1) {
     for (let R = range.s.r + 1; R <= range.e.r; ++R) {
