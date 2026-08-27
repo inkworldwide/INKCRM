@@ -252,7 +252,7 @@ export default function TelecallerReportsPage() {
     return rows;
   }, [allAgentsList, leads, selectedMonths, selectedYears]);
 
-  // Date-wise Monthly Telecaller Matrix (Caller Name | 01-MM-YYYY | 02-MM-YYYY | ... | Total Calls)
+  // Date-wise & Day-of-Week Monthly Telecaller Matrix
   const dateWiseMatrix = React.useMemo(() => {
     const targetMonthName = selectedMonths[0] || months[new Date().getMonth()];
     const targetYearStr = selectedYears[0] || new Date().getFullYear().toString();
@@ -264,13 +264,24 @@ export default function TelecallerReportsPage() {
 
     const daysInMonth = new Date(safeYear, safeMonth + 1, 0).getDate();
 
-    const dateHeaders: { key: string; label: string; dayNum: number }[] = [];
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const daysOfWeekShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    const dateHeaders: { key: string; label: string; dayNum: number; dayName: string; dayNameShort: string }[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dayStr = String(d).padStart(2, '0');
       const monthStr = String(safeMonth + 1).padStart(2, '0');
       const isoKey = `${safeYear}-${monthStr}-${dayStr}`;
-      const headerLabel = `${dayStr}-${monthStr}-${safeYear}`;
-      dateHeaders.push({ key: isoKey, label: headerLabel, dayNum: d });
+      
+      const dateObj = new Date(safeYear, safeMonth, d);
+      const dayIdx = dateObj.getDay();
+      const dayName = daysOfWeek[dayIdx];
+      const dayNameShort = daysOfWeekShort[dayIdx];
+
+      // Header label includes date + day of week name e.g. "01-07-2026 (Wed)"
+      const headerLabel = `${dayStr}-${monthStr}-${safeYear} (${dayNameShort})`;
+
+      dateHeaders.push({ key: isoKey, label: headerLabel, dayNum: d, dayName, dayNameShort });
     }
 
     const agentCallCounts = new Map<string, Map<string, number>>();
@@ -312,6 +323,7 @@ export default function TelecallerReportsPage() {
       }
     });
 
+    // 1. Daily Date Rows
     const matrixRows = allAgentsList.map(agent => {
       const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
       let totalCalls = 0;
@@ -331,51 +343,84 @@ export default function TelecallerReportsPage() {
       };
     });
 
+    // 2. Day of Week Summary Rows (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)
+    const dowMatrixRows = allAgentsList.map(agent => {
+      const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
+      const dowCounts: Record<string, number> = {
+        'Sunday': 0,
+        'Monday': 0,
+        'Tuesday': 0,
+        'Wednesday': 0,
+        'Thursday': 0,
+        'Friday': 0,
+        'Saturday': 0
+      };
+      let totalCalls = 0;
+
+      dateHeaders.forEach(dh => {
+        const cnt = countsMap.get(dh.key) || 0;
+        dowCounts[dh.dayName] = (dowCounts[dh.dayName] || 0) + cnt;
+        totalCalls += cnt;
+      });
+
+      return {
+        agentId: agent.id,
+        callerName: agent.name,
+        dowCounts,
+        totalCalls
+      };
+    });
+
     return {
       monthName: targetMonthName,
       yearStr: targetYearStr,
       dateHeaders,
-      matrixRows
+      matrixRows,
+      dowMatrixRows
     };
   }, [allAgentsList, leads, selectedMonths, selectedYears]);
 
   const agentNamesList = allAgentsList.map(u => u.name);
 
   const exportCSV = () => {
-    const { monthName, yearStr, dateHeaders, matrixRows } = dateWiseMatrix;
+    const { monthName, yearStr, dateHeaders, matrixRows, dowMatrixRows } = dateWiseMatrix;
     
-    // Headers matching exact design in user screenshot: Caller Name | 01-MM-YYYY | 02-MM-YYYY | ... | Total Calls
-    const headers = ['Caller Name', ...dateHeaders.map(dh => dh.label), 'Total Calls'];
+    const workbook = XLSX.utils.book_new();
 
-    const dataRows = matrixRows.map(row => {
-      const rowObj: Record<string, any> = {
-        'Caller Name': row.callerName
-      };
-
+    // Sheet 1: Daily Date-Wise Matrix (Caller Name | 01-07-2026 (Wed) | ... | Total Calls)
+    const headers1 = ['Caller Name', ...dateHeaders.map(dh => dh.label), 'Total Calls'];
+    const dataRows1 = matrixRows.map(row => {
+      const rowObj: Record<string, any> = { 'Caller Name': row.callerName };
       dateHeaders.forEach(dh => {
         const cnt = row.dailyCounts[dh.label];
         rowObj[dh.label] = cnt > 0 ? cnt : '';
       });
-
       rowObj['Total Calls'] = row.totalCalls;
       return rowObj;
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(dataRows, { header: headers });
+    const worksheet1 = XLSX.utils.json_to_sheet(dataRows1, { header: headers1 });
+    worksheet1['!cols'] = headers1.map(h => ({ wch: h === 'Caller Name' ? 26 : h === 'Total Calls' ? 14 : 16 }));
+    XLSX.utils.book_append_sheet(workbook, worksheet1, 'Daily_Date_Matrix');
 
-    const colWidths = headers.map(h => {
-      if (h === 'Caller Name') return { wch: 26 };
-      if (h === 'Total Calls') return { wch: 14 };
-      return { wch: 13 };
+    // Sheet 2: Day of Week Summary Matrix (Caller Name | Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Total Calls)
+    const headers2 = ['Caller Name', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Total Calls'];
+    const dataRows2 = dowMatrixRows.map(row => {
+      const rowObj: Record<string, any> = { 'Caller Name': row.callerName };
+      ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
+        const cnt = row.dowCounts[day];
+        rowObj[day] = cnt > 0 ? cnt : '';
+      });
+      rowObj['Total Calls'] = row.totalCalls;
+      return rowObj;
     });
-    worksheet['!cols'] = colWidths;
 
-    const workbook = XLSX.utils.book_new();
-    const sheetName = `${monthName}_${yearStr}`.slice(0, 31);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const worksheet2 = XLSX.utils.json_to_sheet(dataRows2, { header: headers2 });
+    worksheet2['!cols'] = headers2.map(h => ({ wch: h === 'Caller Name' ? 26 : 14 }));
+    XLSX.utils.book_append_sheet(workbook, worksheet2, 'Day_of_Week_Summary');
 
-    XLSX.writeFile(workbook, `Telecaller_Reports_DateWise_${monthName}_${yearStr}.xlsx`);
-    showToast(`Exported date-wise telecaller report for ${monthName} ${yearStr}!`, 'success');
+    XLSX.writeFile(workbook, `Telecaller_Reports_DayWise_${monthName}_${yearStr}.xlsx`);
+    showToast(`Exported Day-wise telecaller report for ${monthName} ${yearStr}!`, 'success');
   };
 
   const displayAgents = liveAgentReports;
