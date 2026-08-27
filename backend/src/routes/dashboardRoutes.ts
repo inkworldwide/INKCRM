@@ -9,6 +9,26 @@ import { authenticate } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import { HierarchyService } from '../utils/hierarchy';
 
+export const normalizeStatusName = (rawSt: string): string => {
+  if (!rawSt) return 'PENDING';
+  const s = rawSt.trim().toUpperCase();
+
+  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS') return 'HOT LEADS';
+  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS') return 'WARM LEADS';
+  if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
+  if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
+  if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
+  if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
+  if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
+  if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
+  if (s.includes('REJECT')) return 'REJECTED';
+  if (s.includes('FOLLOW')) return 'FOLLOWUP';
+  if (s.includes('DROP')) return 'DROPPED';
+  if (s === 'PENDING') return 'PENDING';
+
+  return s;
+};
+
 const router = Router();
 
 router.use(authenticate);
@@ -111,18 +131,30 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
     endOfToday.setHours(23, 59, 59, 999);
 
     if (leadModule) {
-      // 1. Group leads count by status dynamically
+      // 1. Group leads count by status dynamically (checking status, dialStatus, leadStatus)
       const leadAgg = await CustomRecord.aggregate([
         { $match: leadQuery },
-        { $group: { _id: '$data.status', count: { $sum: 1 } } }
+        {
+          $project: {
+            st: {
+              $ifNull: [
+                '$data.status',
+                { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
+              ]
+            }
+          }
+        },
+        { $group: { _id: '$st', count: { $sum: 1 } } }
       ]);
       
       leadAgg.forEach(item => {
         if (item._id) {
           const rawName = item._id.toString().trim();
-          statusCounts[rawName.toUpperCase()] = item.count;
-          // Store both raw case and normalized versions to handle all lookup styles
-          statusCounts[rawName] = item.count;
+          const canonical = normalizeStatusName(rawName);
+
+          statusCounts[canonical] = (statusCounts[canonical] || 0) + item.count;
+          statusCounts[rawName.toUpperCase()] = (statusCounts[rawName.toUpperCase()] || 0) + item.count;
+          statusCounts[rawName] = (statusCounts[rawName] || 0) + item.count;
         }
       });
 

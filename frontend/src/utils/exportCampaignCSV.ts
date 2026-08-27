@@ -51,10 +51,10 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
   const headers = [
     'Slno',
     'Data Code',
-    'Location',
-    'Customer',
     'firm_name',
     'contact num',
+    'Location',
+    'Customer',
     'Case Details',
     'lead_category',
     'Remarks',
@@ -77,29 +77,67 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
     }).replace(',', '');
   };
 
-  const dataRows = (leads || []).map((lead: any, idx: number) => {
+  // Helper to extract Data Code string for sorting
+  const getDataCodeStr = (lead: any) => {
     const data = lead.data || lead;
-    const slNo = idx + 1;
-
-    // 1. Data Code - Extract exact value from raw excel / lead data without forcing synthetic fallback
-    const rawDataCode = extractField(
+    const raw = extractField(
       data,
       ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
       ['datacode', 'leadcode', 'code']
-    ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code || lead?.dataCode || lead?.data_code || lead?.['Data Code'];
+    ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code || lead?.dataCode || lead?.data_code || lead?.['Data Code'] || '';
+    return String(raw || '').trim();
+  };
 
+  // Sort leads naturally by Data Code serial number (e.g. A1 CATE B 3695, A1 CATE B 3696...)
+  const sortedLeads = [...(leads || [])].sort((a, b) => {
+    const codeA = getDataCodeStr(a);
+    const codeB = getDataCodeStr(b);
+    
+    // Extract numeric suffix digits if present
+    const matchA = codeA.match(/\d+/g);
+    const matchB = codeB.match(/\d+/g);
+    const numA = matchA ? parseInt(matchA[matchA.length - 1], 10) : 0;
+    const numB = matchB ? parseInt(matchB[matchB.length - 1], 10) : 0;
+
+    if (numA !== numB && !isNaN(numA) && !isNaN(numB) && numA > 0 && numB > 0) {
+      return numA - numB;
+    }
+
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const dataRows = sortedLeads.map((lead: any, idx: number) => {
+    const data = lead.data || lead;
+    const slNo = idx + 1; // Strict sequential numbering 1, 2, 3, 4 ... N
+
+    // 1. Data Code
+    const rawDataCode = getDataCodeStr(lead);
     const dataCode = (rawDataCode && String(rawDataCode).trim() !== '' && String(rawDataCode).trim() !== 'N/A' && String(rawDataCode).trim() !== 'Unnamed')
       ? String(rawDataCode).trim()
       : (lead._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A');
 
-    // 2. Location
+    // 2. firm_name
+    const firmName = extractField(
+      data,
+      ['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization'],
+      ['firm', 'company', 'agency', 'business', 'treader', 'trader']
+    ) || 'N/A';
+
+    // 3. contact num
+    const contactNum = extractField(
+      data,
+      ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum', 'callNo', 'whatsappNo', 'phone1', 'phone2'],
+      ['phone', 'mobile', 'contact', 'cell', 'tele']
+    ) || 'N/A';
+
+    // 4. Location
     const location = extractField(
       data,
       ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch'],
       ['location', 'city', 'district', 'address']
     ) || 'N/A';
 
-    // 3. Customer
+    // 5. Customer
     const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
     const customer = (fullName && fullName !== 'Unnamed' ? fullName : '') ||
       extractField(
@@ -107,20 +145,6 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
         ['customer', 'customerName', 'customer_name', 'custName', 'client', 'clientName', 'firstName', 'name', 'fullName', 'buyer', 'buyerName', 'costomer', 'leadName'],
         ['customer', 'client']
       ) || 'N/A';
-
-    // 4. firm_name
-    const firmName = extractField(
-      data,
-      ['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization'],
-      ['firm', 'company', 'agency', 'business', 'treader', 'trader']
-    ) || 'N/A';
-
-    // 5. contact num
-    const contactNum = extractField(
-      data,
-      ['phone', 'mobile', 'contact', 'contactNum', 'contact_num', 'contactNumber', 'contact_number', 'phoneNumber', 'phone_number', 'mobileNo', 'mobile_no', 'contactNo', 'contact_no', 'cell', 'telephone', 'phNo', 'mobNo', 'telNo', 'name_contact_num', 'nameContactNum', 'callNo', 'whatsappNo', 'phone1', 'phone2'],
-      ['phone', 'mobile', 'contact', 'cell', 'tele']
-    ) || 'N/A';
 
     // 6. Case Details
     const caseDetails = extractField(
@@ -158,10 +182,12 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
     }
 
     // 10. Dial Status
-    const dialStatus = data.status || data.dialStatus || 'Yet To Call';
+    const rawSt = data.status || data.dialStatus || data.leadStatus || 'YET TO CALL';
+    const dialStatus = String(rawSt).trim().toUpperCase();
 
     // 11. Dailed Datetime
-    const isDialed = dialStatus && dialStatus !== 'Yet To Call' && dialStatus !== 'Not Called';
+    const notDialedList = ['YET TO CALL', 'NOT CALLED', 'NEW', ''];
+    const isDialed = dialStatus && !notDialedList.includes(dialStatus);
     let dailedDatetime = 'Not Called';
     if (isDialed || data.dialedAt || data.lastCallDate) {
       const dVal = data.dialedAt || data.lastCallDate || lead.updatedAt || data.updatedAt || lead.createdAt;
@@ -171,10 +197,10 @@ export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
     return {
       'Slno': slNo,
       'Data Code': dataCode,
-      'Location': location,
-      'Customer': customer,
       'firm_name': firmName,
       'contact num': contactNum,
+      'Location': location,
+      'Customer': customer,
       'Case Details': caseDetails,
       'lead_category': leadCategory,
       'Remarks': remarks,

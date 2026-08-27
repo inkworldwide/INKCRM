@@ -11,18 +11,24 @@ export default function TelecallerReportsPage() {
   const [leads, setLeads] = useState<any[]>([]);
   const [campaignsList, setCampaignsList] = useState<string[]>([]);
 
-  // Multi-Select Filters
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(['July']);
-  const [selectedYears, setSelectedYears] = useState<string[]>(['2026']);
-  const [selectedRoleTypes, setSelectedRoleTypes] = useState<string[]>([]);
-  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
-  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
-
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const years = ['2024', '2025', '2026', '2027'];
+
+  // Month & Year Filter State (Defaulting to current Month & Year)
+  const currentMonthName = months[new Date().getMonth()];
+  const currentYearStr = new Date().getFullYear().toString();
+
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([currentMonthName]);
+  const [selectedYears, setSelectedYears] = useState<string[]>([currentYearStr]);
+
+  // Multi-Select Filters
+  const [selectedRoleTypes, setSelectedRoleTypes] = useState<string[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
+
   const roleTypes = ['Super Admin', 'Admin', 'Sales Manager', 'Telecaller', 'Sales Representative'];
 
   useEffect(() => {
@@ -34,7 +40,7 @@ export default function TelecallerReportsPage() {
     try {
       const [usersRes, leadsRes, campRes] = await Promise.all([
         api.get('/auth/users').catch(() => ({ data: [] })),
-        api.get('/records/leads?limit=1000').catch(() => ({ data: [] })),
+        api.get('/records/leads?limit=10000').catch(() => ({ data: [] })),
         api.get('/records/campaigns?limit=1000').catch(() => ({ data: [] }))
       ]);
 
@@ -56,7 +62,7 @@ export default function TelecallerReportsPage() {
 
   const handleFilterClick = () => {
     fetchInitialData();
-    showToast('Updated report with real database metrics.', 'info');
+    showToast('Updated report with selected month and year filters.', 'info');
   };
 
   // Build agent list from users DB & lead assigned records
@@ -76,8 +82,8 @@ export default function TelecallerReportsPage() {
     });
 
     leads.forEach((l: any) => {
-      const name = l.assignedTo?.name || l.data?.telecaller || l.data?.assignedAgent;
-      if (name && !addedNames.has(name.toLowerCase())) {
+      const name = l.assignedTo?.name || l.data?.telecaller || l.data?.assignedAgent || l.data?.assignedTo;
+      if (name && typeof name === 'string' && !addedNames.has(name.toLowerCase())) {
         list.push({ 
           id: name, 
           name, 
@@ -88,92 +94,189 @@ export default function TelecallerReportsPage() {
       }
     });
 
-    // Default team members if no users found in DB yet so report is always active
-    if (list.length === 0) {
-      return [
-        { id: '1', name: 'Ananya Sharma', role: 'Telecaller', email: 'ananya@inkcrm.com' },
-        { id: '2', name: 'Rahul Verma', role: 'Telecaller', email: 'rahul@inkcrm.com' },
-        { id: '3', name: 'Priya Singh', role: 'Telecaller', email: 'priya@inkcrm.com' },
-        { id: '4', name: 'Vikram Patel', role: 'Telecaller', email: 'vikram@inkcrm.com' },
-        { id: '5', name: 'Sneha Kulkarni', role: 'Telecaller', email: 'sneha@inkcrm.com' }
-      ];
-    }
-
     return list;
   }, [users, leads]);
 
-  // Build live telecaller performance list
-  const liveAgentReports = allAgentsList.filter(agent => {
-    // Filter by role type
-    if (selectedRoleTypes.length > 0 && !selectedRoleTypes.includes(agent.role)) return false;
-    // Filter by selected agent name
-    if (selectedAgents.length > 0 && !selectedAgents.includes(agent.name)) return false;
-    return true;
-  }).map((agent, idx) => {
-    const userLeads = leads.filter(l => {
-      const data = l.data || {};
-      const agentMatch = (
-        l.assignedTo?._id === agent.id || 
-        (l.assignedTo?.name || '').toLowerCase() === agent.name.toLowerCase() ||
-        (data.telecaller || '').toLowerCase() === agent.name.toLowerCase() ||
-        (data.assignedAgent || '').toLowerCase() === agent.name.toLowerCase()
-      );
+  // Build live date-wise telecaller performance list (Grouped by exact Date + Agent)
+  const liveAgentReports = React.useMemo(() => {
+    const rows: {
+      _id: string;
+      rawDate: string;
+      dateStr: string;
+      agentId: string;
+      name: string;
+      email: string;
+      role: string;
+      assigned: number;
+      connected: number;
+      followups: number;
+      hotLeads: number;
+      yetToCall: number;
+      convRate: number;
+    }[] = [];
 
+    const filteredAgents = allAgentsList.filter(agent => {
+      if (selectedRoleTypes.length > 0 && !selectedRoleTypes.includes(agent.role)) return false;
+      if (selectedAgents.length > 0 && !selectedAgents.includes(agent.name)) return false;
+      return true;
+    });
+
+    // Group map key: `YYYY-MM-DD__agentId`
+    const groupMap = new Map<string, { dateStr: string; agent: typeof filteredAgents[0]; leads: any[] }>();
+
+    leads.forEach(l => {
+      const data = l.data || {};
       // Campaign filter
       const leadCamp = (data.campaign || data.campaignName || l.campaignName || '').trim();
       const campMatch = selectedCampaigns.length === 0 || selectedCampaigns.some(c => c.toLowerCase() === leadCamp.toLowerCase() || leadCamp.toLowerCase().includes(c.toLowerCase()));
+      if (!campMatch) return;
 
-      return agentMatch && campMatch;
+      // Extract date for the lead
+      const dateVal = data.dialedAt || data.lastCallDate || l.updatedAt || l.createdAt || data.date || data.created_at;
+      if (!dateVal) return;
+
+      const leadDateObj = new Date(dateVal);
+      if (isNaN(leadDateObj.getTime())) return;
+
+      const leadMonthName = months[leadDateObj.getMonth()];
+      const leadYearStr = leadDateObj.getFullYear().toString();
+
+      // Filter by Selected Month & Year
+      if (selectedMonths.length > 0 && !selectedMonths.includes(leadMonthName)) return;
+      if (selectedYears.length > 0 && !selectedYears.includes(leadYearStr)) return;
+
+      const leadDateISO = leadDateObj.toISOString().slice(0, 10);
+
+      // Find matching agent
+      const matchedAgent = filteredAgents.find(agent => (
+        l.assignedTo?._id === agent.id || 
+        (l.assignedTo?.name || '').toLowerCase() === agent.name.toLowerCase() ||
+        (data.telecaller || '').toLowerCase() === agent.name.toLowerCase() ||
+        (data.assignedAgent || '').toLowerCase() === agent.name.toLowerCase() ||
+        (data.assignedTo || '').toLowerCase() === agent.name.toLowerCase()
+      ));
+
+      if (matchedAgent) {
+        const key = `${leadDateISO}__${matchedAgent.id}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { dateStr: leadDateISO, agent: matchedAgent, leads: [] });
+        }
+        groupMap.get(key)!.leads.push(l);
+      }
     });
 
-    const assignedCount = userLeads.length > 0 ? userLeads.length : (leads.length > 0 ? Math.max(3, Math.floor(leads.length / allAgentsList.length)) : 15 + idx * 4);
-    
-    const connectedCount = userLeads.filter(l => {
-      const st = (l.data?.status || l.status || '').toLowerCase();
-      return st === 'hot' || st === 'warm' || st === 'followup' || st.includes('approved') || st.includes('disbursed');
-    }).length || Math.floor(assignedCount * 0.8);
+    // Transform grouped map into daily performance rows
+    groupMap.forEach((val, key) => {
+      const { dateStr, agent, leads: agentLeads } = val;
 
-    const followupCount = userLeads.filter(l => {
-      const st = (l.data?.status || l.status || '').toLowerCase();
-      return st === 'followup' || st === 'warm' || st.includes('pending');
-    }).length || Math.floor(assignedCount * 0.35);
+      const formattedDate = new Date(dateStr).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }); // e.g. "27/08/2026"
 
-    return {
-      _id: agent.id,
-      name: agent.name,
-      email: agent.email,
-      role: agent.role,
-      assigned: assignedCount,
-      connected: connectedCount,
-      followups: followupCount
-    };
-  });
+      const assignedCount = agentLeads.length;
+
+      const connectedCount = agentLeads.filter(l => {
+        const data = l.data || {};
+        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
+        const notDialed = ['yet to call', 'not called', 'new', ''];
+        const isDialedStatus = st && !notDialed.includes(st);
+        const hasCallAttempt = Number(data.callAttempts) > 0 || !!data.dialedAt;
+        return isDialedStatus || hasCallAttempt;
+      }).length;
+
+      const followupCount = agentLeads.filter(l => {
+        const data = l.data || {};
+        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
+        return st.includes('followup') || st.includes('cal back') || st.includes('warm') || st.includes('pending');
+      }).length;
+
+      const hotCount = agentLeads.filter(l => {
+        const data = l.data || {};
+        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
+        return st.includes('hot');
+      }).length;
+
+      const yetToCallCount = agentLeads.filter(l => {
+        const data = l.data || {};
+        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
+        return !st || st === 'yet to call' || st === 'not called' || st === 'new';
+      }).length;
+
+      const convRate = assignedCount > 0 ? Math.round((connectedCount / assignedCount) * 100) : 0;
+
+      rows.push({
+        _id: key,
+        rawDate: dateStr,
+        dateStr: formattedDate,
+        agentId: agent.id,
+        name: agent.name,
+        email: agent.email,
+        role: agent.role,
+        assigned: assignedCount,
+        connected: connectedCount,
+        followups: followupCount,
+        hotLeads: hotCount,
+        yetToCall: yetToCallCount,
+        convRate
+      });
+    });
+
+    // Sort by Date (newest date first), then by Agent Name
+    rows.sort((a, b) => b.rawDate.localeCompare(a.rawDate) || a.name.localeCompare(b.name));
+
+    // Fallback: If no lead records exist yet, render default agent rows with today's date
+    if (rows.length === 0) {
+      const todayFormatted = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      filteredAgents.forEach(agent => {
+        rows.push({
+          _id: agent.id,
+          rawDate: new Date().toISOString().slice(0, 10),
+          dateStr: todayFormatted,
+          agentId: agent.id,
+          name: agent.name,
+          email: agent.email,
+          role: agent.role,
+          assigned: 0,
+          connected: 0,
+          followups: 0,
+          hotLeads: 0,
+          yetToCall: 0,
+          convRate: 0
+        });
+      });
+    }
+
+    return rows;
+  }, [allAgentsList, leads, selectedMonths, selectedYears]);
 
   const agentNamesList = allAgentsList.map(u => u.name);
 
   const exportCSV = () => {
-    const headers = ['Agent Name', 'Role', 'Assigned Leads', 'Calls Connected', 'Followups Scheduled'];
+    const headers = ['Date', 'Agent Name', 'Role', 'Assigned Leads', 'Calls Connected', 'Followups Scheduled', 'Hot Leads', 'Yet To Call', 'Efficiency Rate %'];
     const rows = liveAgentReports.map((ag) => [
+      ag.dateStr,
       ag.name,
       ag.role,
       ag.assigned,
       ag.connected,
-      ag.followups
+      ag.followups,
+      ag.hotLeads,
+      ag.yetToCall,
+      `${ag.convRate}%`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Telecaller_Report.csv`);
+    link.setAttribute('download', `Telecaller_Daily_Report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Compute summary stats for the hero cards
-  const displayAgents = liveAgentReports
-    .filter(u => selectedAgents.length === 0 || selectedAgents.includes(u.name))
-    .filter(u => selectedRoleTypes.length === 0 || selectedRoleTypes.some(r => (u.role || 'Telecaller').toLowerCase() === r.toLowerCase()));
+  const displayAgents = liveAgentReports;
 
   const totalAssigned = displayAgents.reduce((sum, ag) => sum + ag.assigned, 0);
   const totalConnected = displayAgents.reduce((sum, ag) => sum + ag.connected, 0);
@@ -269,19 +372,23 @@ export default function TelecallerReportsPage() {
         </div>
       </div>
 
-      {/* FILTER CONTROL CARD (With Multi-Select Checkboxes) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-visible z-20">
+      {/* FILTER CONTROL CARD WITH DATE-WISE PARAMETERS */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-visible z-20 space-y-5">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
         
-        <div className="flex items-center justify-between gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Icons.SlidersHorizontal className="w-3.5 h-3.5" />
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Icons.SlidersHorizontal className="w-4 h-4" />
             </div>
-            <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Telecaller Performance Parameters
-            </h3>
+            <div>
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Telecaller Performance Filter Parameters
+              </h3>
+              <p className="text-[11px] text-slate-500">Filter metrics by campaign and agent parameters</p>
+            </div>
           </div>
+
           <button
             onClick={exportCSV}
             className="h-9 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2"
@@ -291,7 +398,8 @@ export default function TelecallerReportsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* SELECT MONTH & SELECT YEAR FILTERS ONLY */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Select Month */}
           <MultiSelectDropdown
             label="Select Month"
@@ -309,40 +417,13 @@ export default function TelecallerReportsPage() {
             onChange={setSelectedYears}
             placeholder="-All Years-"
           />
-
-          {/* Campaign Filter */}
-          <MultiSelectDropdown
-            label="Campaign Filter"
-            options={campaignsList.length > 0 ? campaignsList : ['No Active Campaigns']}
-            selectedValues={selectedCampaigns}
-            onChange={setSelectedCampaigns}
-            placeholder="-All Campaigns-"
-          />
-
-          {/* Load Agents Types */}
-          <MultiSelectDropdown
-            label="Load Agents Types"
-            options={roleTypes}
-            selectedValues={selectedRoleTypes}
-            onChange={setSelectedRoleTypes}
-            placeholder="-All Agent Roles-"
-          />
-
-          {/* Calling Agent */}
-          <MultiSelectDropdown
-            label="Calling Agent"
-            options={agentNamesList}
-            selectedValues={selectedAgents}
-            onChange={setSelectedAgents}
-            placeholder="-All Calling Agents-"
-          />
         </div>
 
-        {/* View Detail Report Action */}
+        {/* Apply Action */}
         <div className="flex justify-end mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={handleFilterClick}
-            className="h-11 px-6 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="h-10 px-6 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Icons.CheckCircle className="w-4 h-4" />
             Apply Report Filter
@@ -360,7 +441,7 @@ export default function TelecallerReportsPage() {
               Telecaller Productivity & Conversion Ledger
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live statistics from database ({displayAgents.length} organization users)
+              Live date-wise statistics from database ({displayAgents.length} active telecallers)
             </p>
           </div>
         </div>
@@ -369,19 +450,30 @@ export default function TelecallerReportsPage() {
           <div className="p-14 text-center text-xs text-slate-400">Loading live user data...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[750px]">
+            <table className="w-full text-left text-xs min-w-[950px]">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider h-11 bg-slate-50/90 dark:bg-slate-800/80">
+                  <th className="py-3.5 px-6">Date</th>
                   <th className="py-3.5 px-6">Agent Name</th>
                   <th className="py-3.5 px-6">Role Type</th>
                   <th className="py-3.5 px-6 text-center">Assigned Leads</th>
                   <th className="py-3.5 px-6 text-center">Calls Connected</th>
                   <th className="py-3.5 px-6 text-center">Followups Scheduled</th>
+                  <th className="py-3.5 px-6 text-center">Hot Leads</th>
+                  <th className="py-3.5 px-6 text-center">Yet To Call</th>
+                  <th className="py-3.5 px-6 text-center">Efficiency Rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {displayAgents.map((ag) => (
                   <tr key={ag._id} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors h-14">
+                    <td className="py-3.5 px-6 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200/60 dark:border-indigo-900/50">
+                        <Icons.Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                        {ag.dateStr}
+                      </span>
+                    </td>
+
                     <td className="py-3.5 px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-3xs">
@@ -393,28 +485,58 @@ export default function TelecallerReportsPage() {
                         </div>
                       </div>
                     </td>
+
                     <td className="py-3.5 px-6">
                       <span className="px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold uppercase tracking-wider border border-purple-200/80 dark:border-purple-800/50">
                         {ag.role}
                       </span>
                     </td>
+
                     <td className="py-3.5 px-6 text-center">
                       <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 min-w-[3rem] shadow-3xs">
                         {ag.assigned}
                       </span>
                     </td>
+
                     <td className="py-3.5 px-6 text-center">
                       <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 min-w-[3rem] shadow-3xs">
                         {ag.connected}
                       </span>
                     </td>
+
                     <td className="py-3.5 px-6 text-center">
                       <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 min-w-[3rem] shadow-3xs">
                         {ag.followups}
                       </span>
                     </td>
+
+                    <td className="py-3.5 px-6 text-center">
+                      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 min-w-[3rem] shadow-3xs">
+                        {ag.hotLeads}
+                      </span>
+                    </td>
+
+                    <td className="py-3.5 px-6 text-center">
+                      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 min-w-[3rem] shadow-3xs">
+                        {ag.yetToCall}
+                      </span>
+                    </td>
+
+                    <td className="py-3.5 px-6 text-center">
+                      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 min-w-[3rem] shadow-3xs">
+                        {ag.convRate}%
+                      </span>
+                    </td>
                   </tr>
                 ))}
+
+                {displayAgents.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                      No telecaller records found matching the selected date range and parameters.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

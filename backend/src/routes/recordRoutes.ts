@@ -13,6 +13,26 @@ import { authenticate } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import { HierarchyService } from '../utils/hierarchy';
 
+export const normalizeStatusName = (rawSt: string): string => {
+  if (!rawSt) return 'PENDING';
+  const s = rawSt.trim().toUpperCase();
+
+  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS') return 'HOT LEADS';
+  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS') return 'WARM LEADS';
+  if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
+  if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
+  if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
+  if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
+  if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
+  if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
+  if (s.includes('REJECT')) return 'REJECTED';
+  if (s.includes('FOLLOW')) return 'FOLLOWUP';
+  if (s.includes('DROP')) return 'DROPPED';
+  if (s === 'PENDING') return 'PENDING';
+
+  return s;
+};
+
 const router = Router();
 
 // Apply security middlewares
@@ -601,6 +621,37 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
   }
 });
 
+// Helper to build user-assignment filter for My Campaigns
+const buildUserAssignmentFilter = (user: any) => {
+  const uId = String(user._id || user.id || '');
+  const uEmail = (user.email || '').toString().trim();
+  const uName = (user.name || `${user.firstName || ''} ${user.lastName || ''}`).toString().trim();
+  const uCode = (user.userCode || '').toString().trim();
+
+  const userOrConditions: any[] = [
+    { 'data.assignedTo': uId },
+    { 'data.assignedToUserId': uId },
+    { 'data.telecaller': uId },
+    { 'data.assignedAgent': uId }
+  ];
+
+  if (mongoose.Types.ObjectId.isValid(uId)) {
+    userOrConditions.push({ assignedTo: new mongoose.Types.ObjectId(uId) });
+  }
+
+  const textMatchTerms = [uName, uEmail, uCode].filter(Boolean);
+  textMatchTerms.forEach(term => {
+    const escTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp('^\\s*' + escTerm + '\\s*$', 'i');
+    userOrConditions.push({ 'data.assignedTo': regex });
+    userOrConditions.push({ 'data.telecaller': regex });
+    userOrConditions.push({ 'data.assignedAgent': regex });
+    userOrConditions.push({ 'data.assignedToName': regex });
+  });
+
+  return { $or: userOrConditions };
+};
+
 // GET my campaigns (assigned to logged in user)
 router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -611,6 +662,9 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       res.status(401).json({ error: 'Unauthorized.' });
       return;
     }
+
+    const userDoc = await User.findById(userId).select('_id firstName lastName email userCode name role');
+    const userObj = userDoc ? userDoc.toObject() : { id: userId, ...req.user };
 
     // 1. Get registered campaigns from the Campaigns module
     const campaignModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'campaigns' });
@@ -636,7 +690,11 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       return;
     }
 
-    const leadQuery: Record<string, any> = {
+    const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
+      ['super admin', 'admin', 'administrator', 'org admin'].includes(String((userObj as any).role || '').toLowerCase()) ||
+      (userObj.email && userObj.email.toLowerCase().includes('ink@crm'));
+
+    const baseLeadFilter = {
       organizationId: orgId,
       moduleId: leadModule._id,
       $or: [
@@ -647,23 +705,22 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       ]
     };
 
-    // Filter by reporting hierarchy
-    await HierarchyService.modifyRecordQuery(leadQuery, req.user as any, orgId!);
-
-    let leads = await CustomRecord.find(leadQuery).lean();
-
-    // Fallback: If hierarchy query found 0, fetch all leads for org
-    if (leads.length === 0) {
+    let leads: any[] = [];
+    if (isAdmin) {
+      const leadQuery: Record<string, any> = { ...baseLeadFilter };
+      await HierarchyService.modifyRecordQuery(leadQuery, req.user as any, orgId!);
+      leads = await CustomRecord.find(leadQuery).lean();
+    } else {
+      const userFilter = buildUserAssignmentFilter(userObj);
       leads = await CustomRecord.find({
-        organizationId: orgId,
-        moduleId: leadModule._id,
-        $or: [
-          { 'data.source': { $exists: true, $ne: '' } },
-          { 'data.campaignName': { $exists: true, $ne: '' } },
-          { 'data.campaign': { $exists: true, $ne: '' } },
-          { 'data.campaign_name': { $exists: true, $ne: '' } }
-        ]
+        $and: [baseLeadFilter, userFilter]
       }).lean();
+
+      if (leads.length === 0) {
+        const leadQuery: Record<string, any> = { ...baseLeadFilter };
+        await HierarchyService.modifyRecordQuery(leadQuery, req.user as any, orgId!);
+        leads = await CustomRecord.find(leadQuery).lean();
+      }
     }
 
     // Group leads by campaign name — only include actual campaigns!
@@ -748,7 +805,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     const userId = req.user?.id;
     const { campaignName } = req.params;
     const pageNum = parseInt(req.query.page as string || '1', 10);
-    const limitNum = parseInt(req.query.limit as string || '50', 10);
+    const limitNum = parseInt(req.query.limit as string || '100000', 10);
     const skipNum = (pageNum - 1) * limitNum;
     const isExport = req.query.export === 'true';
 
@@ -756,6 +813,9 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       res.status(401).json({ error: 'Unauthorized.' });
       return;
     }
+
+    const userDoc = await User.findById(userId).select('_id firstName lastName email userCode name role');
+    const userObj = userDoc ? userDoc.toObject() : { id: userId, ...req.user };
 
     // Get the leads module
     const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
@@ -768,7 +828,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     const escName = decodedCampaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const campaignRegex = new RegExp('^\\s*' + escName + '\\s*$', 'i');
 
-    const matchFilter = {
+    const campaignFilter = {
       $or: [
         { 'data.source': campaignRegex },
         { 'data.campaignName': campaignRegex },
@@ -777,56 +837,131 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       ]
     };
 
-    const query: Record<string, any> = {
-      organizationId: orgId,
-      moduleId: leadModule._id,
-      ...matchFilter
-    };
+    // Handle full export request (returns exact campaign leads matching campaign card total)
+    if (isExport) {
+      const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
+        ['super admin', 'admin', 'administrator', 'org admin'].includes(String((userObj as any).role || '').toLowerCase()) ||
+        (userObj.email && userObj.email.toLowerCase().includes('ink@crm'));
 
-    // Filter by reporting hierarchy
-    await HierarchyService.modifyRecordQuery(query, req.user as any, orgId!);
+      let exportQuery: Record<string, any> = {};
 
-    // Calculate total allocated and dialed counts fast via MongoDB
-    const [totalAllocated, totalDialed] = await Promise.all([
-      CustomRecord.countDocuments(query),
-      CustomRecord.countDocuments({
-        ...query,
-        $or: [
-          { 'data.dialedAt': { $exists: true, $ne: null } },
-          { 'data.lastCallDate': { $exists: true, $ne: null } },
-          { 'data.callAttempts': { $gt: 0 } },
-          { 
-            'data.dialStatus': { 
-              $in: [
-                'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
-                'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
-                'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
-              ] 
-            } 
-          }
-        ]
-      })
-    ]);
+      if (isAdmin) {
+        exportQuery = {
+          organizationId: orgId,
+          moduleId: leadModule._id,
+          ...campaignFilter
+        };
+        await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
+      } else {
+        const userFilter = buildUserAssignmentFilter(userObj);
+        exportQuery = {
+          organizationId: orgId,
+          moduleId: leadModule._id,
+          $and: [
+            campaignFilter,
+            userFilter
+          ]
+        };
 
-    let leadsQuery = CustomRecord.find(query).sort({ createdAt: -1 });
-    if (!isExport) {
-      leadsQuery = leadsQuery.skip(skipNum).limit(limitNum);
+        const directCount = await CustomRecord.countDocuments(exportQuery);
+        if (directCount === 0) {
+          exportQuery = {
+            organizationId: orgId,
+            moduleId: leadModule._id,
+            ...campaignFilter
+          };
+          await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
+        }
+      }
+
+      const exportLeads = await CustomRecord.find(exportQuery).sort({ createdAt: -1 }).lean();
+
+      res.status(200).json({
+        leads: exportLeads,
+        pagination: {
+          total: exportLeads.length,
+          dialed: exportLeads.filter(l => {
+            const d = l.data || {};
+            const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
+            const st = (d.status || '').toString().trim().toLowerCase();
+            const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
+            const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
+            const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
+            return hasDialedStatus || (hasCalls && hasDialStatus);
+          }).length,
+          yetToDial: exportLeads.filter(l => {
+            const d = l.data || {};
+            const st = (d.status || d.dialStatus || '').toString().trim().toLowerCase();
+            return !st || st === 'yet to call' || st === 'not called' || st === 'new';
+          }).length,
+          page: 1,
+          limit: exportLeads.length,
+          totalPages: 1
+        }
+      });
+      return;
     }
-    let leads = await leadsQuery.lean();
 
-    // Fallback: If hierarchy query returns 0, try org-wide lookup for this campaign
-    if (leads.length === 0 && totalAllocated === 0) {
-      const fallbackQuery: Record<string, any> = {
+    const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
+      ['super admin', 'admin', 'administrator', 'org admin'].includes(String((userObj as any).role || '').toLowerCase()) ||
+      (userObj.email && userObj.email.toLowerCase().includes('ink@crm'));
+
+    let finalQuery: Record<string, any> = {};
+
+    if (isAdmin) {
+      finalQuery = {
         organizationId: orgId,
         moduleId: leadModule._id,
-        ...matchFilter
+        ...campaignFilter
       };
-      let fbQuery = CustomRecord.find(fallbackQuery).sort({ createdAt: -1 });
-      if (!isExport) {
-        fbQuery = fbQuery.skip(skipNum).limit(limitNum);
+      await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
+    } else {
+      const userFilter = buildUserAssignmentFilter(userObj);
+      const query: Record<string, any> = {
+        organizationId: orgId,
+        moduleId: leadModule._id,
+        $and: [
+          campaignFilter,
+          userFilter
+        ]
+      };
+
+      const directCount = await CustomRecord.countDocuments(query);
+      if (directCount > 0) {
+        finalQuery = query;
+      } else {
+        finalQuery = {
+          organizationId: orgId,
+          moduleId: leadModule._id,
+          ...campaignFilter
+        };
+        await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
       }
-      leads = await fbQuery.lean();
     }
+
+    let totalAllocated = await CustomRecord.countDocuments(finalQuery);
+
+    // Calculate dialed count for the filtered leads
+    const totalDialed = await CustomRecord.countDocuments({
+      ...finalQuery,
+      $or: [
+        { 'data.dialedAt': { $exists: true, $ne: null } },
+        { 'data.lastCallDate': { $exists: true, $ne: null } },
+        { 'data.callAttempts': { $gt: 0 } },
+        { 
+          'data.dialStatus': { 
+            $in: [
+              'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
+              'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
+              'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
+            ] 
+          } 
+        }
+      ]
+    });
+
+    const leadsQuery = CustomRecord.find(finalQuery).sort({ createdAt: -1 }).skip(skipNum).limit(limitNum);
+    const leads = await leadsQuery.lean();
 
     res.status(200).json({ 
       leads,
@@ -1373,6 +1508,17 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         if (!updateData.loanType) updateData.loanType = extractedCategory;
         if (!updateData.leadCategory) updateData.leadCategory = extractedCategory;
         if (!updateData.lead_category) updateData.lead_category = extractedCategory;
+      }
+
+      // Normalize status fields to canonical status names so metrics and card counts update perfectly
+      if (updateData.status) {
+        const canonical = normalizeStatusName(updateData.status);
+        updateData.status = canonical;
+        updateData.dialStatus = canonical;
+      } else if (updateData.dialStatus) {
+        const canonical = normalizeStatusName(updateData.dialStatus);
+        updateData.status = canonical;
+        updateData.dialStatus = canonical;
       }
     }
 

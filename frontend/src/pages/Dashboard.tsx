@@ -178,6 +178,26 @@ export default function Dashboard() {
     }
   };
 
+  const normalizeStatusName = (rawSt: string): string => {
+    if (!rawSt) return 'PENDING';
+    const s = rawSt.trim().toUpperCase();
+
+    if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS') return 'HOT LEADS';
+    if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS') return 'WARM LEADS';
+    if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
+    if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
+    if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
+    if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
+    if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
+    if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
+    if (s.includes('REJECT')) return 'REJECTED';
+    if (s.includes('FOLLOW')) return 'FOLLOWUP';
+    if (s.includes('DROP')) return 'DROPPED';
+    if (s === 'PENDING') return 'PENDING';
+
+    return s;
+  };
+
   const getStatusCount = (lbl: string) => {
     if (!metricsData?.statusCounts) return 0;
     const raw = (lbl || '').trim();
@@ -188,25 +208,26 @@ export default function Dashboard() {
       return metricsData.todayFollowupsCount || 0;
     }
 
-    if (upper === 'APPROVED BUT NOT DISBUSE') {
-      return metricsData.statusCounts['APPROVED'] || metricsData.statusCounts['Approved'] || 0;
+    const canonical = normalizeStatusName(raw);
+    if (metricsData.statusCounts[canonical] !== undefined) {
+      return Number(metricsData.statusCounts[canonical]);
     }
-    if (upper === 'DISBUSED' || upper === 'DISBURSED') {
-      return metricsData.statusCounts['DISBURSED'] || metricsData.statusCounts['Disbursed'] || metricsData.statusCounts['DISBUSED'] || 0;
+    if (metricsData.statusCounts[upper] !== undefined) {
+      return Number(metricsData.statusCounts[upper]);
     }
-    if (upper === 'CEBIL PENDING' || upper === 'CEDIL PENDING') {
-      return metricsData.statusCounts['CEDIL PENDING'] || metricsData.statusCounts['CEBIL PENDING'] || metricsData.statusCounts['Cedil Pending'] || 0;
+    if (metricsData.statusCounts[raw] !== undefined) {
+      return Number(metricsData.statusCounts[raw]);
     }
-
-    if (metricsData.statusCounts[raw] !== undefined) return metricsData.statusCounts[raw];
-    if (metricsData.statusCounts[upper] !== undefined) return metricsData.statusCounts[upper];
 
     const noLeadsKey = upper.replace(/ LEADS$/, '');
-    if (metricsData.statusCounts[noLeadsKey] !== undefined) return metricsData.statusCounts[noLeadsKey];
+    if (metricsData.statusCounts[noLeadsKey] !== undefined) {
+      return Number(metricsData.statusCounts[noLeadsKey]);
+    }
 
     for (const [k, v] of Object.entries(metricsData.statusCounts)) {
       const kUpper = k.trim().toUpperCase();
-      if (kUpper === upper || kUpper === noLeadsKey) {
+      const kCanonical = normalizeStatusName(kUpper);
+      if (kCanonical === canonical || kUpper === upper || kUpper === noLeadsKey) {
         return Number(v);
       }
     }

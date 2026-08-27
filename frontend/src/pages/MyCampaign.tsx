@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import { useAuthStore } from '../store/authStore';
@@ -27,6 +27,7 @@ interface LeadState {
   status?: string;
   remarks?: string;
   caseDetails?: string;
+  category?: string;
 }
 
 export const CAMPAIGN_STATUSES = [
@@ -170,6 +171,7 @@ export default function MyCampaign() {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   const [dialFilter, setDialFilter] = useState<'yet_to_dial' | 'dialed' | 'all'>('yet_to_dial');
+  const [visibleCount, setVisibleCount] = useState(50);
   
   // Track inputs for each lead ID
   const [leadStates, setLeadStates] = useState<Record<string, LeadState>>({});
@@ -194,7 +196,7 @@ export default function MyCampaign() {
   const fetchLeadDetails = async (campaignName: string) => {
     try {
       setLoadingLeads(true);
-      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}`);
+      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=100000`);
       setLeads(res.data.leads || []);
       
       // Initialize states
@@ -202,10 +204,12 @@ export default function MyCampaign() {
       (res.data.leads || []).forEach((lead: LeadRecord) => {
         const rawRemarks = lead.data?.notes || lead.data?.remarks || '';
         const cleanRemarks = String(rawRemarks).replace(/<[^>]*>/g, '').trim();
+        const initialCategory = getLeadCategory(lead.data);
         initialStates[lead._id] = {
           status: lead.data?.status || lead.data?.dialStatus || 'YET TO CALL',
           remarks: cleanRemarks,
-          caseDetails: lead.data?.caseDetails || ''
+          caseDetails: lead.data?.caseDetails || '',
+          category: initialCategory !== 'N/A' ? initialCategory : (lead.data?.leadCategory || lead.data?.category || '')
         };
       });
       setLeadStates(initialStates);
@@ -218,6 +222,8 @@ export default function MyCampaign() {
   };
 
   // Fetch status dropdown options
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
     fetchCampaigns();
     api.get('/statuses')
@@ -225,9 +231,21 @@ export default function MyCampaign() {
       .catch(err => console.error('Failed to load statuses', err));
   }, []);
 
+  // Auto-open campaign details if campaign param is present in URL
+  useEffect(() => {
+    const targetCampName = searchParams.get('campaign');
+    if (targetCampName && campaigns.length > 0 && !activeCampaign) {
+      const match = campaigns.find(c => c.campaignName.toLowerCase() === targetCampName.toLowerCase());
+      if (match) {
+        handleViewDetails(match);
+      }
+    }
+  }, [campaigns, searchParams]);
+
   const handleViewDetails = (campaign: CampaignStats, initialFilter: 'yet_to_dial' | 'dialed' | 'all' = 'yet_to_dial') => {
     setActiveCampaign(campaign);
     setDialFilter(initialFilter);
+    setVisibleCount(50);
     fetchLeadDetails(campaign.campaignName);
   };
 
@@ -393,6 +411,8 @@ export default function MyCampaign() {
       const newStatus = state?.status || lead.data?.status || 'YET TO CALL';
       const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
       const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+      const initialCat = getLeadCategory(lead.data);
+      const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
 
       const payload: Record<string, any> = {
         status: newStatus,
@@ -400,6 +420,9 @@ export default function MyCampaign() {
         notes: currentRemarks,
         remarks: currentRemarks,
         caseDetails: currentCaseDetails,
+        leadCategory: currentCategory,
+        category: currentCategory,
+        loanType: currentCategory,
         dialedAt: new Date(),
         callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
       };
@@ -423,6 +446,9 @@ export default function MyCampaign() {
           notes: currentRemarks,
           remarks: currentRemarks,
           caseDetails: currentCaseDetails,
+          leadCategory: currentCategory,
+          category: currentCategory,
+          loanType: currentCategory,
           callAttempts: ((l.data?.callAttempts as number) || 0) + 1,
           dialedAt: new Date().toISOString()
         }
@@ -1019,7 +1045,7 @@ export default function MyCampaign() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-200">
-                          {displayedLeads.map((lead, idx) => {
+                          {displayedLeads.slice(0, visibleCount).map((lead, idx) => {
                             const dataCode = getLeadDataCode(lead);
                             const location = getLeadLocation(lead.data);
                             const customer = getLeadCustomer(lead.data);
@@ -1103,7 +1129,15 @@ export default function MyCampaign() {
                                 </td>
                                 
                                 {/* 8. lead_category */}
-                                <td className="py-3 px-3 border-r border-slate-100 dark:border-slate-800 font-semibold">{leadCategory}</td>
+                                <td className="py-2 px-2 border-r border-slate-100 dark:border-slate-800">
+                                  <input
+                                    type="text"
+                                    placeholder="Lead Category"
+                                    value={leadStates[lead._id]?.category ?? (getLeadCategory(lead.data) === 'N/A' ? '' : getLeadCategory(lead.data))}
+                                    onChange={(e) => handleFieldChange(lead._id, 'category', e.target.value)}
+                                    className="w-full text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-600 font-semibold"
+                                  />
+                                </td>
                                 
                                 {/* 9. Remarks */}
                                 <td className="py-2 px-2 border-r border-slate-100 dark:border-slate-800">
@@ -1144,7 +1178,7 @@ export default function MyCampaign() {
                 ) : (
                   /* CARD VIEW MATCHING EXACT DESIGN IN MEDIA USER IMAGE */
                   <div className="space-y-4">
-                    {displayedLeads.map((lead, idx) => {
+                    {displayedLeads.slice(0, visibleCount).map((lead, idx) => {
                       const customer = getLeadCustomer(lead.data);
                       const firmName = getLeadFirmName(lead.data);
                       const phoneVal = getLeadPhone(lead.data) || 'N/A';
@@ -1251,11 +1285,15 @@ export default function MyCampaign() {
                             {/* 8. Lead Category */}
                             <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
                               <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
-                                Lead Category:
+                                LEAD CATEGORY:
                               </span>
-                              <span className="font-extrabold text-slate-900 dark:text-white text-xs block leading-tight">
-                                {leadCategory}
-                              </span>
+                              <input
+                                type="text"
+                                placeholder="Lead Category"
+                                value={leadStates[lead._id]?.category ?? (getLeadCategory(lead.data) === 'N/A' ? '' : getLeadCategory(lead.data))}
+                                onChange={(e) => handleFieldChange(lead._id, 'category', e.target.value)}
+                                className="w-full h-7 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-0.5 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-2xs font-semibold leading-tight"
+                              />
                             </div>
 
                             {/* 9. Remarks */}
@@ -1332,6 +1370,22 @@ export default function MyCampaign() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* LOAD MORE LEADS BUTTON & PAGINATION CONTROL */}
+                {visibleCount < displayedLeads.length && (
+                  <div className="flex flex-col items-center justify-center py-6 space-y-2.5 border-t border-slate-200/80 dark:border-slate-800 mt-6 bg-slate-50/50 dark:bg-slate-900/40 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Showing <span className="font-extrabold text-slate-900 dark:text-white font-mono">{Math.min(visibleCount, displayedLeads.length).toLocaleString()}</span> of <span className="font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{displayedLeads.length.toLocaleString()}</span> leads
+                    </p>
+                    <button
+                      onClick={() => setVisibleCount(prev => prev + 100)}
+                      className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider active:scale-95"
+                    >
+                      <Icons.ChevronDown className="w-4 h-4 stroke-[2.5]" />
+                      <span>Load More Leads ({(displayedLeads.length - visibleCount).toLocaleString()} remaining)</span>
+                    </button>
                   </div>
                 )}
               </div>

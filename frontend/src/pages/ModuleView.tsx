@@ -61,7 +61,7 @@ export default function ModuleView() {
     if (!campaignLeadsMap[campaignName]) {
       try {
         setLoadingCampaignLeads(prev => ({ ...prev, [campaignName]: true }));
-        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}`);
+        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=100000`);
         setCampaignLeadsMap(prev => ({ ...prev, [campaignName]: res.data.leads || [] }));
       } catch (err) {
         console.error(err);
@@ -1030,7 +1030,7 @@ export default function ModuleView() {
 
     try {
       showToast(`Exporting 12-column report for "${campaignName}"...`, 'info');
-      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}`);
+      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?export=true`);
       const leads = res.data?.leads || [];
 
       if (leads.length === 0) {
@@ -1802,7 +1802,10 @@ export default function ModuleView() {
                           const name = rec.data?.campaignName || rec.data?.source || rec.data?.campaign || rec.data?.name || rec.name || 'Unnamed Campaign';
                           const allocated = getAllocatedNumbers(name);
                           const dialed = getDialedNumbers(name);
-                          const progress = allocated > 0 ? Math.round((dialed / allocated) * 100) : 0;
+                          const rawPct = allocated > 0 ? (dialed / allocated) * 100 : 0;
+                          const isCompleted = dialed >= allocated && allocated > 0;
+                          const isInProgress = dialed > 0 && !isCompleted;
+                          const progressText = isCompleted ? '100%' : isInProgress ? (rawPct < 1 ? `${rawPct.toFixed(1)}%` : `${Math.round(rawPct)}%`) : '0%';
                           const createdDateStr = new Date(rec.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date(rec.createdAt).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
@@ -1817,9 +1820,13 @@ export default function ModuleView() {
                                     <Icons.Megaphone className="w-5 h-5 stroke-[2.2]" />
                                   </div>
                                   <div>
-                                    <span className="capitalize block text-sm font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                    <Link
+                                      to={`/my-campaign?campaign=${encodeURIComponent(name)}`}
+                                      className="capitalize block text-sm font-extrabold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 tracking-tight transition-colors cursor-pointer"
+                                      title="Click to view campaign telecalling details"
+                                    >
                                       {name}
-                                    </span>
+                                    </Link>
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.2 rounded">
                                       Active Campaign
                                     </span>
@@ -1845,19 +1852,19 @@ export default function ModuleView() {
                               <td className="px-6 py-4.5 min-w-[140px]">
                                 <div className="space-y-1.5">
                                   <div className="flex justify-between items-center text-xs">
-                                    <span className="font-extrabold text-slate-800 dark:text-slate-100 font-mono">{progress}%</span>
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-100 font-mono">{progressText}</span>
                                     <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                                      progress >= 100 ? 'text-emerald-700 bg-emerald-100/80 dark:bg-emerald-950/60 dark:text-emerald-300' :
-                                      progress > 0 ? 'text-indigo-700 bg-indigo-100/80 dark:bg-indigo-950/60 dark:text-indigo-300' :
+                                      isCompleted ? 'text-emerald-700 bg-emerald-100/80 dark:bg-emerald-950/60 dark:text-emerald-300' :
+                                      isInProgress ? 'text-indigo-700 bg-indigo-100/80 dark:bg-indigo-950/60 dark:text-indigo-300' :
                                       'text-slate-500 bg-slate-100 dark:bg-slate-800'
                                     }`}>
-                                      {progress >= 100 ? 'Completed' : progress > 0 ? 'In Progress' : 'Pending'}
+                                      {isCompleted ? 'Completed' : isInProgress ? 'IN PROGRESS' : 'PENDING'}
                                     </span>
                                   </div>
                                   <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/60 dark:border-slate-700/60 p-0.5">
                                     <div 
                                       className="h-full rounded-full transition-all bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" 
-                                      style={{ width: `${Math.max(progress, 3)}%` }} 
+                                      style={{ width: `${Math.max(rawPct, dialed > 0 ? 3 : 0)}%` }} 
                                     />
                                   </div>
                                 </div>
