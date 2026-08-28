@@ -12,6 +12,8 @@ out/
 .cache/
 
 # Local env files (NEVER COMMIT PRODUCTION CREDENTIALS)
+backup_snapshot_*/
+backup_*/
 .env
 .env*
 !.env.example

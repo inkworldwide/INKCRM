@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Icons from 'lucide-react';
@@ -242,7 +241,8 @@ export default function ModuleView() {
   };
 
   // High-performance Parse Excel (XLSX/XLS) files using SheetJS
-  const parseExcelFile = (buffer: ArrayBuffer): any[] => {
+  const parseExcelFile = async (buffer: ArrayBuffer): Promise<any[]> => {
+    const XLSX = await import('xlsx');
     const workbook = XLSX.read(buffer, { type: 'array' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     
@@ -379,7 +379,7 @@ export default function ModuleView() {
           if (isExcel) {
             // Parse XLSX/XLS with SheetJS
             const buffer = event.target?.result as ArrayBuffer;
-            parsedLeads = parseExcelFile(buffer);
+            parsedLeads = await parseExcelFile(buffer);
           } else {
             // Parse CSV as text
             const csvText = event.target?.result as string;

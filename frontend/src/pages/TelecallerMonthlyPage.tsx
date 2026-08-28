@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
-import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
 import MultiSelectDropdown from '../components/MultiSelectDropdown';
@@ -343,7 +342,8 @@ export default function TelecallerMonthlyPage() {
     };
   }, [allAgentsList, leads, selectedMonths, selectedYears]);
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
+    const XLSX = await import('xlsx');
     const { monthName, yearStr, dateHeaders, matrixRows, dowMatrixRows } = dateWiseMatrix;
     
     const workbook = XLSX.utils.book_new();
