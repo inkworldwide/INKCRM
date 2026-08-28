@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as faceapi from 'face-api.js';
 import { ShieldCheck, XCircle, Loader2, RefreshCw, Eye, RotateCcw, KeyRound } from 'lucide-react';
 import api from '../services/api';
-import { loadFaceApiModels, getFastFaceDetectorOptions } from '../utils/faceModelLoader';
+import { loadFaceApiModels, getFastFaceDetectorOptions, getFaceApi } from '../utils/faceModelLoader';
 
 interface Props {
   tempToken: string;
@@ -122,6 +121,7 @@ export default function FaceVerificationModal({ tempToken, onSuccess, onCancel }
 
       try {
         const options = getFastFaceDetectorOptions();
+        const faceapi = await getFaceApi();
         const detection = await faceapi
           .detectSingleFace(videoRef.current, options)
           .withFaceLandmarks()

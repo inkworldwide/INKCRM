@@ -589,6 +589,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
           notes: remarksVal,
           remarks: remarksVal,
           status: 'New',
+          normalizedStatus: 'PENDING',
           dialStatus: 'Yet To Call',
           callAttempts: 0,
           dialedAt: null,
@@ -1052,24 +1053,25 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
 
 
     // Parse other fields for inline filters, e.g. ?data.status=HOT LEADS
+    const USE_INDEXED_STATUS_QUERY = process.env.USE_INDEXED_STATUS_QUERY !== 'false';
+
     Object.keys(req.query).forEach((q) => {
       if (q.startsWith('data.')) {
         const val = req.query[q];
         if (typeof val === 'string' && val.trim()) {
           const cleanVal = val.trim();
-          if (q === 'data.status' || q === 'data.leadStatus') {
-            const noLeadsVal = cleanVal.replace(/\s+leads$/i, '');
-            const withLeadsVal = noLeadsVal + ' LEADS';
-            const variations = Array.from(new Set([cleanVal, noLeadsVal, withLeadsVal]));
-            const regexVariations = variations.map(
-              (v) => new RegExp(`^\\s*${v.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i')
-            );
-            const statusFilter = {
-              $or: [
-                { 'data.status': { $in: regexVariations } },
-                { 'data.leadStatus': { $in: regexVariations } }
-              ]
-            };
+          if (q === 'data.status' || q === 'data.leadStatus' || q === 'data.normalizedStatus') {
+            const normVal = normalizeStatusName(cleanVal);
+            const statusFilter = USE_INDEXED_STATUS_QUERY
+              ? { 'data.normalizedStatus': normVal }
+              : {
+                  $or: [
+                    { 'data.normalizedStatus': normVal },
+                    { 'data.status': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') },
+                    { 'data.leadStatus': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') }
+                  ]
+                };
+
             if (query.$and) {
               query.$and.push(statusFilter);
             } else {

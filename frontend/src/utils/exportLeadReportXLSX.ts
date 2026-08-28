@@ -1,6 +1,5 @@
-import * as XLSX from 'xlsx';
-
-export const exportLeadReportXLSX = (leads: any[], fileNamePrefix: string = 'Lead_Report') => {
+export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string = 'Lead_Report') => {
+  const XLSX = await import('xlsx');
   const headers = [
     'Sl.No.',
     'Data Code',

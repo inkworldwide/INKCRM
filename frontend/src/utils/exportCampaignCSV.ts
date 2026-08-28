@@ -47,7 +47,8 @@ const extractField = (dataObj: any, targets: string[], contains: string[] = []):
   return '';
 };
 
-export const exportCampaignXLSX = (campaignName: string, leads: any[]) => {
+export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => {
+  const XLSX = await import('xlsx');
   const headers = [
     'Slno',
     'Data Code',

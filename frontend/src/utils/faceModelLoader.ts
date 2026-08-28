@@ -1,8 +1,14 @@
-import * as faceapi from 'face-api.js';
-
 let isLoaded = false;
 let isLoading = false;
 let loadPromise: Promise<boolean> | null = null;
+let faceapiModule: any = null;
+
+export async function getFaceApi() {
+  if (!faceapiModule) {
+    faceapiModule = await import('face-api.js');
+  }
+  return faceapiModule;
+}
 
 const MODEL_SOURCES = [
   '/models',
@@ -12,7 +18,7 @@ const MODEL_SOURCES = [
 ];
 
 /**
- * Loads face-api.js models with high-speed TinyFaceDetector + fallback.
+ * Loads face-api.js models on demand with dynamic import.
  */
 export async function loadFaceApiModels(
   onProgress?: (msg: string) => void
@@ -23,6 +29,7 @@ export async function loadFaceApiModels(
   isLoading = true;
   loadPromise = (async () => {
     let lastError: any = null;
+    const faceapi = await getFaceApi();
 
     for (let i = 0; i < MODEL_SOURCES.length; i++) {
       const sourceUrl = MODEL_SOURCES[i];
@@ -57,11 +64,14 @@ export async function loadFaceApiModels(
   return loadPromise;
 }
 
-export function getFastFaceDetectorOptions(): faceapi.TinyFaceDetectorOptions | faceapi.SsdMobilenetv1Options {
-  if (faceapi.nets.tinyFaceDetector.isLoaded) {
-    return new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+export function getFastFaceDetectorOptions(): any {
+  if (faceapiModule?.nets?.tinyFaceDetector?.isLoaded) {
+    return new faceapiModule.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
   }
-  return new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
+  if (faceapiModule?.SsdMobilenetv1Options) {
+    return new faceapiModule.SsdMobilenetv1Options({ minConfidence: 0.5 });
+  }
+  return { inputSize: 224, scoreThreshold: 0.5 };
 }
 
 export function isFaceApiLoaded(): boolean {

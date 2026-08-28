@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import * as faceapi from 'face-api.js';
 import { Camera, ShieldCheck, Trash2, Loader2, XCircle, CheckCircle, Upload } from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
-import { loadFaceApiModels, getFastFaceDetectorOptions } from '../utils/faceModelLoader';
+import { loadFaceApiModels, getFastFaceDetectorOptions, getFaceApi } from '../utils/faceModelLoader';
 
 export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel }: { mode?: 'settings' | 'signup', onSuccess?: (embedding: number[]) => void, onCancel?: () => void }) {
   const { showConfirm, showAlertModal } = useToastStore();
@@ -136,6 +135,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
       });
 
       const options = getFastFaceDetectorOptions();
+      const faceapi = await getFaceApi();
       const detection = await faceapi
         .detectSingleFace(img, options)
         .withFaceLandmarks()
@@ -179,6 +179,7 @@ export default function FaceEnrollment({ mode = 'settings', onSuccess, onCancel 
       isDetectingRef.current = true;
       try {
         const options = getFastFaceDetectorOptions();
+        const faceapi = await getFaceApi();
         const detection = await faceapi
           .detectSingleFace(videoRef.current, options)
           .withFaceLandmarks()

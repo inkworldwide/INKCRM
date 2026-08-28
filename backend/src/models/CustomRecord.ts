@@ -21,15 +21,48 @@ const CustomRecordSchema = new Schema<ICustomRecord>(
   { timestamps: true, strict: false } // strict: false allows saving unstructured sub-fields directly
 );
 
+// Pre-save hook to write normalizedStatus for indexed queries going forward
+CustomRecordSchema.pre('save', function (next) {
+  if (this.data) {
+    const dataObj = this.data instanceof Map ? Object.fromEntries(this.data) : this.data;
+    const rawSt = dataObj.status || dataObj.dialStatus || dataObj.leadStatus;
+    if (rawSt) {
+      const cleanSt = String(rawSt).trim().toUpperCase();
+      let normalized = cleanSt;
+
+      if (cleanSt === 'HOT' || cleanSt === 'HOT LEAD' || cleanSt === 'HOT LEADS') normalized = 'HOT LEADS';
+      else if (cleanSt === 'WARM' || cleanSt === 'WARM LEAD' || cleanSt === 'WARM LEADS') normalized = 'WARM LEADS';
+      else if (cleanSt.includes('CEBIL') || cleanSt.includes('CEDIL') || cleanSt.includes('CIVIL') || cleanSt.includes('CIBIL')) normalized = 'CEBIL PENDING';
+      else if (cleanSt.includes('DOCUMENT') || cleanSt.includes('DOC PENDING')) normalized = 'DOCUMENT PENDING';
+      else if (cleanSt.includes('APPROVAL PENDING') || cleanSt === 'APPROVAL PENDING') normalized = 'APPROVAL PENDING';
+      else if (cleanSt.includes('APPROVED BUT NOT') || cleanSt === 'APPROVED BUT NOT DISBUSE' || cleanSt === 'APPROVED BUT NOT DISBURSED') normalized = 'APPROVED BUT NOT DISBUSE';
+      else if (cleanSt === 'APPROVED') normalized = 'APPROVED BUT NOT DISBUSE';
+      else if (cleanSt.includes('DISBURS') || cleanSt.includes('DISBUS')) normalized = 'DISBUSED';
+      else if (cleanSt.includes('REJECT')) normalized = 'REJECTED';
+      else if (cleanSt.includes('FOLLOW')) normalized = 'FOLLOWUP';
+      else if (cleanSt.includes('DROP')) normalized = 'DROPPED';
+      else if (cleanSt === 'PENDING') normalized = 'PENDING';
+
+      if (this.data instanceof Map) {
+        this.data.set('normalizedStatus', normalized);
+      } else {
+        (this.data as any).normalizedStatus = normalized;
+      }
+    }
+  }
+  next();
+});
+
 // Indexes for fast querying, aggregations, sorting & multi-tenant isolation
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedTo': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaignName': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.source': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaign': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.normalizedStatus': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dataCode': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.phone': 1 });
-CustomRecordSchema.index({ 'data.email': 1 });
-CustomRecordSchema.index({ createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, 'data.email': 1 });
+CustomRecordSchema.index({ organizationId: 1, createdAt: -1 });
 
 export default mongoose.model<ICustomRecord>('CustomRecord', CustomRecordSchema);
