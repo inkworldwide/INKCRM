@@ -714,7 +714,60 @@ router.get('/me', authenticate, async (req: Request, res: Response): Promise<voi
 router.get('/roles', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const roles = await Role.find({ organizationId: req.organizationId });
-    res.status(200).json(roles);
+    
+    const allSystemMenus = [
+      'dashboard', 'leads', 'campaigns', 'campaignassignments', 'export_campaigns',
+      'lead_reports', 'telecaller_reports', 'telecaller_monthly',
+      'funnel_daily', 'funnel_monthly', 'funnel_annual',
+      'settings', 'access_privilege', 'lead_transfer', 'users_management'
+    ];
+
+    const telecallerDefaultMenus = [
+      'dashboard', 'leads', 'campaigns', 'campaignassignments', 'export_campaigns',
+      'telecaller_reports', 'telecaller_monthly',
+      'funnel_daily', 'funnel_monthly', 'funnel_annual'
+    ];
+
+    // Auto-populate default menus for roles if unconfigured or empty
+    const sanitizedRoles = await Promise.all(roles.map(async (role) => {
+      const roleName = (role.name || '').toLowerCase();
+      let modified = false;
+
+      if (!role.permissions) {
+        role.permissions = { modules: [], fields: [], menus: [] };
+        modified = true;
+      }
+
+      if (!Array.isArray(role.permissions.menus) || role.permissions.menus.length === 0) {
+        if (roleName.includes('super admin') || roleName.includes('admin')) {
+          role.permissions.menus = [...allSystemMenus];
+          modified = true;
+        } else if (roleName.includes('caller') || roleName.includes('agent') || roleName.includes('teli')) {
+          role.permissions.menus = [...telecallerDefaultMenus];
+          modified = true;
+        } else {
+          role.permissions.menus = [...allSystemMenus];
+          modified = true;
+        }
+      } else if (roleName.includes('super admin') || roleName.includes('admin')) {
+        // Ensure Super Admin and Admin always have all system menus in their list
+        const missing = allSystemMenus.filter(m => !role.permissions.menus.includes(m));
+        if (missing.length > 0) {
+          role.permissions.menus = Array.from(new Set([...role.permissions.menus, ...missing]));
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        role.markModified('permissions');
+        role.markModified('permissions.menus');
+        await role.save();
+      }
+
+      return role;
+    }));
+
+    res.status(200).json(sanitizedRoles);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve tenant roles.' });
   }
@@ -734,6 +787,10 @@ router.put('/roles/:id', authenticate, async (req: Request, res: Response): Prom
     if (typeof isActive === 'boolean') role.isActive = isActive;
 
     if (permissions) {
+      if (!role.permissions) {
+        role.permissions = { modules: [], fields: [], menus: [] };
+      }
+
       if (Array.isArray(permissions)) {
         role.permissions.modules = permissions;
       } else if (typeof permissions === 'object') {
@@ -747,11 +804,16 @@ router.put('/roles/:id', authenticate, async (req: Request, res: Response): Prom
           role.permissions.fields = permissions.fields;
         }
       }
+
+      role.markModified('permissions');
+      role.markModified('permissions.menus');
+      role.markModified('permissions.modules');
     }
 
     await role.save();
     res.status(200).json({ message: 'Role updated successfully.', role });
   } catch (error) {
+    console.error('[AUTH] Role update error:', error);
     res.status(500).json({ error: 'Failed to update role.' });
   }
 });

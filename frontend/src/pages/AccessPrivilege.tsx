@@ -212,10 +212,23 @@ export default function AccessPrivilege() {
   const loadRoleData = (roleId: string, rolesList: Role[] = roles) => {
     const r = rolesList.find((role) => role._id === roleId);
     if (r) {
-      // If menus array is defined, respect it (even if empty); only fallback to default if undefined
-      const rMenus = Array.isArray(r.permissions?.menus)
-        ? r.permissions.menus
-        : SYSTEM_MENU_CONFIG.map(m => m.key);
+      const roleName = (r.name || '').toLowerCase();
+      const isSuperAdminOrAdmin = roleName.includes('super admin') || roleName.includes('admin');
+
+      let rMenus: string[] = [];
+      if (isSuperAdminOrAdmin) {
+        // Super Admin & Admin default to full 100% menu access
+        rMenus = fullMenuItems.map(m => m.key);
+      } else if (Array.isArray(r.permissions?.menus) && r.permissions.menus.length > 0) {
+        rMenus = r.permissions.menus;
+      } else {
+        // Default telecaller operational menus
+        rMenus = [
+          'dashboard', 'leads', 'campaigns', 'campaignassignments', 'export_campaigns',
+          'telecaller_reports', 'telecaller_monthly',
+          'funnel_daily', 'funnel_monthly', 'funnel_annual'
+        ];
+      }
       
       setAllowedMenus(rMenus);
 
