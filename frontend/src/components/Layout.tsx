@@ -95,7 +95,9 @@ export default function Layout({ children }: LayoutProps) {
       const res = await api.get('/records/leads', { params: { limit: 100 } });
       return res.data;
     },
-    refetchInterval: (query) => (query.state.error ? false : 5000)
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => (query.state.error ? false : 30000)
   });
 
   const { data: dbStatuses } = useQuery({
@@ -104,7 +106,9 @@ export default function Layout({ children }: LayoutProps) {
       const res = await api.get('/statuses');
       return res.data || [];
     },
-    refetchInterval: (query) => (query.state.error ? false : 5000)
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => (query.state.error ? false : 60000)
   });
 
   const { data: metricsData } = useQuery({
@@ -113,7 +117,9 @@ export default function Layout({ children }: LayoutProps) {
       const res = await api.get('/dashboard/metrics');
       return res.data;
     },
-    refetchInterval: (query) => (query.state.error ? false : 5000)
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => (query.state.error ? false : 30000)
   });
 
   const queryClient = useQueryClient();

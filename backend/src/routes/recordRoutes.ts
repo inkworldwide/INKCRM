@@ -49,6 +49,43 @@ const matchModuleName = (permName: string, targetName: string): boolean => {
   return false;
 };
 
+// ── In-Memory Role Cache (60s TTL + Instant Invalidation) ─────────────────────
+interface CachedRole {
+  role: any;
+  expiresAt: number;
+}
+const roleCacheMap = new Map<string, CachedRole>();
+const ROLE_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+export const invalidateRoleCache = (roleId?: string) => {
+  if (roleId) {
+    roleCacheMap.delete(String(roleId));
+  } else {
+    roleCacheMap.clear();
+  }
+};
+
+export const clearRoleCache = () => {
+  roleCacheMap.clear();
+};
+
+const getCachedRole = async (roleId?: any) => {
+  if (!roleId) return null;
+  const idStr = String(roleId);
+  const now = Date.now();
+  const cached = roleCacheMap.get(idStr);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.role;
+  }
+
+  const role = await Role.findById(roleId);
+  if (role) {
+    roleCacheMap.set(idStr, { role, expiresAt: now + ROLE_CACHE_TTL_MS });
+  }
+  return role;
+};
+
 // Helper: Check Role Permission dynamically
 const authorizeModuleAction = async (
   req: Request,
@@ -57,7 +94,7 @@ const authorizeModuleAction = async (
   action: 'create' | 'read' | 'update' | 'delete'
 ): Promise<{ allowed: boolean; scope: 'all' | 'own' }> => {
   try {
-    const role = await Role.findById(req.user?.roleId);
+    const role = await getCachedRole(req.user?.roleId);
     if (!role) return { allowed: false, scope: 'none' as any };
 
     // Super Admin bypass
@@ -72,7 +109,7 @@ const authorizeModuleAction = async (
     }
 
     const permission = role.permissions.modules.find(
-      (m) => matchModuleName(m.moduleName, moduleName)
+      (m: any) => matchModuleName(m.moduleName, moduleName)
     );
 
     if (!permission) return { allowed: false, scope: 'none' as any };

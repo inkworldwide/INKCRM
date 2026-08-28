@@ -12,6 +12,7 @@ import { haversineDistance } from '../utils/geoUtils';
 import { seedNewTenantData } from '../utils/seeder';
 import { HierarchyService } from '../utils/hierarchy';
 import { reverseGeocode } from '../utils/geocoding';
+import { invalidateRoleCache } from './recordRoutes';
 
 const router = Router();
 
@@ -811,6 +812,7 @@ router.put('/roles/:id', authenticate, async (req: Request, res: Response): Prom
     }
 
     await role.save();
+    invalidateRoleCache(req.params.id);
     res.status(200).json({ message: 'Role updated successfully.', role });
   } catch (error) {
     console.error('[AUTH] Role update error:', error);
