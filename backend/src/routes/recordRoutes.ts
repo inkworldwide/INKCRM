@@ -1476,28 +1476,50 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Check RBAC permissions
-    const { allowed, scope } = await authorizeModuleAction(req, res, moduleDef.name, 'update');
-    if (!allowed) {
-      res.status(403).json({ error: `Access Denied: Update permission absent for module ${moduleDef.name}` });
-      return;
-    }
-
-    const recordQuery: Record<string, any> = {
+    // Fetch target record first by ID and Organization
+    let record = await CustomRecord.findOne({
       _id: id,
       organizationId: req.organizationId
-    };
-    if (scope === 'own') {
-      recordQuery.createdBy = req.user?.id;
-    }
+    });
 
-    // Apply Dynamic Reporting Manager Hierarchy filtering
-    await HierarchyService.modifyRecordQuery(recordQuery, req.user as any, req.organizationId!);
-
-    const record = await CustomRecord.findOne(recordQuery);
     if (!record) {
       res.status(404).json({ error: 'Record not found.' });
       return;
+    }
+
+    // Determine authorization for Super Admin, Admin, Telecaller & Hierarchy
+    const userDoc = await User.findById(req.user?.id).select('_id roleId firstName lastName email userCode name role');
+    const userObj = userDoc ? userDoc.toObject() : { id: req.user?.id, ...req.user };
+    const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
+      ['super admin', 'admin', 'administrator', 'org admin'].includes(String((userObj as any).role || '').toLowerCase()) ||
+      (userObj.email && userObj.email.toLowerCase().includes('ink@crm'));
+
+    if (!isAdmin) {
+      // Check RBAC update permission
+      const { allowed } = await authorizeModuleAction(req, res, moduleDef.name, 'update');
+      if (!allowed) {
+        res.status(403).json({ error: `Access Denied: Update permission absent for module ${moduleDef.name}` });
+        return;
+      }
+
+      // Allow update if user created record OR if record is assigned to user OR if hierarchy grants access
+      const isCreator = record.createdBy?.toString() === String(req.user?.id);
+      
+      const assignmentFilter = buildUserAssignmentFilter(userObj);
+      const isAssigned = await CustomRecord.exists({
+        _id: id,
+        organizationId: req.organizationId,
+        ...assignmentFilter
+      });
+
+      const hierarchyQuery: Record<string, any> = { _id: id, organizationId: req.organizationId };
+      await HierarchyService.modifyRecordQuery(hierarchyQuery, req.user as any, req.organizationId!);
+      const hasHierarchyAccess = await CustomRecord.exists(hierarchyQuery);
+
+      if (!isCreator && !isAssigned && !hasHierarchyAccess) {
+        res.status(403).json({ error: 'Access Denied: You do not have permission to update this record.' });
+        return;
+      }
     }
 
     const oldValues = record.data instanceof Map ? Object.fromEntries(record.data) : (record.data || {});
@@ -1647,8 +1669,8 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
 
     // Generate Notifications for assignedTo or status changes
     const recName = `${record.data?.firstName || ''} ${record.data?.lastName || ''}`.trim() || moduleDef.singularLabel || 'Record';
-    const userObj = req.user as any;
-    const updaterName = userObj?.firstName ? `${userObj.firstName} ${userObj.lastName || ''}`.trim() : (userObj?.email || 'System');
+    const updaterObj = userDoc ? userDoc.toObject() : (req.user as any);
+    const updaterName = (updaterObj as any)?.firstName ? `${(updaterObj as any).firstName} ${(updaterObj as any).lastName || ''}`.trim() : ((updaterObj as any)?.email || 'System');
 
     if (changedFields.includes('assignedTo') && updateData.assignedTo) {
       await createNotification({

@@ -513,8 +513,9 @@ export default function MyCampaign() {
         }
       }
     } catch (err: any) {
-      console.error(err);
-      showToast('Failed to save lead updates.', 'error');
+      console.error('[MY CAMPAIGN SAVE ERROR]', err);
+      const serverMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+      showToast(serverMsg || 'Failed to save lead updates.', 'error');
     }
   };
 
