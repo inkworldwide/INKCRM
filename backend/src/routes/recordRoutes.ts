@@ -1047,40 +1047,73 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       moduleId: moduleDef._id
     };
 
-    if (scope === 'own') {
-      query.createdBy = req.user?.id;
-    }
-
-
-    // Parse other fields for inline filters, e.g. ?data.status=HOT LEADS
+    // Support ?status=HOT LEADS or ?data.status=HOT LEADS or ?followup=today
     const USE_INDEXED_STATUS_QUERY = process.env.USE_INDEXED_STATUS_QUERY !== 'false';
 
+    const rawStatusParam = req.query.status || req.query.leadStatus || req.query['data.status'] || req.query['data.normalizedStatus'];
+    if (typeof rawStatusParam === 'string' && rawStatusParam.trim()) {
+      const cleanVal = rawStatusParam.trim();
+      const normVal = normalizeStatusName(cleanVal);
+      const statusFilter = USE_INDEXED_STATUS_QUERY
+        ? { 'data.normalizedStatus': normVal }
+        : {
+            $or: [
+              { 'data.normalizedStatus': normVal },
+              { 'data.status': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') },
+              { 'data.leadStatus': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') }
+            ]
+          };
+
+      if (query.$and) {
+        query.$and.push(statusFilter);
+      } else {
+        query.$and = [statusFilter];
+      }
+    }
+
+    if (req.query.followup) {
+      const followupVal = String(req.query.followup).trim().toLowerCase();
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+
+      if (followupVal === 'today') {
+        const timeFilter = {
+          $or: [
+            { 'data.followUpDate': { $gte: startOfToday, $lte: endOfToday } },
+            { 'data.followUpDate': { $regex: '^' + startOfToday.toISOString().split('T')[0] } }
+          ]
+        };
+        if (query.$and) {
+          query.$and.push(timeFilter);
+        } else {
+          query.$and = [timeFilter];
+        }
+      } else if (followupVal === 'upcoming') {
+        const futureFilter = {
+          $or: [
+            { 'data.followUpDate': { $gt: endOfToday } },
+            { 'data.followUpDate': { $gt: endOfToday.toISOString().split('T')[0] } }
+          ]
+        };
+        if (query.$and) {
+          query.$and.push(futureFilter);
+        } else {
+          query.$and = [futureFilter];
+        }
+      }
+    }
+
+    // Parse other fields for inline filters, e.g. ?data.city=Mumbai
     Object.keys(req.query).forEach((q) => {
       if (q.startsWith('data.')) {
+        if (q === 'data.status' || q === 'data.leadStatus' || q === 'data.normalizedStatus') return; // Handled above
         const val = req.query[q];
         if (typeof val === 'string' && val.trim()) {
           const cleanVal = val.trim();
-          if (q === 'data.status' || q === 'data.leadStatus' || q === 'data.normalizedStatus') {
-            const normVal = normalizeStatusName(cleanVal);
-            const statusFilter = USE_INDEXED_STATUS_QUERY
-              ? { 'data.normalizedStatus': normVal }
-              : {
-                  $or: [
-                    { 'data.normalizedStatus': normVal },
-                    { 'data.status': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') },
-                    { 'data.leadStatus': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') }
-                  ]
-                };
-
-            if (query.$and) {
-              query.$and.push(statusFilter);
-            } else {
-              query.$and = [statusFilter];
-            }
-          } else {
-            const escVal = cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-            query[q] = { $regex: new RegExp(`^${escVal}$`, 'i') };
-          }
+          const escVal = cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          query[q] = { $regex: new RegExp(`^${escVal}$`, 'i') };
         } else {
           query[q] = val;
         }

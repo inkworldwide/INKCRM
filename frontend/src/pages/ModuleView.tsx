@@ -37,6 +37,7 @@ export default function ModuleView() {
   const [filterField, setFilterField] = useState('');
   const [filterVal, setFilterVal] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(100);
 
   // File upload and History timeline states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1048,6 +1049,7 @@ export default function ModuleView() {
 
   // Read ?status= from URL and apply as filter
   const urlStatus = searchParams.get('status');
+  const urlFollowup = searchParams.get('followup');
 
   // Set Active Module in store on path mount/change
   useEffect(() => {
@@ -1058,23 +1060,30 @@ export default function ModuleView() {
       if (urlStatus) {
         setFilterField('status');
         setFilterVal(urlStatus);
+      } else if (urlFollowup) {
+        setFilterField('followup');
+        setFilterVal(urlFollowup);
       } else {
         setFilterField('');
         setFilterVal('');
       }
     }
-  }, [apiPath, urlStatus]);
+  }, [apiPath, urlStatus, urlFollowup]);
 
   // Query records
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['records', apiPath, searchVal, filterField, filterVal, page],
+    queryKey: ['records', apiPath, searchVal, filterField, filterVal, page, pageSize],
     queryFn: async () => {
       const params: Record<string, any> = {
         page,
-        limit: 25,
+        limit: pageSize,
         search: searchVal
       };
-      if (filterField && filterVal) {
+      if (filterField === 'status') {
+        params.status = filterVal;
+      } else if (filterField === 'followup') {
+        params.followup = filterVal;
+      } else if (filterField && filterVal) {
         params[`data.${filterField}`] = filterVal;
       }
       const res = await api.get(`/records/${apiPath}`, { params });
@@ -2284,28 +2293,55 @@ export default function ModuleView() {
 
           {/* Pagination bar */}
           <div className="px-6 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-3 text-xs shadow-xs mt-6">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">
-              Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
-              <span className="font-bold text-slate-800 dark:text-slate-200">{data?.pagination?.totalPages || 1}</span>
-              <span className="ml-2 text-slate-400 font-mono">({data?.pagination?.total ?? (data?.records?.length || 0)} Total Records)</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                className="h-8.5 px-3.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <Icons.ChevronLeft className="w-3.5 h-3.5" />
-                Previous
-              </button>
-              <button
-                disabled={page >= (data?.pagination?.totalPages || 1)}
-                onClick={() => setPage(page + 1)}
-                className="h-8.5 px-3.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
-              >
-                Next
-                <Icons.ChevronRight className="w-3.5 h-3.5" />
-              </button>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">
+                Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">{data?.pagination?.totalPages || 1}</span>
+                <span className="ml-2 text-slate-400 font-mono">({(data?.pagination?.total ?? (data?.records?.length || 0)).toLocaleString()} Total Records)</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-semibold">Per Page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="h-8 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value={25}>25 leads</option>
+                  <option value={50}>50 leads</option>
+                  <option value={100}>100 leads</option>
+                  <option value={250}>250 leads</option>
+                  <option value={500}>500 leads</option>
+                  <option value={1000}>1,000 leads</option>
+                  <option value={5000}>5,000 leads</option>
+                  <option value={10000}>10,000 leads</option>
+                  <option value={100000}>All (100,000 leads)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                  className="h-8.5 px-3.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Icons.ChevronLeft className="w-3.5 h-3.5" />
+                  Previous
+                </button>
+                <button
+                  disabled={page >= (data?.pagination?.totalPages || 1)}
+                  onClick={() => setPage(page + 1)}
+                  className="h-8.5 px-3.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-40 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  Next
+                  <Icons.ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
