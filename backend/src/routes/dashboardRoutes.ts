@@ -156,10 +156,14 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         if (item._id) {
           const rawName = item._id.toString().trim();
           const canonical = normalizeStatusName(rawName);
+          const uppercaseName = rawName.toUpperCase();
+          const count = Number(item.count || 0);
 
-          statusCounts[canonical] = (statusCounts[canonical] || 0) + item.count;
-          statusCounts[rawName.toUpperCase()] = (statusCounts[rawName.toUpperCase()] || 0) + item.count;
-          statusCounts[rawName] = (statusCounts[rawName] || 0) + item.count;
+          // Use a Set to ensure item.count is added EXACTLY ONCE to each distinct key!
+          const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
+          uniqueKeys.forEach(k => {
+            statusCounts[k] = (statusCounts[k] || 0) + count;
+          });
         }
       });
 

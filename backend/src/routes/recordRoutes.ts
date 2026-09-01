@@ -1637,10 +1637,12 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         const canonical = normalizeStatusName(updateData.status);
         updateData.status = canonical;
         updateData.dialStatus = canonical;
+        updateData.normalizedStatus = canonical;
       } else if (updateData.dialStatus) {
         const canonical = normalizeStatusName(updateData.dialStatus);
         updateData.status = canonical;
         updateData.dialStatus = canonical;
+        updateData.normalizedStatus = canonical;
       }
     }
 
