@@ -2007,7 +2007,19 @@ export default function ModuleView() {
                         ? resolveUserDisplayName(rec.data.assignedBy) 
                         : (createdByName && createdByName !== 'System' && createdByName !== 'N/A' ? createdByName : 'System Router'));
                   const psmName = rec.data?.psmName || resolveUserDisplayName(rec.data?.psm || rec.data?.assignedTo || 'Unassigned');
-                  const statusThemeColor = getCardThemeColor(rec.data?.status || 'HOT');
+
+                  const isFollowupCard = String(rec.data?.status || rec.data?.normalizedStatus || '').toUpperCase().includes('FOLLOW');
+                  const actualStage = rec.data?.stageStatus || rec.data?.originalStatus || rec.data?.previousStatus || rec.data?.leadStage || (rec.data?.dialStatus && !String(rec.data.dialStatus).toUpperCase().includes('FOLLOW') ? rec.data.dialStatus : '');
+                  
+                  const displayStatusText = isFollowupCard
+                    ? (actualStage ? `${actualStage.toUpperCase()} (FOLLOWUP)` : 'HOT LEADS (FOLLOWUP)')
+                    : (rec.data?.status || 'NEW');
+
+                  const statusThemeColor = getCardThemeColor(isFollowupCard && actualStage ? actualStage : (rec.data?.status || 'HOT'));
+
+                  const badgeLabelText = isFollowupCard
+                    ? (actualStage ? (actualStage.toUpperCase().endsWith('LEAD') || actualStage.toUpperCase().endsWith('LEADS') ? actualStage.toUpperCase() : `${actualStage.toUpperCase()} LEAD`) : 'HOT LEAD')
+                    : (rec.data?.status ? (rec.data.status.toUpperCase().endsWith('LEAD') || rec.data.status.toUpperCase().endsWith('LEADS') ? rec.data.status.toUpperCase() : `${rec.data.status.toUpperCase()} LEAD`) : 'LEAD INFO');
 
                   return (
                     <div key={rec._id} className="border border-[#EAE4DA] dark:border-slate-800 rounded-2xl p-4 sm:p-6 bg-white dark:bg-slate-900 relative mb-6 last:mb-0 text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
@@ -2084,7 +2096,7 @@ export default function ModuleView() {
                         {/* --- Row 4 --- */}
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Status: </span>
-                          <span className="text-[#44403C] dark:text-stone-300 uppercase font-semibold">{rec.data?.status || 'NEW'}</span>
+                          <span className="text-[#44403C] dark:text-stone-300 uppercase font-semibold">{displayStatusText}</span>
                         </div>
 
                         <div className="text-[13px] leading-snug">
@@ -2136,7 +2148,7 @@ export default function ModuleView() {
                             }}
                           >
                             <Icons.Flame className="w-3.5 h-3.5 stroke-[2.5]" />
-                            <span>{rec.data?.status ? `${rec.data.status} LEAD` : 'LEAD INFO'}</span>
+                            <span>{badgeLabelText}</span>
                           </span>
                         </div>
 

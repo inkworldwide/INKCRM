@@ -70,9 +70,9 @@ export default function MonthlyFunnelPage() {
     setLoading(true);
     try {
       const [leadsRes, campRes, usersRes] = await Promise.all([
-        api.get('/records/leads?limit=1000').catch(() => ({ data: { records: [] } })),
-        api.get('/records/campaigns?limit=1000').catch(() => ({ data: { records: [] } })),
-        api.get('/auth/users').catch(() => ({ data: [] }))
+        api.get('/records/leads?limit=100000').catch(() => ({ data: { records: [] } })),
+        api.get('/records/campaigns?limit=10000').catch(() => ({ data: { records: [] } })),
+        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] }))
       ]);
 
       const fetchedLeads = leadsRes.data?.records || leadsRes.data || [];

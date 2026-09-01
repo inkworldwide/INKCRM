@@ -39,9 +39,9 @@ export default function TelecallerReportsPage() {
     setLoading(true);
     try {
       const [usersRes, leadsRes, campRes] = await Promise.all([
-        api.get('/auth/users').catch(() => ({ data: [] })),
-        api.get('/records/leads?limit=10000').catch(() => ({ data: [] })),
-        api.get('/records/campaigns?limit=1000').catch(() => ({ data: [] }))
+        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
+        api.get('/records/leads?limit=100000').catch(() => ({ data: [] })),
+        api.get('/records/campaigns?limit=10000').catch(() => ({ data: [] }))
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];

@@ -416,8 +416,10 @@ export default function MyCampaign() {
       const initialCat = getLeadCategory(lead.data);
       const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
 
+      const isHot = newStatus.toUpperCase().includes('HOT');
+      const isWarm = newStatus.toUpperCase().includes('WARM');
+
       const payload: Record<string, any> = {
-        status: newStatus,
         dialStatus: newStatus,
         notes: currentRemarks,
         remarks: currentRemarks,
@@ -428,6 +430,16 @@ export default function MyCampaign() {
         dialedAt: new Date(),
         callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
       };
+
+      if (isHot || isWarm) {
+        const canonical = isHot ? 'HOT LEADS' : 'WARM LEADS';
+        payload.status = canonical;
+        payload.normalizedStatus = canonical;
+      } else {
+        // Campaign dialing status ONLY: mark as campaign dial so it does NOT update Dashboard or Leads Process metrics!
+        payload.isCampaignDialOnly = true;
+        payload.normalizedStatus = 'CAMPAIGN_DIAL';
+      }
 
       await api.put(`/records/leads/${lead._id}`, payload);
       
@@ -458,50 +470,6 @@ export default function MyCampaign() {
 
       // 2. Smoothly scroll to the top of the next lead
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
-      // Check if Hot Lead or Warm Lead is selected
-      const isHot = newStatus.toUpperCase().includes('HOT');
-      const isWarm = newStatus.toUpperCase().includes('WARM');
-
-      if (isHot || isWarm) {
-        const passedStatus = isHot ? 'Hot' : 'Warm';
-        const phoneVal = getLeadPhone(lead.data);
-        const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : '';
-        const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
-
-        navigate('/modules/leads/new', {
-          state: {
-            ...lead.data,
-            firstName: getLeadCustomer(lead.data),
-            lastName: '',
-            customerName: getLeadCustomer(lead.data),
-            customer: getLeadCustomer(lead.data),
-            fullName: getLeadCustomer(lead.data),
-            phone: phoneVal,
-            mobile: phoneVal,
-            company: getLeadFirmName(lead.data),
-            firmName: getLeadFirmName(lead.data),
-            firm_name: getLeadFirmName(lead.data),
-            city: getLeadLocation(lead.data),
-            location: getLeadLocation(lead.data),
-            leadCategory: getLeadCategory(lead.data),
-            loanType: getLeadCategory(lead.data),
-            dataCode: getLeadDataCode(lead),
-            data_code: getLeadDataCode(lead),
-            'Data Code': getLeadDataCode(lead),
-            status: passedStatus,
-            notes: currentRemarks,
-            remarks: currentRemarks,
-            caseDetails: currentCaseDetails,
-            source: activeCampaign?.campaignName || lead.data?.source || lead.data?.campaignName || '',
-            psm: creatorName,
-            psmName: creatorName,
-            leadOwner: creatorName,
-            created_by_user: creatorName
-          }
-        });
-        return;
-      }
 
       // Refresh list in background to maintain sync for other statuses
       const res = await api.get('/records/campaigns/my-campaigns');

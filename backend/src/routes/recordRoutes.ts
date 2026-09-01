@@ -1633,13 +1633,25 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       }
 
       // Normalize status fields to canonical status names so metrics and card counts update perfectly
-      if (updateData.status) {
+      if (updateData.isCampaignDialOnly || updateData.normalizedStatus === 'CAMPAIGN_DIAL') {
+        updateData.normalizedStatus = 'CAMPAIGN_DIAL';
+      } else if (updateData.status) {
         const canonical = normalizeStatusName(updateData.status);
-        updateData.status = canonical;
-        updateData.dialStatus = canonical;
-        updateData.normalizedStatus = canonical;
-      } else if (updateData.dialStatus) {
-        const canonical = normalizeStatusName(updateData.dialStatus);
+        if (canonical === 'FOLLOWUP') {
+          if (oldValues.status && oldValues.status !== 'FOLLOWUP' && oldValues.status !== 'Followup') {
+            updateData.originalStatus = oldValues.status;
+            updateData.stageStatus = oldValues.status;
+          } else if (oldValues.originalStatus) {
+            updateData.originalStatus = oldValues.originalStatus;
+            updateData.stageStatus = oldValues.stageStatus || oldValues.originalStatus;
+          } else {
+            updateData.originalStatus = 'HOT LEADS';
+            updateData.stageStatus = 'HOT LEADS';
+          }
+        } else {
+          updateData.originalStatus = canonical;
+          updateData.stageStatus = canonical;
+        }
         updateData.status = canonical;
         updateData.dialStatus = canonical;
         updateData.normalizedStatus = canonical;
