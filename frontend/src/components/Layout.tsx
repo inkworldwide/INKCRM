@@ -368,7 +368,7 @@ export default function Layout({ children }: LayoutProps) {
                           icon={Icons.Layers} 
                           colorClass="text-[#7C3AED]"
                           indent 
-                          badge={leadsData?.pagination?.totalRecords || leadsData?.records?.length || 0} 
+                          badge={metricsData?.statusCounts?.ALL ?? metricsData?.totalLeads ?? leadsData?.pagination?.total ?? 0} 
                           isCollapsed={isCollapsed}
                         />
                         {(() => {
@@ -424,20 +424,13 @@ export default function Layout({ children }: LayoutProps) {
                               ];
 
                           const getStatusCountFromMetrics = (name: string) => {
-                            if (!metricsData?.statusCounts) {
-                              const records = leadsData?.records || [];
-                              return records.filter((r: any) => {
-                                const s1 = (r.data?.status || '').toString().trim().toUpperCase();
-                                const s2 = name.trim().toUpperCase();
-                                return s1 === s2 || s1 === s2.replace(/ LEADS$/, '') || s2 === s1.replace(/ LEADS$/, '');
-                              }).length;
-                            }
+                            if (!metricsData?.statusCounts) return 0;
                             const raw = (name || '').trim();
                             const upper = raw.toUpperCase();
-                            if (metricsData.statusCounts[raw] !== undefined) return metricsData.statusCounts[raw];
-                            if (metricsData.statusCounts[upper] !== undefined) return metricsData.statusCounts[upper];
+                            if (metricsData.statusCounts[raw] !== undefined) return Number(metricsData.statusCounts[raw]);
+                            if (metricsData.statusCounts[upper] !== undefined) return Number(metricsData.statusCounts[upper]);
                             const noLeadsKey = upper.replace(/ LEADS$/, '');
-                            if (metricsData.statusCounts[noLeadsKey] !== undefined) return metricsData.statusCounts[noLeadsKey];
+                            if (metricsData.statusCounts[noLeadsKey] !== undefined) return Number(metricsData.statusCounts[noLeadsKey]);
                             for (const [k, v] of Object.entries(metricsData.statusCounts)) {
                               const kUpper = k.trim().toUpperCase();
                               if (kUpper === upper || kUpper === noLeadsKey || kUpper.replace(/ LEADS$/, '') === noLeadsKey) {

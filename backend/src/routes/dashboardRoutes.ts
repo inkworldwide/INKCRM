@@ -131,15 +131,20 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
     endOfToday.setHours(23, 59, 59, 999);
 
     if (leadModule) {
-      // 1. Group leads count by status dynamically (checking status, dialStatus, leadStatus)
+      // 1. Group leads count by status dynamically (checking normalizedStatus first)
       const leadAgg = await CustomRecord.aggregate([
         { $match: leadQuery },
         {
           $project: {
             st: {
               $ifNull: [
-                '$data.status',
-                { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
+                '$data.normalizedStatus',
+                {
+                  $ifNull: [
+                    '$data.status',
+                    { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
+                  ]
+                }
               ]
             }
           }
@@ -236,6 +241,8 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       }
 
       let totalLeads = await CustomRecord.countDocuments(leadQuery);
+      statusCounts['ALL'] = totalLeads;
+      statusCounts['ALL LEADS'] = totalLeads;
 
       const activityQuery: Record<string, any> = { organizationId: orgId };
       const isSuper = await HierarchyService.isSuperAdmin(req.user?.roleId);
