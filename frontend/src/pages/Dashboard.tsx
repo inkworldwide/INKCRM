@@ -680,7 +680,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-black text-[#111111] dark:text-white tracking-tight">Campaign Status</h3>
                       <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/40">
-                        4 Campaign Drives
+                        {metricsData?.campaignMetrics?.totalCampaigns !== undefined ? metricsData.campaignMetrics.totalCampaigns : (campaignRecords?.length || 0)} Campaign Drives
                       </span>
                     </div>
                     <p className="text-[11px] text-[#6B7280] dark:text-slate-400 font-medium mt-0.5">My campaign execution overview</p>
@@ -699,7 +699,7 @@ export default function Dashboard() {
                 {[
                   { 
                     label: 'TOTAL CAMPAIGNS', 
-                    value: (campaignRecords && campaignRecords.length > 0) ? campaignRecords.length : (metricsData?.dealStatus?.open ? metricsData.dealStatus.open + 2 : 3), 
+                    value: metricsData?.campaignMetrics?.totalCampaigns !== undefined ? metricsData.campaignMetrics.totalCampaigns : (campaignRecords?.length || 0), 
                     sub: 'All active drives', 
                     icon: Icons.Megaphone,
                     themeColor: '#4F46E5',
@@ -708,7 +708,7 @@ export default function Dashboard() {
                   },
                   { 
                     label: 'COMPLETED CAMPAIGN', 
-                    value: metricsData?.completedCampaigns !== undefined ? metricsData.completedCampaigns : (metricsData?.dealStatus?.won || 1), 
+                    value: metricsData?.campaignMetrics?.completedCampaigns !== undefined ? metricsData.campaignMetrics.completedCampaigns : 0, 
                     sub: '100% Dialed & Closed', 
                     icon: Icons.CheckCircle2,
                     themeColor: '#10B981',
@@ -717,7 +717,7 @@ export default function Dashboard() {
                   },
                   { 
                     label: 'INPROGRESS', 
-                    value: metricsData?.inProgressCampaigns !== undefined ? metricsData.inProgressCampaigns : (metricsData?.dealStatus?.pending || 2), 
+                    value: metricsData?.campaignMetrics?.inProgressCampaigns !== undefined ? metricsData.campaignMetrics.inProgressCampaigns : 0, 
                     sub: 'Active calling', 
                     icon: Icons.PhoneCall,
                     themeColor: '#2563EB',
@@ -726,7 +726,7 @@ export default function Dashboard() {
                   },
                   { 
                     label: 'YET TO START', 
-                    value: metricsData?.yetToStartCampaigns !== undefined ? metricsData.yetToStartCampaigns : (metricsData?.dealStatus?.lost || 0), 
+                    value: metricsData?.campaignMetrics?.yetToStartCampaigns !== undefined ? metricsData.campaignMetrics.yetToStartCampaigns : 0, 
                     sub: 'Queued drives', 
                     icon: Icons.Clock,
                     themeColor: '#D97706',
@@ -790,17 +790,17 @@ export default function Dashboard() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                   </span>
-                  <span className="tracking-wide">78% DIALED</span>
+                  <span className="tracking-wide">{metricsData?.campaignMetrics?.dialedPercentage ?? 0}% DIALED</span>
                 </div>
               </div>
 
               {/* Sub-metrics breakdown */}
               <div className="flex items-baseline justify-between text-[11px] mb-1.5 px-0.5 relative z-10">
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-xs font-black text-white tracking-tight">3,120</span>
-                  <span className="text-[10px] text-slate-400 font-medium">of 4,000 Leads Dialed</span>
+                  <span className="text-xs font-black text-white tracking-tight">{(metricsData?.campaignMetrics?.totalLeadsDialed ?? 0).toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-400 font-medium">of {(metricsData?.campaignMetrics?.totalLeadsAllocated ?? 0).toLocaleString()} Leads Dialed</span>
                 </div>
-                <span className="text-[10px] font-bold text-indigo-300 tracking-tight">880 Remaining</span>
+                <span className="text-[10px] font-bold text-indigo-300 tracking-tight">{(metricsData?.campaignMetrics?.totalLeadsRemaining ?? 0).toLocaleString()} Remaining</span>
               </div>
 
               {/* High-definition progress track */}
@@ -811,7 +811,7 @@ export default function Dashboard() {
                 <div 
                   className="h-full rounded-full transition-all duration-1000 ease-out relative" 
                   style={{ 
-                    width: '78%',
+                    width: `${Math.max(metricsData?.campaignMetrics?.dialedPercentage ?? 0, (metricsData?.campaignMetrics?.totalLeadsDialed ?? 0) > 0 ? 4 : 0)}%`,
                     background: 'linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #10B981 100%)',
                     boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)'
                   }} 
@@ -824,7 +824,9 @@ export default function Dashboard() {
               <div className="flex items-center justify-between gap-2 text-[10px] relative z-10">
                 <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.07] px-2.5 py-1 rounded-lg">
                   <Icons.PhoneCall className="w-3 h-3 text-indigo-300" />
-                  <span className="text-slate-300 font-medium">Personal & Home Loan Drives</span>
+                  <span className="text-slate-300 font-medium truncate max-w-[200px]">
+                    {metricsData?.campaignMetrics?.activeCampaignNames || 'Personal & Home Loan Drives'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-emerald-500/[0.08] border border-emerald-500/20 px-2.5 py-1 rounded-lg">
                   <Icons.Target className="w-3 h-3 text-emerald-400" />

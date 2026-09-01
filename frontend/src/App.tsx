@@ -27,6 +27,7 @@ import AnnualFunnelPage from './pages/AnnualFunnelPage';
 import CampaignReportPage from './pages/CampaignReportPage';
 import Status from './pages/Status';
 import MyCampaign from './pages/MyCampaign';
+import ImportDeleteLeads from './pages/ImportDeleteLeads';
 
 // Route Guard for authenticated workspaces
 function ProtectedRoute({ children, menuKey }: { children: React.ReactNode; menuKey?: string }) {
@@ -221,6 +222,14 @@ export default function App() {
           element={
             <ProtectedRoute menuKey="lead_transfer">
               <LeadTransfer />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/import-delete-leads"
+          element={
+            <ProtectedRoute menuKey="import_delete_leads">
+              <ImportDeleteLeads />
             </ProtectedRoute>
           }
         />

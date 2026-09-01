@@ -507,19 +507,22 @@ export default function Layout({ children }: LayoutProps) {
             )}
 
             {/* Group 3: Administration */}
-            {(canAccessMenu('settings') || canAccessMenu('access_privilege') || canAccessMenu('lead_transfer') || canAccessMenu('users_management')) && (
+            {(canAccessMenu('settings') || canAccessMenu('access_privilege') || canAccessMenu('lead_transfer') || canAccessMenu('import_delete_leads') || canAccessMenu('users_management')) && (
               <SidebarGroup title="ADMINISTRATION" isCollapsed={isCollapsed}>
                 {canAccessMenu('settings') && (
                   <SidebarItem to="/settings" label="SETTINGS" icon={Icons.Settings} colorClass="text-[#CA8A04]" isCollapsed={isCollapsed} />
                 )}
 
-                {(canAccessMenu('access_privilege') || canAccessMenu('lead_transfer')) && (
+                {(canAccessMenu('access_privilege') || canAccessMenu('lead_transfer') || canAccessMenu('import_delete_leads')) && (
                   <SidebarAccordion label="SECURITY" icon={Icons.ShieldCheck} colorClass="text-[#DC2626]" defaultOpen={true} isCollapsed={isCollapsed}>
                     {canAccessMenu('access_privilege') && (
                       <SidebarItem to="/access-privilege" label="ACCESS PRIVILEGE" icon={Icons.ShieldCheck} colorClass="text-[#DC2626]" indent isCollapsed={isCollapsed} />
                     )}
                     {canAccessMenu('lead_transfer') && (
                       <SidebarItem to="/lead-transfer" label="LEAD TRANSFER" icon={Icons.Send} colorClass="text-[#DC2626]" indent isCollapsed={isCollapsed} />
+                    )}
+                    {canAccessMenu('import_delete_leads') && (
+                      <SidebarItem to="/import-delete-leads" label="IMPORT AND DELETE LEADS" icon={Icons.FileSpreadsheet} colorClass="text-[#DC2626]" indent isCollapsed={isCollapsed} />
                     )}
                   </SidebarAccordion>
                 )}
@@ -564,6 +567,7 @@ export default function Layout({ children }: LayoutProps) {
                     if (path === '/settings') return 'Settings';
                     if (path === '/access-privilege') return 'Access Privilege';
                     if (path === '/lead-transfer') return 'Lead Transfer';
+                    if (path === '/import-delete-leads') return 'Import and Delete Leads';
                     if (path === '/my-campaign') return 'My Campaign';
                     if (path === '/workflows') return 'Workflows & Automation';
                     if (path === '/status') return 'Status Pipeline Stages';

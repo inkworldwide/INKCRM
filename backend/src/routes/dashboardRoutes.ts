@@ -282,6 +282,126 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         .sort({ createdAt: -1 })
         .limit(10);
 
+      // 4. Calculate Real-Time Campaign Execution Metrics
+      const campaignModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'campaigns' });
+      let campaignRecords: any[] = [];
+      if (campaignModule) {
+        campaignRecords = await CustomRecord.find({
+          organizationId: orgId,
+          moduleId: campaignModule._id
+        }).lean();
+      }
+
+      const registeredCampaignNames = new Set(
+        campaignRecords.map((c: any) => {
+          const d = c.data || {};
+          return (d.campaignName || d.name || d.source || '').toString().trim().toLowerCase();
+        }).filter(Boolean)
+      );
+
+      const baseLeadFilter = {
+        organizationId: orgId,
+        moduleId: leadModule._id,
+        $or: [
+          { 'data.source': { $exists: true, $ne: '' } },
+          { 'data.campaignName': { $exists: true, $ne: '' } },
+          { 'data.campaign': { $exists: true, $ne: '' } },
+          { 'data.campaign_name': { $exists: true, $ne: '' } }
+        ]
+      };
+
+      const campLeadQuery: Record<string, any> = { ...baseLeadFilter };
+      await HierarchyService.modifyRecordQuery(campLeadQuery, req.user as any, orgId!);
+      const allCampaignLeads = await CustomRecord.find(campLeadQuery).lean();
+
+      // Group leads by campaign name
+      const campaignGroups: Record<string, any[]> = {};
+      allCampaignLeads.forEach((lead: any) => {
+        const d = lead.data || {};
+        const rawSource = (d.campaignName || d.campaign || d.campaign_name || d.source)?.toString().trim();
+        if (rawSource) {
+          const lower = rawSource.toLowerCase();
+          const genericSources = ['website', 'referral', 'cold call', 'social media', 'google ads', 'facebook ads', 'walk-in', 'direct'];
+          const isRegistered = registeredCampaignNames.size === 0 || registeredCampaignNames.has(lower);
+          if (isRegistered && (registeredCampaignNames.has(lower) || !genericSources.includes(lower))) {
+            const canonical = campaignRecords.find(c => {
+              const cd = c.data || {};
+              return (cd.campaignName || cd.name || cd.source || '').toString().trim().toLowerCase() === lower;
+            });
+            const campName = canonical ? (canonical.data?.campaignName || canonical.data?.name || rawSource) : rawSource;
+            if (!campaignGroups[campName]) {
+              campaignGroups[campName] = [];
+            }
+            campaignGroups[campName].push(lead);
+          }
+        }
+      });
+
+      // Also include registered campaigns that have 0 leads assigned
+      campaignRecords.forEach(c => {
+        const d = c.data || {};
+        const name = (d.campaignName || d.name || d.source || '').toString().trim();
+        if (name && !campaignGroups[name]) {
+          campaignGroups[name] = [];
+        }
+      });
+
+      let totalCampaignsCount = Object.keys(campaignGroups).length;
+      let completedCampaignsCount = 0;
+      let inProgressCampaignsCount = 0;
+      let yetToStartCampaignsCount = 0;
+      let totalLeadsAllocated = 0;
+      let totalLeadsDialed = 0;
+
+      const activeNamesList: string[] = [];
+
+      Object.keys(campaignGroups).forEach(campName => {
+        const gLeads = campaignGroups[campName];
+        const assigned = gLeads.length;
+        const dialedCount = gLeads.filter(l => {
+          const d = l.data || {};
+          const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
+          const st = (d.status || '').toString().trim().toLowerCase();
+          const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
+          const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
+          const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
+          return hasDialedStatus || (hasCalls && hasDialStatus);
+        }).length;
+
+        totalLeadsAllocated += assigned;
+        totalLeadsDialed += dialedCount;
+        activeNamesList.push(campName);
+
+        if (assigned > 0 && dialedCount >= assigned) {
+          completedCampaignsCount++;
+        } else if (dialedCount > 0) {
+          inProgressCampaignsCount++;
+        } else {
+          yetToStartCampaignsCount++;
+        }
+      });
+
+      if (totalCampaignsCount === 0 && campaignRecords.length > 0) {
+        totalCampaignsCount = campaignRecords.length;
+        yetToStartCampaignsCount = campaignRecords.length;
+      }
+
+      const totalLeadsRemaining = Math.max(0, totalLeadsAllocated - totalLeadsDialed);
+      const dialedPercentage = totalLeadsAllocated > 0 ? Math.round((totalLeadsDialed / totalLeadsAllocated) * 100) : 0;
+      const activeCampaignNames = activeNamesList.length > 0 ? activeNamesList.slice(0, 3).join(' & ') : 'Active Campaigns';
+
+      const campaignMetrics = {
+        totalCampaigns: totalCampaignsCount,
+        completedCampaigns: completedCampaignsCount,
+        inProgressCampaigns: inProgressCampaignsCount,
+        yetToStartCampaigns: yetToStartCampaignsCount,
+        totalLeadsAllocated,
+        totalLeadsDialed,
+        totalLeadsRemaining,
+        dialedPercentage,
+        activeCampaignNames
+      };
+
       res.status(200).json({
         statusCounts,
         pipelineData,
@@ -292,7 +412,8 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         upcomingFollowupsCount,
         isUpcoming,
         totalLeads,
-        recentActivities
+        recentActivities,
+        campaignMetrics
       });
       return;
     }

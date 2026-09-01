@@ -1779,6 +1779,365 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
   }
 });
 
+// Bulk Delete Count for Leads
+router.post('/leads/bulk-delete-count', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.organizationId;
+    const { campaignName, assignedTo, status, createdDate, startDate, endDate } = req.body;
+
+    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    if (!leadModule) {
+      res.status(200).json({ count: 0 });
+      return;
+    }
+
+    const query: Record<string, any> = {
+      organizationId: orgId,
+      moduleId: leadModule._id
+    };
+
+    const andConditions: any[] = [];
+
+    if (campaignName) {
+      const esc = String(campaignName).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.source': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaignName': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaign': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaign_name': new RegExp('^' + esc + '$', 'i') }
+        ]
+      });
+    }
+
+    if (assignedTo) {
+      const esc = String(assignedTo).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.assignedTo': new RegExp(esc, 'i') },
+          { 'data.assignedAgent': new RegExp(esc, 'i') },
+          { 'data.telecaller': new RegExp(esc, 'i') },
+          { 'data.assignedToName': new RegExp(esc, 'i') },
+          { 'data.psm': new RegExp(esc, 'i') }
+        ]
+      });
+    }
+
+    if (status) {
+      const esc = String(status).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.status': new RegExp('^' + esc + '$', 'i') },
+          { 'data.dialStatus': new RegExp('^' + esc + '$', 'i') },
+          { 'data.normalizedStatus': new RegExp('^' + esc + '$', 'i') }
+        ]
+      });
+    }
+
+    if (createdDate) {
+      const dayStart = new Date(createdDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(createdDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      andConditions.push({
+        $or: [
+          { createdAt: { $gte: dayStart, $lte: dayEnd } },
+          { 'data.created_at': { $regex: '^' + createdDate } },
+          { 'data.date': { $regex: '^' + createdDate } },
+          { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
+        ]
+      });
+    } else if (startDate || endDate) {
+      const dateFilter: any = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) {
+        const endD = new Date(endDate);
+        endD.setHours(23, 59, 59, 999);
+        dateFilter.$lte = endD;
+      }
+      andConditions.push({ createdAt: dateFilter });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
+    const count = await CustomRecord.countDocuments(query);
+    res.status(200).json({ count });
+  } catch (error) {
+    console.error('Count bulk delete leads error:', error);
+    res.status(200).json({ count: 0 });
+  }
+});
+
+// Bulk Delete Leads
+router.post('/leads/bulk-delete', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.organizationId;
+    const { campaignName, assignedTo, status, createdDate, startDate, endDate } = req.body;
+
+    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    if (!leadModule) {
+      res.status(404).json({ error: 'Leads module not found.' });
+      return;
+    }
+
+    const query: Record<string, any> = {
+      organizationId: orgId,
+      moduleId: leadModule._id
+    };
+
+    const andConditions: any[] = [];
+
+    if (campaignName) {
+      const esc = String(campaignName).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.source': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaignName': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaign': new RegExp('^' + esc + '$', 'i') },
+          { 'data.campaign_name': new RegExp('^' + esc + '$', 'i') }
+        ]
+      });
+    }
+
+    if (assignedTo) {
+      const esc = String(assignedTo).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.assignedTo': new RegExp(esc, 'i') },
+          { 'data.assignedAgent': new RegExp(esc, 'i') },
+          { 'data.telecaller': new RegExp(esc, 'i') },
+          { 'data.assignedToName': new RegExp(esc, 'i') },
+          { 'data.psm': new RegExp(esc, 'i') }
+        ]
+      });
+    }
+
+    if (status) {
+      const esc = String(status).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.status': new RegExp('^' + esc + '$', 'i') },
+          { 'data.dialStatus': new RegExp('^' + esc + '$', 'i') },
+          { 'data.normalizedStatus': new RegExp('^' + esc + '$', 'i') }
+        ]
+      });
+    }
+
+    if (createdDate) {
+      const dayStart = new Date(createdDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(createdDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      andConditions.push({
+        $or: [
+          { createdAt: { $gte: dayStart, $lte: dayEnd } },
+          { 'data.created_at': { $regex: '^' + createdDate } },
+          { 'data.date': { $regex: '^' + createdDate } },
+          { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
+        ]
+      });
+    } else if (startDate || endDate) {
+      const dateFilter: any = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) {
+        const endD = new Date(endDate);
+        endD.setHours(23, 59, 59, 999);
+        dateFilter.$lte = endD;
+      }
+      andConditions.push({ createdAt: dateFilter });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
+    const result = await CustomRecord.deleteMany(query);
+
+    res.status(200).json({
+      message: `Successfully deleted ${result.deletedCount} leads.`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error: any) {
+    console.error('Bulk delete leads error:', error);
+    res.status(500).json({ error: 'Failed to bulk delete leads.' });
+  }
+});
+
+// Count Duplicate Leads (Keeping 1 original lead per phone, targeting extra duplicates)
+router.post('/leads/duplicates-count', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.organizationId;
+    const { status, user, date, month, year } = req.body;
+
+    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    if (!leadModule) {
+      res.status(200).json({ duplicateGroups: 0, extraDuplicatesCount: 0, idsToDelete: [] });
+      return;
+    }
+
+    const query: Record<string, any> = {
+      organizationId: orgId,
+      moduleId: leadModule._id
+    };
+
+    const andConditions: any[] = [];
+
+    if (status) {
+      const esc = String(status).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.status': new RegExp('^' + esc + '$', 'i') },
+          { 'data.dialStatus': new RegExp('^' + esc + '$', 'i') },
+          { 'data.normalizedStatus': new RegExp('^' + esc + '$', 'i') }
+        ]
+      });
+    }
+
+    if (user) {
+      const esc = String(user).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'data.assignedTo': new RegExp(esc, 'i') },
+          { 'data.assignedAgent': new RegExp(esc, 'i') },
+          { 'data.telecaller': new RegExp(esc, 'i') },
+          { 'data.assignedToName': new RegExp(esc, 'i') }
+        ]
+      });
+    }
+
+    if (date) {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      andConditions.push({
+        $or: [
+          { createdAt: { $gte: dayStart, $lte: dayEnd } },
+          { 'data.created_at': { $regex: '^' + date } },
+          { 'data.date': { $regex: '^' + date } }
+        ]
+      });
+    } else {
+      if (year) {
+        const y = parseInt(year, 10);
+        if (!isNaN(y)) {
+          if (month) {
+            const monthsNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const mIdx = monthsNames.findIndex(m => m.toLowerCase() === month.toLowerCase());
+            if (mIdx >= 0) {
+              const startM = new Date(y, mIdx, 1);
+              const endM = new Date(y, mIdx + 1, 0, 23, 59, 59, 999);
+              andConditions.push({ createdAt: { $gte: startM, $lte: endM } });
+            }
+          } else {
+            const startY = new Date(y, 0, 1);
+            const endY = new Date(y, 11, 31, 23, 59, 59, 999);
+            andConditions.push({ createdAt: { $gte: startY, $lte: endY } });
+          }
+        }
+      }
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
+    }
+
+    // Find duplicates grouped by phone/mobile number
+    const agg = await CustomRecord.aggregate([
+      { $match: query },
+      {
+        $project: {
+          _id: 1,
+          createdAt: 1,
+          phone: {
+            $ifNull: [
+              '$data.phone',
+              { $ifNull: ['$data.mobile', { $ifNull: ['$data.contact', '$data.phoneNumber'] }] }
+            ]
+          }
+        }
+      },
+      {
+        $match: {
+          phone: { $exists: true, $nin: [null, ''] }
+        }
+      },
+      {
+        $group: {
+          _id: '$phone',
+          ids: { $push: '$_id' },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $match: {
+          count: { $gt: 1 }
+        }
+      }
+    ]);
+
+    let duplicateGroups = agg.length;
+    let extraDuplicatesCount = 0;
+    const idsToDelete: any[] = [];
+
+    agg.forEach(group => {
+      // Keep 1st lead, mark 2nd, 3rd, etc. extra duplicate copies for deletion
+      const extraIds = group.ids.slice(1);
+      extraDuplicatesCount += extraIds.length;
+      idsToDelete.push(...extraIds.map((id: any) => id.toString()));
+    });
+
+    res.status(200).json({
+      duplicateGroups,
+      extraDuplicatesCount,
+      idsToDelete
+    });
+  } catch (error) {
+    console.error('Count duplicate leads error:', error);
+    res.status(200).json({ duplicateGroups: 0, extraDuplicatesCount: 0, idsToDelete: [] });
+  }
+});
+
+// Delete Extra Duplicate Leads
+router.post('/leads/delete-duplicates', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const orgId = req.organizationId;
+    const { idsToDelete } = req.body;
+
+    if (!Array.isArray(idsToDelete) || idsToDelete.length === 0) {
+      res.status(400).json({ error: 'No extra duplicate lead IDs provided for deletion.' });
+      return;
+    }
+
+    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    if (!leadModule) {
+      res.status(404).json({ error: 'Leads module not found.' });
+      return;
+    }
+
+    const objectIds = idsToDelete.map(id => new mongoose.Types.ObjectId(id));
+
+    const result = await CustomRecord.deleteMany({
+      organizationId: orgId,
+      moduleId: leadModule._id,
+      _id: { $in: objectIds }
+    });
+
+    res.status(200).json({
+      message: `Successfully purged ${result.deletedCount} extra duplicate leads (1 original lead kept per contact).`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error: any) {
+    console.error('Delete duplicate leads error:', error);
+    res.status(500).json({ error: 'Failed to delete duplicate leads.' });
+  }
+});
+
 // 5. DELETE A RECORD
 router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void> => {
   try {
