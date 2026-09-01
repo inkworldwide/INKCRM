@@ -89,17 +89,6 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [branding, fetchBranding]);
 
-  const { data: leadsData } = useQuery({
-    queryKey: ['sidebar-leads'],
-    queryFn: async () => {
-      const res = await api.get('/records/leads', { params: { limit: 100 } });
-      return res.data;
-    },
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-    refetchInterval: (query) => (query.state.error ? false : 30000)
-  });
-
   const { data: dbStatuses } = useQuery({
     queryKey: ['statuses-list'],
     queryFn: async () => {
@@ -112,14 +101,14 @@ export default function Layout({ children }: LayoutProps) {
   });
 
   const { data: metricsData } = useQuery({
-    queryKey: ['dashboard-metrics-sidebar'],
+    queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
       return res.data;
     },
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-    refetchInterval: (query) => (query.state.error ? false : 30000)
+    staleTime: 10000,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => (query.state.error ? false : 15000)
   });
 
   const queryClient = useQueryClient();
@@ -368,7 +357,7 @@ export default function Layout({ children }: LayoutProps) {
                           icon={Icons.Layers} 
                           colorClass="text-[#7C3AED]"
                           indent 
-                          badge={metricsData?.statusCounts?.ALL ?? metricsData?.totalLeads ?? leadsData?.pagination?.total ?? 0} 
+                          badge={metricsData?.statusCounts?.ALL ?? metricsData?.statusCounts?.['ALL LEADS'] ?? 0} 
                           isCollapsed={isCollapsed}
                         />
                         {(() => {
