@@ -1402,6 +1402,38 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       }
     });
 
+    // Resolve createdBy, assignedBy, and assignedTo metadata
+    const currentUserDoc = await User.findById(req.user?.id).select('_id firstName lastName email');
+    const currentUserName = currentUserDoc 
+      ? `${currentUserDoc.firstName || ''} ${currentUserDoc.lastName || ''}`.trim() || (currentUserDoc as any).name || currentUserDoc.email 
+      : req.user?.email || 'System';
+
+    if (!recordData.createdBy) {
+      recordData.createdBy = currentUserName;
+      recordData.createdByName = currentUserName;
+    }
+    if (!recordData.assignedBy) {
+      recordData.assignedBy = currentUserName;
+      recordData.assignedByName = currentUserName;
+    }
+
+    if (recordData.assignedTo) {
+      if (/^[0-9a-fA-F]{24}$/.test(String(recordData.assignedTo))) {
+        const assignedUser = await User.findById(recordData.assignedTo).select('firstName lastName email');
+        if (assignedUser) {
+          const aName = `${assignedUser.firstName || ''} ${assignedUser.lastName || ''}`.trim() || (assignedUser as any).name || assignedUser.email;
+          recordData.assignedToName = aName;
+          recordData.assignedTo = aName;
+          recordData.telecaller = aName;
+          recordData.assignedAgent = aName;
+        }
+      } else {
+        recordData.assignedToName = recordData.assignedTo;
+        recordData.telecaller = recordData.assignedTo;
+        recordData.assignedAgent = recordData.assignedTo;
+      }
+    }
+
     const creatorId = new mongoose.Types.ObjectId(req.user?.id);
     const newRecord = await CustomRecord.create({
       organizationId: req.organizationId,
@@ -1655,6 +1687,42 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         updateData.status = canonical;
         updateData.dialStatus = canonical;
         updateData.normalizedStatus = canonical;
+      }
+    }
+
+    // Resolve createdBy, assignedBy, and assignedTo metadata on update
+    const currentUserDoc = await User.findById(req.user?.id).select('_id firstName lastName email');
+    const currentUserName = currentUserDoc 
+      ? `${currentUserDoc.firstName || ''} ${currentUserDoc.lastName || ''}`.trim() || (currentUserDoc as any).name || currentUserDoc.email 
+      : req.user?.email || 'System';
+
+    if (!updateData.createdBy) {
+      updateData.createdBy = oldValues.createdBy || currentUserName;
+      updateData.createdByName = oldValues.createdByName || oldValues.createdBy || currentUserName;
+    }
+
+    if (updateData.assignedTo && updateData.assignedTo !== oldValues.assignedTo) {
+      updateData.assignedBy = currentUserName;
+      updateData.assignedByName = currentUserName;
+    } else if (!updateData.assignedBy && oldValues.assignedBy) {
+      updateData.assignedBy = oldValues.assignedBy;
+      updateData.assignedByName = oldValues.assignedByName || oldValues.assignedBy;
+    }
+
+    if (updateData.assignedTo) {
+      if (/^[0-9a-fA-F]{24}$/.test(String(updateData.assignedTo))) {
+        const assignedUser = await User.findById(updateData.assignedTo).select('firstName lastName email');
+        if (assignedUser) {
+          const aName = `${assignedUser.firstName || ''} ${assignedUser.lastName || ''}`.trim() || (assignedUser as any).name || assignedUser.email;
+          updateData.assignedToName = aName;
+          updateData.assignedTo = aName;
+          updateData.telecaller = aName;
+          updateData.assignedAgent = aName;
+        }
+      } else {
+        updateData.assignedToName = updateData.assignedTo;
+        updateData.telecaller = updateData.assignedTo;
+        updateData.assignedAgent = updateData.assignedTo;
       }
     }
 

@@ -471,6 +471,21 @@ export default function RecordForm() {
         data.currency = 'INR';
       }
 
+      const userFullName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'System';
+      if (!data.createdBy) {
+        data.createdBy = userFullName;
+        data.createdByName = userFullName;
+      }
+      if (!data.assignedBy) {
+        data.assignedBy = userFullName;
+        data.assignedByName = userFullName;
+      }
+      if (data.assignedTo) {
+        data.assignedToName = data.assignedTo;
+        data.telecaller = data.assignedTo;
+        data.assignedAgent = data.assignedTo;
+      }
+
       let createdCount = 1;
       const targetRecordId = (id && id !== 'new') ? id : (location.state?._id || location.state?.id);
       if (targetRecordId) {
