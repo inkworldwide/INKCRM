@@ -472,8 +472,9 @@ export default function RecordForm() {
       }
 
       let createdCount = 1;
-      if (id) {
-        await api.put(`/records/${apiPath}/${id}`, data);
+      const targetRecordId = (id && id !== 'new') ? id : (location.state?._id || location.state?.id);
+      if (targetRecordId) {
+        await api.put(`/records/${apiPath}/${targetRecordId}`, data);
       } else {
         if (apiPath === 'leads' && data.businessPartner) {
           const partners = data.businessPartner.split(',').map((s: string) => s.trim()).filter(Boolean);

@@ -344,10 +344,12 @@ export default function MyCampaign() {
       const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : '';
       const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
 
-      // Immediately navigate to Create Lead page (/modules/leads/new) with all exact pre-filled lead details & PSM
-      navigate('/modules/leads/new', {
+      // Immediately navigate to Edit Lead page for this existing lead (/modules/leads/${lead._id}) with all exact pre-filled lead details & PSM
+      navigate(`/modules/leads/${lead._id}`, {
         state: {
           ...lead.data,
+          _id: lead._id,
+          id: lead._id,
           firstName: getLeadCustomer(lead.data),
           lastName: '',
           customerName: getLeadCustomer(lead.data),
