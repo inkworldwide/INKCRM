@@ -297,9 +297,8 @@ export default function Dashboard() {
       }
     }
 
-    // Default fallback list of cards + Today's Followups
+    // Default fallback list of 11 status cards + Today's Followups (matching 2nd image layout)
     return [
-      { label: 'NEW LEADS', rawName: 'NEW', category: 'pipeline', icon: Icons.Sparkles, sub: 'Stage #1 Ingested', accentColor: '#6366F1' },
       { label: 'HOT LEADS', rawName: 'HOT LEADS', category: 'pipeline', icon: Icons.Flame, sub: 'Stage #2', accentColor: '#0284C7' },
       { label: 'WARM LEADS', rawName: 'WARM LEADS', category: 'pipeline', icon: Icons.Sun, sub: 'Stage #3', accentColor: '#F59E0B' },
       { label: 'CEBIL PENDING', rawName: 'CEBIL PENDING', category: 'pipeline', icon: Icons.FileWarning, sub: 'Stage #5', accentColor: '#E11D48' },

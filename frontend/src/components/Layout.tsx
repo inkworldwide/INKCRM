@@ -410,7 +410,6 @@ export default function Layout({ children }: LayoutProps) {
                           const activeStatuses = (Array.isArray(dbStatuses) && dbStatuses.length > 0)
                             ? dbStatuses
                             : [
-                                { name: 'NEW LEADS', icon: 'Sparkles', color: '#6366F1' },
                                 { name: 'HOT LEADS', icon: 'Flame', color: '#0284C7' },
                                 { name: 'WARM LEADS', icon: 'Sun', color: '#F59E0B' },
                                 { name: 'CEBIL PENDING', icon: 'FileWarning', color: '#E11D48' },

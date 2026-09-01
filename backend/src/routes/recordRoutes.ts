@@ -1069,6 +1069,34 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       } else {
         query.$and = [statusFilter];
       }
+    } else if (apiPath.toLowerCase() === 'leads' && !req.query.followup && (!search || typeof search !== 'string' || !search.trim())) {
+      // When viewing ALL LEADS without a status filter, restrict to lead process statuses for 100% count alignment
+      const CANONICAL_PROCESS_STATUSES = [
+        'HOT LEADS',
+        'WARM LEADS',
+        'CEBIL PENDING',
+        'DOCUMENT PENDING',
+        'APPROVAL PENDING',
+        'APPROVED BUT NOT DISBUSE',
+        'DISBUSED',
+        'REJECTED',
+        'FOLLOWUP',
+        'DROPPED',
+        'PENDING'
+      ];
+
+      const leadProcessFilter = {
+        $or: [
+          { 'data.normalizedStatus': { $in: CANONICAL_PROCESS_STATUSES } },
+          { 'data.status': { $in: ['Hot', 'HOT', 'HOT LEADS', 'Warm', 'WARM', 'WARM LEADS', 'Document Pending', 'DOCUMENT PENDING', 'Disbursed', 'DISBUSED', 'Followup', 'FOLLOWUP', 'Dropped', 'DROPPED', 'Rejected', 'REJECTED', 'CEBIL PENDING', 'APPROVAL PENDING', 'APPROVED BUT NOT DISBUSE', 'PENDING'] } }
+        ]
+      };
+
+      if (query.$and) {
+        query.$and.push(leadProcessFilter);
+      } else {
+        query.$and = [leadProcessFilter];
+      }
     }
 
     if (req.query.followup) {

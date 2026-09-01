@@ -240,9 +240,30 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         });
       }
 
-      let totalLeads = await CustomRecord.countDocuments(leadQuery);
-      statusCounts['ALL'] = totalLeads;
-      statusCounts['ALL LEADS'] = totalLeads;
+      const CANONICAL_LEAD_STATUSES = [
+        'HOT LEADS',
+        'WARM LEADS',
+        'CEBIL PENDING',
+        'DOCUMENT PENDING',
+        'APPROVAL PENDING',
+        'APPROVED BUT NOT DISBUSE',
+        'DISBUSED',
+        'REJECTED',
+        'FOLLOWUP',
+        'DROPPED',
+        'PENDING'
+      ];
+
+      CANONICAL_LEAD_STATUSES.forEach(st => {
+        if (statusCounts[st] === undefined) {
+          statusCounts[st] = 0;
+        }
+      });
+
+      const totalProcessSum = CANONICAL_LEAD_STATUSES.reduce((sum, st) => sum + (statusCounts[st] || 0), 0);
+      let totalLeads = totalProcessSum;
+      statusCounts['ALL'] = totalProcessSum;
+      statusCounts['ALL LEADS'] = totalProcessSum;
 
       const activityQuery: Record<string, any> = { organizationId: orgId };
       const isSuper = await HierarchyService.isSuperAdmin(req.user?.roleId);
