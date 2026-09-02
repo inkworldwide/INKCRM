@@ -302,6 +302,18 @@ export default function RecordForm() {
         recordValues.firmName = recordValues.company;
       }
 
+      // Ensure SOURCE & createdBy are populated with actual lead creator user/agent name
+      const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+      const creatorName = recordValues.createdBy || recordValues.createdByName || recordValues.creator || recordValues.assignedBy || loggedInUserFullName;
+
+      if (!recordValues.source || String(recordValues.source).trim() === '' || String(recordValues.source).trim() === 'Source') {
+        recordValues.source = creatorName;
+      }
+      if (!recordValues.createdBy) {
+        recordValues.createdBy = creatorName;
+        recordValues.createdByName = creatorName;
+      }
+
       // Default currency
       if (!recordValues.currency) {
         recordValues.currency = 'INR';
@@ -471,7 +483,7 @@ export default function RecordForm() {
         data.currency = 'INR';
       }
 
-      const userFullName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'System';
+      const userFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
       if (!data.createdBy) {
         data.createdBy = userFullName;
         data.createdByName = userFullName;
@@ -479,6 +491,9 @@ export default function RecordForm() {
       if (!data.assignedBy) {
         data.assignedBy = userFullName;
         data.assignedByName = userFullName;
+      }
+      if (!data.source || String(data.source).trim() === '' || String(data.source).trim() === 'Source') {
+        data.source = data.createdBy || data.createdByName || userFullName;
       }
       if (data.assignedTo) {
         data.assignedToName = data.assignedTo;

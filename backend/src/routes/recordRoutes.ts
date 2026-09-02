@@ -377,6 +377,11 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       ? new mongoose.Types.ObjectId(String(rawUserId))
       : new mongoose.Types.ObjectId();
 
+    const importerUserDoc = await User.findById(userId).select('firstName lastName email');
+    const importerUserName = importerUserDoc 
+      ? `${importerUserDoc.firstName || ''} ${importerUserDoc.lastName || ''}`.trim() || (importerUserDoc as any).name || importerUserDoc.email 
+      : (req.user as any)?.email || 'System';
+
     // Find Leads Module Definition with broad fallback
     let leadModule = await ModuleDefinition.findOne({
       $or: [
@@ -594,9 +599,13 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
           callAttempts: 0,
           dialedAt: null,
           lastCallDate: null,
-          source: campaignName, // Set source as campaign name
+          createdBy: importerUserName,
+          createdByName: importerUserName,
+          assignedBy: importerUserName,
+          assignedByName: importerUserName,
+          source: importerUserName || campaignName,
           campaignName: campaignName,
-          assignedTo: assignedAgent // Set agent name
+          assignedTo: assignedAgent
         }
       });
     });
@@ -1416,6 +1425,9 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       recordData.assignedBy = currentUserName;
       recordData.assignedByName = currentUserName;
     }
+    if (!recordData.source || String(recordData.source).trim() === '' || String(recordData.source).trim() === 'Source') {
+      recordData.source = recordData.createdBy || recordData.createdByName || currentUserName;
+    }
 
     if (recordData.assignedTo) {
       if (/^[0-9a-fA-F]{24}$/.test(String(recordData.assignedTo))) {
@@ -1527,6 +1539,19 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     }
 
     if (record.data) {
+      let creatorName = record.data.createdBy || record.data.createdByName;
+      if (!creatorName && record.createdBy && typeof record.createdBy === 'object') {
+        const c = record.createdBy as any;
+        creatorName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || c.email;
+      }
+      if (creatorName) {
+        record.data.createdBy = creatorName;
+        record.data.createdByName = creatorName;
+      }
+      if (!record.data.source || String(record.data.source).trim() === '' || String(record.data.source).trim() === 'Source') {
+        record.data.source = creatorName || 'System';
+      }
+
       const ids = [record.data.assignedTo, record.data.assignedBy, record.data.psm]
         .filter(id => id && /^[0-9a-fA-F]{24}$/.test(String(id)));
       if (ids.length > 0) {
@@ -1699,6 +1724,9 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     if (!updateData.createdBy) {
       updateData.createdBy = oldValues.createdBy || currentUserName;
       updateData.createdByName = oldValues.createdByName || oldValues.createdBy || currentUserName;
+    }
+    if (!updateData.source || String(updateData.source).trim() === '' || String(updateData.source).trim() === 'Source') {
+      updateData.source = oldValues.source || updateData.createdBy || updateData.createdByName || currentUserName;
     }
 
     if (updateData.assignedTo && updateData.assignedTo !== oldValues.assignedTo) {
