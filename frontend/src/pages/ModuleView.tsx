@@ -11,7 +11,7 @@ import { useThemeStore } from '../store/themeStore';
 import { formatDate } from '../utils/dateFormatter';
 import { exportCampaignCSV } from '../utils/exportCampaignCSV';
 import { exportLeadReportXLSX } from '../utils/exportLeadReportXLSX';
-import { maskPhoneNumber } from '../utils/phoneUtils';
+import { maskPhoneNumber, triggerPhoneCall, openWhatsAppChat } from '../utils/phoneUtils';
 
 type ViewMode = 'table' | 'kanban' | 'calendar' | 'timeline';
 
@@ -2154,13 +2154,12 @@ export default function ModuleView() {
 
                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <button 
-                            onClick={() => {
-                              let cleanPhone = String(rawPhone || '').replace(/\D/g, '').trim();
-                              if (cleanPhone) {
-                                if (cleanPhone.length === 10) {
-                                  cleanPhone = `91${cleanPhone}`;
-                                }
-                                window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (rawPhone) {
+                                openWhatsAppChat(rawPhone);
                               } else {
                                 showToast('No phone number available for this lead.', 'warning');
                               }
@@ -2172,11 +2171,13 @@ export default function ModuleView() {
                           </button>
                           
                           <button 
-                            onClick={() => {
-                              const cleanPhone = String(rawPhone || '').replace(/[^\d+]/g, '').trim();
-                              if (cleanPhone) {
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (rawPhone) {
                                 showToast(`Calling ${leadName}...`, 'info');
-                                window.location.href = `tel:${cleanPhone}`;
+                                triggerPhoneCall(rawPhone);
                               } else {
                                 showToast('No phone number available for this lead.', 'warning');
                               }

@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import * as Icons from 'lucide-react';
 import { exportCampaignCSV, exportCampaignXLSX } from '../utils/exportCampaignCSV';
 import { TableHorizontalScrollWrapper } from '../components/TableHorizontalScrollWrapper';
-import { maskPhoneNumber } from '../utils/phoneUtils';
+import { maskPhoneNumber, triggerPhoneCall, openWhatsAppChat } from '../utils/phoneUtils';
 
 interface CampaignStats {
   campaignName: string;
@@ -231,19 +231,22 @@ export default function MyCampaign() {
       .catch(err => console.error('Failed to load statuses', err));
   }, []);
 
-  // Auto-open campaign details if campaign param is present in URL
+  // Auto-open campaign details if campaign param is present in URL or saved in sessionStorage
   useEffect(() => {
-    const targetCampName = searchParams.get('campaign');
-    if (targetCampName && campaigns.length > 0 && !activeCampaign) {
-      const match = campaigns.find(c => c.campaignName.toLowerCase() === targetCampName.toLowerCase());
-      if (match) {
-        handleViewDetails(match);
+    if (campaigns.length > 0 && !activeCampaign) {
+      const targetCampName = searchParams.get('campaign') || sessionStorage.getItem('inkcrm_active_campaign_name');
+      if (targetCampName) {
+        const match = campaigns.find(c => c.campaignName.toLowerCase() === targetCampName.toLowerCase());
+        if (match) {
+          handleViewDetails(match);
+        }
       }
     }
   }, [campaigns, searchParams]);
 
   const handleViewDetails = (campaign: CampaignStats, initialFilter: 'yet_to_dial' | 'dialed' | 'all' = 'yet_to_dial') => {
     setActiveCampaign(campaign);
+    sessionStorage.setItem('inkcrm_active_campaign_name', campaign.campaignName);
     setDialFilter(initialFilter);
     setVisibleCount(50);
     fetchLeadDetails(campaign.campaignName);
@@ -251,6 +254,7 @@ export default function MyCampaign() {
 
   const handleBack = () => {
     setActiveCampaign(null);
+    sessionStorage.removeItem('inkcrm_active_campaign_name');
     setLeads([]);
     fetchCampaigns();
   };
@@ -381,20 +385,20 @@ export default function MyCampaign() {
     }
   };
 
-  const handleWhatsAppChat = (lead: LeadRecord) => {
+  const handleWhatsAppChat = (lead: LeadRecord, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     const rawPhone = getLeadPhone(lead.data);
-    let cleanPhone = String(rawPhone).replace(/\D/g, '').trim();
-    if (!cleanPhone) {
+    if (!rawPhone) {
       showToast('No phone number available for this lead.', 'warning');
       return;
     }
-    if (cleanPhone.length === 10) {
-      cleanPhone = `91${cleanPhone}`;
-    }
-    window.open(`https://wa.me/${cleanPhone}`, '_blank');
+    openWhatsAppChat(rawPhone);
   };
 
-  const handleInitiateCall = (lead: LeadRecord) => {
+  const handleInitiateCall = (lead: LeadRecord, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     const rawPhone = getLeadPhone(lead.data);
     const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
     if (!cleanPhone) {
@@ -1405,8 +1409,11 @@ export default function MyCampaign() {
               </button>
 
               <button
-                onClick={() => {
-                  window.location.href = `tel:${callModalLead.phone}`;
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  triggerPhoneCall(callModalLead.phone);
                   setCallModalLead(null);
                 }}
                 className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"

@@ -7,7 +7,7 @@ import { DynamicIcon } from '../components/Layout';
 import { useQuery } from '@tanstack/react-query';
 import { formatDate } from '../utils/dateFormatter';
 import { useToastStore } from '../store/toastStore';
-import { maskPhoneNumber } from '../utils/phoneUtils';
+import { maskPhoneNumber, triggerPhoneCall, openWhatsAppChat } from '../utils/phoneUtils';
 import SalesFunnel3D from '../components/SalesFunnel3D';
 
 export default function Dashboard() {
@@ -1065,14 +1065,13 @@ export default function Dashboard() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button 
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           const rawPhone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num || '';
-                          let cleanPhone = String(rawPhone).replace(/\D/g, '').trim();
-                          if (cleanPhone) {
-                            if (cleanPhone.length === 10) {
-                              cleanPhone = `91${cleanPhone}`;
-                            }
-                            window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                          if (rawPhone) {
+                            openWhatsAppChat(rawPhone);
                           } else {
                             showToast('No phone number available for this lead.', 'warning');
                           }
@@ -1084,13 +1083,15 @@ export default function Dashboard() {
                       </button>
                       
                       <button 
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           const rawPhone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contactNum || rec.data?.mobileNo || rec.data?.contact_num || '';
-                          const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '').trim();
-                          if (cleanPhone) {
+                          if (rawPhone) {
                             const leadName = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || rec.data?.fullName || rec.data?.customerName || rec.data?.name || 'Lead';
                             showToast(`Calling ${leadName}...`, 'info');
-                            window.location.href = `tel:${cleanPhone}`;
+                            triggerPhoneCall(rawPhone);
                           } else {
                             showToast('No phone number available for this lead.', 'warning');
                           }

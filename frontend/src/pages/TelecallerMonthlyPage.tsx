@@ -2,27 +2,20 @@ import React, { useState, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
-import MultiSelectDropdown from '../components/MultiSelectDropdown';
 
 export default function TelecallerMonthlyPage() {
   const { showToast } = useToastStore();
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
-  const [campaignsList, setCampaignsList] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
 
-  const months = [
+  const monthNamesShort = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const monthNamesFull = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const years = ['2024', '2025', '2026', '2027'];
-
-  // Month & Year Filter State (Defaulting to current Month & Year)
-  const currentMonthName = months[new Date().getMonth()];
-  const currentYearStr = new Date().getFullYear().toString();
-
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([currentMonthName]);
-  const [selectedYears, setSelectedYears] = useState<string[]>([currentYearStr]);
 
   useEffect(() => {
     fetchMonthlyData();
@@ -31,34 +24,25 @@ export default function TelecallerMonthlyPage() {
   const fetchMonthlyData = async () => {
     setLoading(true);
     try {
-      const [usersRes, leadsRes, campRes] = await Promise.all([
+      const [usersRes, leadsRes] = await Promise.all([
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
-        api.get('/records/leads?limit=100000').catch(() => ({ data: [] })),
-        api.get('/records/campaigns?limit=10000').catch(() => ({ data: [] }))
+        api.get('/records/leads?limit=100000').catch(() => ({ data: [] }))
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];
       const fetchedLeads = Array.isArray(leadsRes.data) ? leadsRes.data : leadsRes.data?.records || [];
-      const fetchedCampaigns = (campRes.data?.records || []).map((c: any) => c.data?.campaignName || c.name).filter(Boolean);
-      const leadCampaigns = fetchedLeads.map((l: any) => l.data?.campaign || l.data?.campaignName || l.campaignName).filter(Boolean);
 
       setUsers(fetchedUsers);
       setLeads(fetchedLeads);
-      setCampaignsList(Array.from(new Set([...fetchedCampaigns, ...leadCampaigns])));
     } catch (err) {
       console.error(err);
-      showToast('Failed to load monthly telecaller report data.', 'error');
+      showToast('Failed to load telecaller monthly report data.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFilterClick = () => {
-    fetchMonthlyData();
-    showToast('Updated monthly report with selected month and year filters.', 'info');
-  };
-
-  // Build agent list from users DB & lead assigned records
+  // Build list of all active telecallers / agents
   const allAgentsList = React.useMemo(() => {
     const list: { id: string; name: string; role: string; email: string }[] = [];
     const addedNames = new Set<string>();
@@ -75,7 +59,7 @@ export default function TelecallerMonthlyPage() {
     });
 
     leads.forEach((l: any) => {
-      const name = l.assignedTo?.name || l.data?.telecaller || l.data?.assignedAgent || l.data?.assignedTo;
+      const name = l.assignedTo?.name || l.data?.telecaller || l.data?.assignedAgent || l.data?.assignedTo || l.data?.assignedToName;
       if (name && typeof name === 'string' && !addedNames.has(name.toLowerCase())) {
         list.push({ 
           id: name, 
@@ -90,165 +74,14 @@ export default function TelecallerMonthlyPage() {
     return list;
   }, [users, leads]);
 
-  // Compute per-day date-wise monthly performance matrix (Grouped by Date + Telecaller Agent)
-  const liveMonthlyAgents = React.useMemo(() => {
-    const rows: {
-      _id: string;
-      rawDate: string;
-      dateStr: string;
-      agentId: string;
-      name: string;
-      role: string;
-      assigned: number;
-      dialed: number;
-      yetToDial: number;
-      progressPct: number;
-    }[] = [];
+  // Compute 12-Month Performance Matrix (Caller Name x Jan-Dec Months for Selected Year)
+  const monthlyMatrixData = React.useMemo(() => {
+    const targetYearNum = parseInt(selectedYear, 10) || new Date().getFullYear();
 
-    const filteredAgents = allAgentsList;
-
-    // Map to group leads by: `YYYY-MM-DD__agentId`
-    const groupMap = new Map<string, { dateStr: string; agent: typeof filteredAgents[0]; leads: any[] }>();
-
-    leads.forEach(l => {
-      const data = l.data || {};
-      // Extract date for the lead
-      const dateVal = data.dialedAt || data.lastCallDate || l.updatedAt || l.createdAt || data.date || data.created_at;
-      if (!dateVal) return;
-
-      const leadDateObj = new Date(dateVal);
-      if (isNaN(leadDateObj.getTime())) return;
-
-      const leadMonthName = months[leadDateObj.getMonth()];
-      const leadYearStr = leadDateObj.getFullYear().toString();
-
-      // Filter by Selected Month & Year
-      if (selectedMonths.length > 0 && !selectedMonths.includes(leadMonthName)) return;
-      if (selectedYears.length > 0 && !selectedYears.includes(leadYearStr)) return;
-
-      const leadDateISO = leadDateObj.toISOString().slice(0, 10);
-
-      // Find matching agent
-      const matchedAgent = filteredAgents.find(agent => (
-        l.assignedTo?._id === agent.id || 
-        (l.assignedTo?.name || '').toLowerCase() === agent.name.toLowerCase() ||
-        (data.telecaller || '').toLowerCase() === agent.name.toLowerCase() ||
-        (data.assignedAgent || '').toLowerCase() === agent.name.toLowerCase() ||
-        (data.assignedTo || '').toLowerCase() === agent.name.toLowerCase()
-      ));
-
-      if (matchedAgent) {
-        const key = `${leadDateISO}__${matchedAgent.id}`;
-        if (!groupMap.has(key)) {
-          groupMap.set(key, { dateStr: leadDateISO, agent: matchedAgent, leads: [] });
-        }
-        groupMap.get(key)!.leads.push(l);
-      }
-    });
-
-    // Transform grouped map into daily performance rows
-    groupMap.forEach((val, key) => {
-      const { dateStr, agent, leads: agentLeads } = val;
-
-      const formattedDate = new Date(dateStr).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
-
-      const assigned = agentLeads.length;
-
-      const dialed = agentLeads.filter(l => {
-        const data = l.data || {};
-        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
-        const notDialed = ['yet to call', 'not called', 'new', ''];
-        const isDialedStatus = st && !notDialed.includes(st);
-        const hasCallAttempt = Number(data.callAttempts) > 0 || !!data.dialedAt;
-        return isDialedStatus || hasCallAttempt;
-      }).length;
-
-      const yetToDial = agentLeads.filter(l => {
-        const data = l.data || {};
-        const st = String(data.status || data.dialStatus || l.status || '').trim().toLowerCase();
-        return !st || st === 'yet to call' || st === 'not called' || st === 'new';
-      }).length;
-
-      const progressPct = assigned > 0 ? Math.round((dialed / assigned) * 100) : 0;
-
-      rows.push({
-        _id: key,
-        rawDate: dateStr,
-        dateStr: formattedDate,
-        agentId: agent.id,
-        name: agent.name,
-        role: agent.role,
-        assigned,
-        dialed,
-        yetToDial,
-        progressPct
-      });
-    });
-
-    // Sort by Date (newest first e.g. 27 Aug, 26 Aug...), then by Agent Name
-    rows.sort((a, b) => b.rawDate.localeCompare(a.rawDate) || a.name.localeCompare(b.name));
-
-    // Fallback: If no leads match date range, construct default agent rows for today
-    if (rows.length === 0) {
-      const todayFormatted = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      filteredAgents.forEach(agent => {
-        rows.push({
-          _id: agent.id,
-          rawDate: new Date().toISOString().slice(0, 10),
-          dateStr: todayFormatted,
-          agentId: agent.id,
-          name: agent.name,
-          role: agent.role,
-          assigned: 0,
-          dialed: 0,
-          yetToDial: 0,
-          progressPct: 0
-        });
-      });
-    }
-
-    return rows;
-  }, [allAgentsList, leads, selectedMonths, selectedYears]);
-
-  // Date-wise & Day-of-Week Monthly Telecaller Matrix
-  const dateWiseMatrix = React.useMemo(() => {
-    const targetMonthName = selectedMonths[0] || months[new Date().getMonth()];
-    const targetYearStr = selectedYears[0] || new Date().getFullYear().toString();
-    const monthIndex = months.findIndex(m => m.toLowerCase() === targetMonthName.toLowerCase());
-    const yearNum = parseInt(targetYearStr, 10);
-
-    const safeMonth = monthIndex >= 0 ? monthIndex : new Date().getMonth();
-    const safeYear = !isNaN(yearNum) ? yearNum : new Date().getFullYear();
-
-    const daysInMonth = new Date(safeYear, safeMonth + 1, 0).getDate();
-
-    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const daysOfWeekShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-    const dateHeaders: { key: string; label: string; dayNum: number; dayName: string; dayNameShort: string }[] = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dayStr = String(d).padStart(2, '0');
-      const monthStr = String(safeMonth + 1).padStart(2, '0');
-      const isoKey = `${safeYear}-${monthStr}-${dayStr}`;
-      
-      const dateObj = new Date(safeYear, safeMonth, d);
-      const dayIdx = dateObj.getDay();
-      const dayName = daysOfWeek[dayIdx];
-      const dayNameShort = daysOfWeekShort[dayIdx];
-
-      // Header label includes date + day of week name e.g. "01-07-2026 (Wed)"
-      const headerLabel = `${dayStr}-${monthStr}-${safeYear} (${dayNameShort})`;
-
-      dateHeaders.push({ key: isoKey, label: headerLabel, dayNum: d, dayName, dayNameShort });
-    }
-
-    const agentCallCounts = new Map<string, Map<string, number>>();
+    // Map: agentId -> Array of 12 month call counts [Jan, Feb, ... Dec]
+    const agentMonthlyCounts = new Map<string, number[]>();
     allAgentsList.forEach(agent => {
-      agentCallCounts.set(agent.id, new Map<string, number>());
+      agentMonthlyCounts.set(agent.id, new Array(12).fill(0));
     });
 
     leads.forEach(l => {
@@ -259,168 +92,151 @@ export default function TelecallerMonthlyPage() {
 
       if (!isDialed) return;
 
-      const dateVal = data.dialedAt || data.lastCallDate || l.updatedAt || l.createdAt;
+      const dateVal = data.dialedAt || data.lastCallDate || l.updatedAt || l.createdAt || data.date || data.created_at;
       if (!dateVal) return;
 
-      const leadDate = new Date(dateVal);
-      if (isNaN(leadDate.getTime())) return;
+      const leadDateObj = new Date(dateVal);
+      if (isNaN(leadDateObj.getTime())) return;
 
-      if (leadDate.getMonth() !== safeMonth || leadDate.getFullYear() !== safeYear) return;
+      if (leadDateObj.getFullYear() !== targetYearNum) return;
 
-      const isoKey = leadDate.toISOString().slice(0, 10);
+      const monthIdx = leadDateObj.getMonth(); // 0 to 11
 
-      const agent = allAgentsList.find(a => (
+      const matchedAgent = allAgentsList.find(a => (
         l.assignedTo?._id === a.id ||
         String(l.assignedTo?.name || '').toLowerCase() === a.name.toLowerCase() ||
         String(data.telecaller || '').toLowerCase() === a.name.toLowerCase() ||
         String(data.assignedAgent || '').toLowerCase() === a.name.toLowerCase() ||
         String(data.assignedTo || '').toLowerCase() === a.name.toLowerCase() ||
+        String(data.assignedToName || '').toLowerCase() === a.name.toLowerCase() ||
         String(l.assignedToName || '').toLowerCase() === a.name.toLowerCase()
       ));
 
-      if (agent) {
-        const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
-        countsMap.set(isoKey, (countsMap.get(isoKey) || 0) + 1);
-        agentCallCounts.set(agent.id, countsMap);
+      if (matchedAgent) {
+        const counts = agentMonthlyCounts.get(matchedAgent.id) || new Array(12).fill(0);
+        counts[monthIdx] = (counts[monthIdx] || 0) + 1;
+        agentMonthlyCounts.set(matchedAgent.id, counts);
       }
     });
 
-    // 1. Daily Date Rows
+    // Construct matrix rows per agent
     const matrixRows = allAgentsList.map(agent => {
-      const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
-      let totalCalls = 0;
-      const dailyCounts: Record<string, number> = {};
-
-      dateHeaders.forEach(dh => {
-        const cnt = countsMap.get(dh.key) || 0;
-        dailyCounts[dh.label] = cnt;
-        totalCalls += cnt;
-      });
+      const counts = agentMonthlyCounts.get(agent.id) || new Array(12).fill(0);
+      const annualTotal = counts.reduce((a, b) => a + b, 0);
+      const avgPerMonth = Math.round(annualTotal / 12);
 
       return {
         agentId: agent.id,
         callerName: agent.name,
-        dailyCounts,
-        totalCalls
+        role: agent.role,
+        monthCounts: counts,
+        annualTotal,
+        avgPerMonth
       };
     });
 
-    // 2. Day of Week Summary Rows (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)
-    const dowMatrixRows = allAgentsList.map(agent => {
-      const countsMap = agentCallCounts.get(agent.id) || new Map<string, number>();
-      const dowCounts: Record<string, number> = {
-        'Sunday': 0,
-        'Monday': 0,
-        'Tuesday': 0,
-        'Wednesday': 0,
-        'Thursday': 0,
-        'Friday': 0,
-        'Saturday': 0
-      };
-      let totalCalls = 0;
+    // Sort rows by Annual Total descending
+    matrixRows.sort((a, b) => b.annualTotal - a.annualTotal || a.callerName.localeCompare(b.callerName));
 
-      dateHeaders.forEach(dh => {
-        const cnt = countsMap.get(dh.key) || 0;
-        dowCounts[dh.dayName] = (dowCounts[dh.dayName] || 0) + cnt;
-        totalCalls += cnt;
+    // Calculate Column Monthly Totals
+    const monthlyTotals = new Array(12).fill(0);
+    let grandAnnualTotal = 0;
+
+    matrixRows.forEach(row => {
+      row.monthCounts.forEach((cnt, mIdx) => {
+        monthlyTotals[mIdx] += cnt;
       });
+      grandAnnualTotal += row.annualTotal;
+    });
 
-      return {
-        agentId: agent.id,
-        callerName: agent.name,
-        dowCounts,
-        totalCalls
-      };
+    // Determine Top Performer & Top Month
+    const topPerformerRow = matrixRows[0];
+    let topMonthIdx = 0;
+    let maxMonthCalls = 0;
+
+    monthlyTotals.forEach((cnt, mIdx) => {
+      if (cnt > maxMonthCalls) {
+        maxMonthCalls = cnt;
+        topMonthIdx = mIdx;
+      }
     });
 
     return {
-      monthName: targetMonthName,
-      yearStr: targetYearStr,
-      dateHeaders,
+      yearStr: selectedYear,
       matrixRows,
-      dowMatrixRows
+      monthlyTotals,
+      grandAnnualTotal,
+      overallMonthlyAvg: Math.round(grandAnnualTotal / 12),
+      topPerformer: topPerformerRow ? `${topPerformerRow.callerName} (${topPerformerRow.annualTotal} Dials)` : 'N/A',
+      topMonthName: maxMonthCalls > 0 ? `${monthNamesFull[topMonthIdx]} (${maxMonthCalls} Dials)` : 'N/A'
     };
-  }, [allAgentsList, leads, selectedMonths, selectedYears]);
+  }, [allAgentsList, leads, selectedYear]);
 
-  const exportCSV = async () => {
+  // Export 12-Month Matrix to Excel
+  const export12MonthExcel = async () => {
     const XLSX = await import('xlsx');
-    const { monthName, yearStr, dateHeaders, matrixRows, dowMatrixRows } = dateWiseMatrix;
+    const { yearStr, matrixRows, monthlyTotals, grandAnnualTotal, overallMonthlyAvg } = monthlyMatrixData;
     
     const workbook = XLSX.utils.book_new();
 
-    // Sheet 1: Daily Date-Wise Matrix (Caller Name | 01-07-2026 (Wed) | ... | Total Calls)
-    const headers1 = ['Caller Name', ...dateHeaders.map(dh => dh.label), 'Total Calls'];
-    const dataRows1 = matrixRows.map(row => {
+    const headers = ['Caller Name', ...monthNamesShort, 'Annual Total', 'Avg / Month'];
+    
+    const dataRows = matrixRows.map(row => {
       const rowObj: Record<string, any> = { 'Caller Name': row.callerName };
-      dateHeaders.forEach(dh => {
-        const cnt = row.dailyCounts[dh.label];
-        rowObj[dh.label] = cnt > 0 ? cnt : '';
+      monthNamesShort.forEach((m, mIdx) => {
+        const cnt = row.monthCounts[mIdx];
+        rowObj[m] = cnt > 0 ? cnt : '';
       });
-      rowObj['Total Calls'] = row.totalCalls;
+      rowObj['Annual Total'] = row.annualTotal;
+      rowObj['Avg / Month'] = row.avgPerMonth;
       return rowObj;
     });
 
-    const worksheet1 = XLSX.utils.json_to_sheet(dataRows1, { header: headers1 });
-    worksheet1['!cols'] = headers1.map(h => ({ wch: h === 'Caller Name' ? 26 : h === 'Total Calls' ? 14 : 16 }));
-    XLSX.utils.book_append_sheet(workbook, worksheet1, 'Daily_Date_Matrix');
-
-    // Sheet 2: Day of Week Summary Matrix (Caller Name | Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Total Calls)
-    const headers2 = ['Caller Name', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Total Calls'];
-    const dataRows2 = dowMatrixRows.map(row => {
-      const rowObj: Record<string, any> = { 'Caller Name': row.callerName };
-      ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
-        const cnt = row.dowCounts[day];
-        rowObj[day] = cnt > 0 ? cnt : '';
-      });
-      rowObj['Total Calls'] = row.totalCalls;
-      return rowObj;
+    // Add summary row
+    const summaryRow: Record<string, any> = { 'Caller Name': 'TOTAL MONTHLY DIALS' };
+    monthNamesShort.forEach((m, mIdx) => {
+      summaryRow[m] = monthlyTotals[mIdx];
     });
+    summaryRow['Annual Total'] = grandAnnualTotal;
+    summaryRow['Avg / Month'] = overallMonthlyAvg;
+    dataRows.push(summaryRow);
 
-    const worksheet2 = XLSX.utils.json_to_sheet(dataRows2, { header: headers2 });
-    worksheet2['!cols'] = headers2.map(h => ({ wch: h === 'Caller Name' ? 26 : 14 }));
-    XLSX.utils.book_append_sheet(workbook, worksheet2, 'Day_of_Week_Summary');
+    const worksheet = XLSX.utils.json_to_sheet(dataRows, { header: headers });
+    worksheet['!cols'] = headers.map(h => ({ wch: h === 'Caller Name' ? 26 : 12 }));
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Monthly_Matrix_${yearStr}`);
 
-    XLSX.writeFile(workbook, `Telecaller_Monthly_DayWise_Report_${monthName}_${yearStr}.xlsx`);
-    showToast(`Exported Day-wise telecaller report for ${monthName} ${yearStr}!`, 'success');
+    XLSX.writeFile(workbook, `Telecaller_12Month_Performance_Matrix_${yearStr}.xlsx`);
+    showToast(`Exported 12-Month Telecaller Performance Matrix for Year ${yearStr}!`, 'success');
   };
-
-  // Compute summary stats for hero cards
-  const totalAssigned = liveMonthlyAgents.reduce((sum, ag) => sum + ag.assigned, 0);
-  const totalDialed = liveMonthlyAgents.reduce((sum, ag) => sum + ag.dialed, 0);
-  const totalYetToDial = liveMonthlyAgents.reduce((sum, ag) => sum + ag.yetToDial, 0);
-  const topPerformer = liveMonthlyAgents[0]?.name || 'N/A';
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-4">
-      {/* 4 Vibrant Metric Hero Cards */}
+      {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Top Performer */}
+        {/* Card 1: Top Performer (Annual) */}
         <div className="bg-white dark:bg-slate-900 border border-amber-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-500" />
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Top Performer (#1)
+              Top Performer ({selectedYear})
             </span>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-500 flex items-center justify-center text-white shadow-xs">
               <Icons.Trophy className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-xl font-black text-slate-900 dark:text-white truncate">
-              {topPerformer}
-            </span>
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md font-mono">
-              Leader
+            <span className="text-lg font-black text-slate-900 dark:text-white truncate">
+              {monthlyMatrixData.topPerformer}
             </span>
           </div>
         </div>
 
-        {/* Card 2: Total Dialed */}
+        {/* Card 2: Total Annual Dials */}
         <div className="bg-white dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Total Dialed
+              Total Annual Dials
             </span>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-xs">
               <Icons.PhoneCall className="w-4.5 h-4.5" />
@@ -428,310 +244,211 @@ export default function TelecallerMonthlyPage() {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-              {totalDialed}
+              {monthlyMatrixData.grandAnnualTotal.toLocaleString()}
             </span>
             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md font-mono">
-              Completed Dials
+              Year {selectedYear}
             </span>
           </div>
         </div>
 
-        {/* Card 3: Total Yet to Dial */}
+        {/* Card 3: Top Performing Month */}
         <div className="bg-white dark:bg-slate-900 border border-sky-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-blue-500" />
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Yet to Dial
+              Top Month
             </span>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-xs">
-              <Icons.Clock className="w-4.5 h-4.5" />
+              <Icons.CalendarDays className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-              {totalYetToDial}
-            </span>
-            <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded-md font-mono">
-              Pending Dials
+            <span className="text-lg font-black text-slate-900 dark:text-white truncate">
+              {monthlyMatrixData.topMonthName}
             </span>
           </div>
         </div>
 
-        {/* Card 4: Assigned Leads */}
+        {/* Card 4: Monthly Average Dials */}
         <div className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Assigned Leads
+              Monthly Avg Dials
             </span>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-xs">
-              <Icons.Users className="w-4.5 h-4.5" />
+              <Icons.TrendingUp className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-              {totalAssigned}
+              {monthlyMatrixData.overallMonthlyAvg.toLocaleString()}
             </span>
             <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md font-mono">
-              Lead Pool
+              Dials / Month
             </span>
           </div>
         </div>
       </div>
 
-      {/* FILTER CONTROL CARD WITH DATE-WISE PARAMETERS */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-visible z-20 space-y-5">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-        
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Icons.SlidersHorizontal className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Monthly Performance Filter Parameters
-              </h3>
-              <p className="text-[11px] text-slate-500">Filter metrics by campaign and telecaller parameters</p>
-            </div>
-          </div>
-
-          <button
-            onClick={exportCSV}
-            className="h-9 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2"
-          >
-            <Icons.Download className="w-3.5 h-3.5" />
-            Export Summary
-          </button>
-        </div>
-
-        {/* SELECT MONTH & SELECT YEAR FILTERS ONLY */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Select Month */}
-          <MultiSelectDropdown
-            label="Select Month"
-            options={months}
-            selectedValues={selectedMonths}
-            onChange={setSelectedMonths}
-            placeholder="-All Months-"
-          />
-
-          {/* Select Year */}
-          <MultiSelectDropdown
-            label="Select Year"
-            options={years}
-            selectedValues={selectedYears}
-            onChange={setSelectedYears}
-            placeholder="-All Years-"
-          />
-        </div>
-
-        {/* View Detail Report Action */}
-        <div className="flex justify-end mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={handleFilterClick}
-            className="h-10 px-6 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Icons.TrendingUp className="w-4 h-4" />
-            Apply Report Filter
-          </button>
-        </div>
-      </div>
-
-      {/* MONTHLY AGENT RANKINGS TABLE */}
+      {/* 12-MONTH MONTH-WISE PERFORMANCE MATRIX TABLE */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
         
-        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        {/* Header Bar */}
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
-              Telecaller Monthly Ranking & Target Matrix
+            <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+              <Icons.Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              12-Month Telecaller Call Performance Matrix ({selectedYear})
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live statistics from database ({liveMonthlyAgents.length} organization users)
+              12-Month dial breakdown matrix from January to December {selectedYear}
             </p>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Select Year Dropdown */}
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl">
+              <span className="text-xs font-bold uppercase text-slate-500">Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-transparent text-xs font-black text-slate-900 dark:text-white focus:outline-none cursor-pointer font-mono"
+              >
+                {years.map(y => (
+                  <option key={y} value={y} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Export Button */}
+            <button
+              onClick={export12MonthExcel}
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Icons.FileSpreadsheet className="w-4 h-4" />
+              <span>Export Monthly Excel</span>
+            </button>
           </div>
         </div>
 
+        {/* Table Content */}
         {loading ? (
-          <div className="p-14 text-center text-xs text-slate-400">Loading monthly performance matrix...</div>
+          <div className="p-16 text-center text-xs text-slate-400 font-semibold flex items-center justify-center gap-2">
+            <Icons.Loader className="w-5 h-5 animate-spin text-indigo-600" />
+            <span>Loading 12-Month Performance Matrix...</span>
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[850px]">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider h-11 bg-slate-50/90 dark:bg-slate-800/80">
-                  <th className="py-3.5 px-6">Date</th>
-                  <th className="py-3.5 px-6">Telecaller Agent</th>
-                  <th className="py-3.5 px-6 text-center">Assigned Leads</th>
-                  <th className="py-3.5 px-6 text-center">Dialed</th>
-                  <th className="py-3.5 px-6 text-center">Yet To Dial</th>
-                  <th className="py-3.5 px-6 text-center">Target Progress</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {liveMonthlyAgents.map((ag, idx) => (
-                  <tr key={ag._id || idx} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors h-14">
-                    <td className="py-3.5 px-6 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200/60 dark:border-indigo-900/50">
-                        <Icons.Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                        {ag.dateStr}
-                      </span>
-                    </td>
-
-                      <td className="py-3.5 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-3xs">
-                            {ag.name.substring(0, 2)}
-                          </div>
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-white block">
-                              {ag.name}
-                            </span>
-                            <span className="text-[10px] text-purple-600 font-medium">
-                              {ag.role}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-6 text-center">
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 min-w-[3rem] shadow-3xs">
-                          {ag.assigned}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-6 text-center">
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 min-w-[3rem] shadow-3xs">
-                          {ag.dialed}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-6 text-center">
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 min-w-[3rem] shadow-3xs">
-                          {ag.yetToDial}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-6 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-20 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
-                            <div 
-                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" 
-                              style={{ width: `${Math.max(ag.progressPct, 5)}%` }} 
-                            />
-                          </div>
-                          <span className="text-[10px] font-bold font-mono text-slate-500">
-                            {ag.progressPct}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                ))}
-
-                {liveMonthlyAgents.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      No monthly telecaller records found matching the selected parameters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* DATE-WISE TELECALLER CALL MATRIX TABLE (Matching Image 1 Exact Layout) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600" />
-        
-        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
-              <Icons.CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              Date-Wise Telecaller Call Performance Matrix ({dateWiseMatrix.monthName} {dateWiseMatrix.yearStr})
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Daily dial breakdown matrix from Day 1 to Day {dateWiseMatrix.dateHeaders.length}
-            </p>
-          </div>
-
-          <button
-            onClick={exportCSV}
-            className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer self-start sm:self-auto"
-          >
-            <Icons.FileSpreadsheet className="w-4 h-4" />
-            Export Date-Wise Excel
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="p-14 text-center text-xs text-slate-400">Loading daily call matrix...</div>
-        ) : (
-          <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
-            <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
+            <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
               <thead>
                 <tr className="bg-[#000080] text-white text-[11px] font-black uppercase tracking-wider h-11">
                   <th className="py-3 px-4 sticky left-0 z-10 bg-[#000080] border-r border-indigo-900 min-w-[200px] shadow-sm">
                     Caller Name
                   </th>
-                  {dateWiseMatrix.dateHeaders.map(dh => (
-                    <th key={dh.key} className="py-3 px-3 text-center border-r border-indigo-900 min-w-[90px] whitespace-nowrap font-mono">
-                      {dh.label}
+                  {monthNamesShort.map((m, idx) => (
+                    <th key={m} className="py-3 px-3 text-center border-r border-indigo-900 min-w-[70px] whitespace-nowrap font-mono">
+                      {m}
                     </th>
                   ))}
+                  <th className="py-3 px-4 text-center bg-indigo-950 min-w-[110px] whitespace-nowrap border-r border-indigo-900">
+                    Annual Total
+                  </th>
                   <th className="py-3 px-4 text-center bg-indigo-950 min-w-[100px] whitespace-nowrap">
-                    Total Calls
+                    Avg / Mo
                   </th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {dateWiseMatrix.matrixRows.map((row, idx) => (
+                {monthlyMatrixData.matrixRows.map((row, idx) => (
                   <tr 
                     key={row.agentId || idx} 
-                    className={`${idx % 2 === 0 ? 'bg-slate-50/70 dark:bg-slate-900/60' : 'bg-white dark:bg-slate-900'} hover:bg-indigo-50/50 dark:hover:bg-slate-800/60 transition-colors h-11`}
+                    className={`${idx % 2 === 0 ? 'bg-slate-50/70 dark:bg-slate-900/60' : 'bg-white dark:bg-slate-900'} hover:bg-indigo-50/50 dark:hover:bg-slate-800/60 transition-colors h-12`}
                   >
-                    {/* Sticky Caller Name Column */}
-                    <td className={`py-2.5 px-4 font-bold text-slate-900 dark:text-slate-100 sticky left-0 z-10 border-r border-slate-200 dark:border-slate-800 shadow-sm ${idx % 2 === 0 ? 'bg-slate-100/90 dark:bg-slate-850' : 'bg-slate-50 dark:bg-slate-900'}`}>
-                      <span className="capitalize block truncate max-w-[190px]" title={row.callerName}>
-                        {row.callerName}
-                      </span>
+                    {/* Caller Name Column */}
+                    <td className={`py-3 px-4 font-bold text-slate-900 dark:text-slate-100 sticky left-0 z-10 border-r border-slate-200 dark:border-slate-800 shadow-sm ${idx % 2 === 0 ? 'bg-slate-100/90 dark:bg-slate-850' : 'bg-slate-50 dark:bg-slate-900'}`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-[11px] uppercase flex-shrink-0">
+                          {row.callerName.substring(0, 2)}
+                        </div>
+                        <span className="capitalize block truncate max-w-[160px]" title={row.callerName}>
+                          {row.callerName}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Daily Call Counts */}
-                    {dateWiseMatrix.dateHeaders.map(dh => {
-                      const count = row.dailyCounts[dh.label];
-                      return (
-                        <td 
-                          key={dh.key} 
-                          className="py-2.5 px-3 text-center border-r border-slate-200/60 dark:border-slate-800/60 font-mono text-xs"
-                        >
-                          {count > 0 ? (
-                            <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                              {count}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300 dark:text-slate-700">-</span>
-                          )}
-                        </td>
-                      );
-                    })}
+                    {/* 12 Months Columns */}
+                    {row.monthCounts.map((cnt, mIdx) => (
+                      <td 
+                        key={mIdx} 
+                        className="py-3 px-3 text-center border-r border-slate-200/60 dark:border-slate-800/60 font-mono text-xs"
+                      >
+                        {cnt > 0 ? (
+                          <span className="font-extrabold text-slate-900 dark:text-slate-100 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800/60">
+                            {cnt}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700">-</span>
+                        )}
+                      </td>
+                    ))}
 
-                    {/* Total Calls Column */}
-                    <td className="py-2.5 px-4 text-center font-mono font-black text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40">
-                      {row.totalCalls > 0 ? row.totalCalls : 0}
+                    {/* Annual Total Column */}
+                    <td className="py-3 px-4 text-center font-mono font-black text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40 border-r border-slate-200 dark:border-slate-800 text-xs">
+                      {row.annualTotal > 0 ? (
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white shadow-3xs">
+                          {row.annualTotal}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">0</span>
+                      )}
+                    </td>
+
+                    {/* Avg / Month Column */}
+                    <td className="py-3 px-4 text-center font-mono font-bold text-teal-700 dark:text-teal-400 bg-teal-50/40 dark:bg-teal-950/30 text-xs">
+                      {row.avgPerMonth}
                     </td>
                   </tr>
                 ))}
 
-                {dateWiseMatrix.matrixRows.length === 0 && (
+                {monthlyMatrixData.matrixRows.length === 0 && (
                   <tr>
-                    <td colSpan={dateWiseMatrix.dateHeaders.length + 2} className="py-12 text-center text-slate-400">
-                      No telecaller data available for the selected month and year.
+                    <td colSpan={15} className="py-14 text-center text-slate-400">
+                      No telecaller performance records found for Year {selectedYear}.
                     </td>
                   </tr>
                 )}
               </tbody>
+
+              {/* Bottom Grand Summary Row */}
+              {monthlyMatrixData.matrixRows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100 dark:bg-slate-800 font-black text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700 h-12">
+                    <td className="py-3 px-4 sticky left-0 z-10 bg-slate-200 dark:bg-slate-750 border-r border-slate-300 dark:border-slate-700 uppercase tracking-wider font-extrabold text-[11px]">
+                      TOTAL MONTHLY DIALS
+                    </td>
+
+                    {monthlyMatrixData.monthlyTotals.map((tot, mIdx) => (
+                      <td key={mIdx} className="py-3 px-3 text-center border-r border-slate-300 dark:border-slate-700 font-mono text-xs font-black text-indigo-700 dark:text-indigo-300">
+                        {tot > 0 ? tot : 0}
+                      </td>
+                    ))}
+
+                    <td className="py-3 px-4 text-center font-mono font-black text-white bg-indigo-700 border-r border-indigo-800 text-sm">
+                      {monthlyMatrixData.grandAnnualTotal}
+                    </td>
+
+                    <td className="py-3 px-4 text-center font-mono font-black text-white bg-teal-700 text-xs">
+                      {monthlyMatrixData.overallMonthlyAvg}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

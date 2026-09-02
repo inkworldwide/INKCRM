@@ -9,33 +9,32 @@ export default function ImportDeleteLeads() {
   const [activeTab, setActiveTab] = useState<'import' | 'delete' | 'duplicates'>('import');
 
   // Common State
-  const [campaigns, setCampaigns] = useState<string[]>([]);
   const [telecallers, setTelecallers] = useState<any[]>([]);
+  const [leadStatuses, setLeadStatuses] = useState<string[]>([]);
   const [loadingInitial, setLoadingInitial] = useState(true);
 
   // Import State
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importCampaign, setImportCampaign] = useState('Direct Lead Import');
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgressStatus, setImportProgressStatus] = useState('');
   const [importProgressPercent, setImportProgressPercent] = useState(0);
 
-  // Delete State (By User + Specific Date + Lead Status)
+  // Delete State (By User + Particular Date + Actual Lead Process Status)
   const [deleteAgent, setDeleteAgent] = useState('');
   const [deleteDate, setDeleteDate] = useState('');
-  const [deleteCampaign, setDeleteCampaign] = useState('');
   const [deleteStatus, setDeleteStatus] = useState('');
   const [matchingLeadsCount, setMatchingLeadsCount] = useState<number | null>(null);
   const [isCounting, setIsCounting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Duplicate Leads State (Only Extra Duplicates)
+  // Duplicate Leads State (Matching Lead No, Lead Name, Created Date, Phone, Assigned To, Assigned By)
   const [dupStatus, setDupStatus] = useState('');
   const [dupAgent, setDupAgent] = useState('');
   const [dupDate, setDupDate] = useState('');
   const [dupMonth, setDupMonth] = useState('');
   const [dupYear, setDupYear] = useState('2026');
+  const [scanMode, setScanMode] = useState<'all_match' | 'phone_only'>('all_match');
   const [duplicateScanResult, setDuplicateScanResult] = useState<{
     duplicateGroups: number;
     extraDuplicatesCount: number;
@@ -51,30 +50,24 @@ export default function ImportDeleteLeads() {
 
   const yearsList = ['2026', '2025', '2024', '2023'];
 
-  const statusesList = [
-    'YET TO CALL',
-    'COOL LEAD',
-    'CAL BACK',
-    'GIVEN LOGIN',
-    'FOLLOWUP',
-    'NOT INTRESTED',
-    'NO ANSWER',
-    'CALL REJECT',
-    'CALL NOT CONNECT',
-    'WRONG NUM',
-    'NUM NOT EXIT',
-    'REPEATED NUM',
-    'NO BUSINESS',
+  // Default Lead Process Statuses fallback
+  const defaultLeadStatuses = [
+    'NEW',
     'HOT LEADS',
     'WARM LEADS',
-    'CEBIL PENDING',
+    'COOL LEADS',
+    'FOLLOWUP',
+    'PENDING',
     'DOCUMENT PENDING',
     'APPROVAL PENDING',
     'APPROVED BUT NOT DISBUSE',
-    'DISBUSED',
+    'DISBURSED',
     'REJECTED',
     'DROPPED',
-    'PENDING'
+    'NOT INTERESTED',
+    'NO ANSWER',
+    'WRONG NUM',
+    'UNTOUCHED'
   ];
 
   useEffect(() => {
@@ -84,16 +77,20 @@ export default function ImportDeleteLeads() {
   const fetchInitialData = async () => {
     setLoadingInitial(true);
     try {
-      const [campRes, usersRes] = await Promise.all([
-        api.get('/records/campaigns?limit=1000').catch(() => ({ data: { records: [] } })),
-        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] }))
+      const [usersRes, statusRes] = await Promise.all([
+        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
+        api.get('/statuses').catch(() => ({ data: [] }))
       ]);
-
-      const campList = (campRes.data?.records || []).map((c: any) => c.data?.campaignName || c.name || c.data?.source).filter(Boolean);
-      setCampaigns(Array.from(new Set(campList)));
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];
       setTelecallers(fetchedUsers);
+
+      const fetchedStatuses = Array.isArray(statusRes.data) ? statusRes.data.map((s: any) => s.name).filter(Boolean) : [];
+      if (fetchedStatuses.length > 0) {
+        setLeadStatuses(fetchedStatuses);
+      } else {
+        setLeadStatuses(defaultLeadStatuses);
+      }
     } catch (err) {
       console.error(err);
       showToast('Failed to load initial data.', 'error');
@@ -171,7 +168,7 @@ export default function ImportDeleteLeads() {
             return;
           }
 
-          const targetCampaignTag = importCampaign.trim() || 'Direct Lead Import';
+          const targetCampaignTag = 'Direct Lead Import';
           const validSelectedAgents = telecallers.filter(u => selectedAgents.includes(u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.name || u.email));
           const agentNames = validSelectedAgents.map(a => {
             const fn = (a.firstName || '').trim();
@@ -241,7 +238,7 @@ export default function ImportDeleteLeads() {
 
   // ── 2. PREVIEW DELETION MATCH COUNT ───────────────────────────────────────
   const handlePreviewDeleteCount = async () => {
-    if (!deleteAgent && !deleteDate && !deleteStatus && !deleteCampaign) {
+    if (!deleteAgent && !deleteDate && !deleteStatus) {
       showToast('Please select at least one filter criterion (Telecaller, Date, or Status).', 'warning');
       return;
     }
@@ -251,8 +248,7 @@ export default function ImportDeleteLeads() {
       const res = await api.post('/records/leads/bulk-delete-count', {
         assignedTo: deleteAgent || undefined,
         createdDate: deleteDate || undefined,
-        status: deleteStatus || undefined,
-        campaignName: deleteCampaign || undefined
+        status: deleteStatus || undefined
       });
       setMatchingLeadsCount(res.data?.count ?? 0);
     } catch (err) {
@@ -264,17 +260,18 @@ export default function ImportDeleteLeads() {
 
   // ── 3. EXECUTE BULK DELETE LEADS ──────────────────────────────────────────
   const handleExecuteBulkDelete = () => {
-    if (!deleteAgent && !deleteDate && !deleteStatus && !deleteCampaign) {
+    if (!deleteAgent && !deleteDate && !deleteStatus) {
       showToast('Please select at least one filter criterion to delete leads.', 'warning');
       return;
     }
 
     const userLabel = deleteAgent ? `for user '${deleteAgent}'` : 'across all users';
     const dateLabel = deleteDate ? `on date '${deleteDate}'` : 'for all dates';
+    const statusLabel = deleteStatus ? `with status '${deleteStatus}'` : '';
 
     showConfirm({
       title: 'CONFIRM DELETE LEADS',
-      message: `Are you sure you want to permanently delete leads ${userLabel} ${dateLabel}? This action cannot be undone.`,
+      message: `Are you sure you want to permanently delete leads ${userLabel} ${dateLabel} ${statusLabel}? This action cannot be undone.`,
       type: 'danger',
       confirmText: 'YES, DELETE LEADS',
       cancelText: 'CANCEL',
@@ -284,8 +281,7 @@ export default function ImportDeleteLeads() {
           const res = await api.post('/records/leads/bulk-delete', {
             assignedTo: deleteAgent || undefined,
             createdDate: deleteDate || undefined,
-            status: deleteStatus || undefined,
-            campaignName: deleteCampaign || undefined
+            status: deleteStatus || undefined
           });
 
           showAlertModal({
@@ -298,7 +294,6 @@ export default function ImportDeleteLeads() {
           setDeleteAgent('');
           setDeleteDate('');
           setDeleteStatus('');
-          setDeleteCampaign('');
           setMatchingLeadsCount(null);
         } catch (err: any) {
           console.error(err);
@@ -319,7 +314,8 @@ export default function ImportDeleteLeads() {
         user: dupAgent || undefined,
         date: dupDate || undefined,
         month: dupMonth || undefined,
-        year: dupYear || undefined
+        year: dupYear || undefined,
+        scanMode
       });
 
       setDuplicateScanResult({
@@ -373,35 +369,38 @@ export default function ImportDeleteLeads() {
     });
   };
 
+  const activeLeadStatuses = leadStatuses.length > 0 ? leadStatuses : defaultLeadStatuses;
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-6">
-      {/* ── TOP HEADER & ENHANCED TAB NAVIGATION ──────────────────────────── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-rose-600 to-amber-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 flex-shrink-0">
-            <Icons.ShieldCheck className="w-6 h-6 stroke-[2.2]" />
+      {/* ── TOP HEADER BANNER & BALANCED TAB CONTROLLER (SINGLE LINE TITLE) ── */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border-b border-slate-200/90 dark:border-slate-800 pb-6">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 flex-shrink-0">
+            <Icons.ShieldCheck className="w-7 h-7 stroke-[2.2]" />
           </div>
-          <div className="text-left">
+          <div className="text-left flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight whitespace-nowrap">
                 Import & Lead Management
               </h1>
-              <span className="text-xs font-black px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 shadow-3xs font-mono uppercase">
+              <span className="text-[10px] font-black px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 shadow-3xs font-mono uppercase tracking-wider whitespace-nowrap">
                 Security & Data Studio
               </span>
             </div>
-            <p className="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+            <p className="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 mt-1 font-medium max-w-2xl">
               Bulk import lead contact sheets, delete user/date leads, or purge extra duplicate records safely.
             </p>
           </div>
         </div>
 
-        {/* Improved 3-Segment Tab Controller */}
-        <div className="w-full lg:w-auto p-1.5 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        {/* Ultra-Clean 3-Segment Tab Bar */}
+        <div className="w-full xl:w-auto p-1.5 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner flex items-center justify-start sm:justify-center gap-2 overflow-x-auto no-scrollbar">
           {/* Tab 1: Import Leads */}
           <button
+            type="button"
             onClick={() => setActiveTab('import')}
-            className={`flex-1 lg:flex-none px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
               activeTab === 'import'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-500/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
@@ -413,8 +412,9 @@ export default function ImportDeleteLeads() {
 
           {/* Tab 2: Delete Leads */}
           <button
+            type="button"
             onClick={() => setActiveTab('delete')}
-            className={`flex-1 lg:flex-none px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
               activeTab === 'delete'
                 ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-500/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
@@ -426,8 +426,9 @@ export default function ImportDeleteLeads() {
 
           {/* Tab 3: Delete Duplicate Leads */}
           <button
+            type="button"
             onClick={() => setActiveTab('duplicates')}
-            className={`flex-1 lg:flex-none px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
               activeTab === 'duplicates'
                 ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30 ring-2 ring-amber-500/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
@@ -439,9 +440,9 @@ export default function ImportDeleteLeads() {
         </div>
       </div>
 
-      {/* ── TAB 1: BULK IMPORT LEADS STUDIO ────────────────────────────────── */}
+      {/* ── TAB 1: BULK IMPORT LEADS STUDIO (CLEAN 2-STEP IMPORT FORM) ────── */}
       {activeTab === 'import' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -470,60 +471,30 @@ export default function ImportDeleteLeads() {
           </div>
 
           <form onSubmit={handleImportSubmit} className="space-y-6 max-w-4xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Step 1: Assign Telecallers / Employees */}
-              <div className="bg-slate-50/70 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">1</span>
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Assign Telecaller / User (Optional)
-                  </label>
-                </div>
-                <MultiSelectDropdown
-                  options={telecallers.map((u: any) => u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.name || u.email)}
-                  selectedValues={selectedAgents}
-                  onChange={setSelectedAgents}
-                  placeholder="Select telecallers to distribute imported leads..."
-                />
-                <p className="text-[11px] text-slate-400 mt-2 font-medium">
-                  Leads will be evenly distributed among selected telecallers during bulk import.
-                </p>
+            {/* Step 1: Assign Telecallers / Employees */}
+            <div className="bg-slate-50/70 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">1</span>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Assign Telecaller / User (Optional)
+                </label>
               </div>
-
-              {/* Step 2: Source / Campaign Tag */}
-              <div className="bg-slate-50/70 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">2</span>
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Source / Campaign Tag (Optional)
-                  </label>
-                </div>
-                <div className="relative">
-                  <Icons.Tag className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    list="campaigns-datalist"
-                    value={importCampaign}
-                    onChange={(e) => setImportCampaign(e.target.value)}
-                    placeholder="e.g. Direct Import, Q3 Leads, Home Loan Drive..."
-                    className="w-full h-11 pl-10 pr-4 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 transition-all"
-                  />
-                  <datalist id="campaigns-datalist">
-                    {campaigns.map((c, i) => (
-                      <option key={i} value={c} />
-                    ))}
-                  </datalist>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-2 font-medium">
-                  Tags lead records for filtering and reporting inside the Leads Process.
-                </p>
-              </div>
+              <MultiSelectDropdown
+                options={telecallers.map((u: any) => u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.name || u.email)}
+                selectedValues={selectedAgents}
+                onChange={setSelectedAgents}
+                placeholder="Select telecallers to distribute imported leads..."
+                searchPlaceholder="Search telecallers by name..."
+              />
+              <p className="text-[11px] text-slate-400 mt-2 font-medium">
+                Leads will be evenly distributed among selected telecallers during bulk import.
+              </p>
             </div>
 
-            {/* Step 3: Choose File Uploader */}
+            {/* Step 2: Choose File Uploader */}
             <div className="bg-slate-50/70 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
               <div className="flex items-center gap-2 mb-4">
-                <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">3</span>
+                <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">2</span>
                 <label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
                   Select CSV or Excel Contact File <span className="text-rose-500">*</span>
                 </label>
@@ -597,9 +568,9 @@ export default function ImportDeleteLeads() {
         </div>
       )}
 
-      {/* ── TAB 2: BULK DELETE LEADS STUDIO (USER + DATE + STATUS) ──────────── */}
+      {/* ── TAB 2: BULK DELETE LEADS STUDIO (3 CLEAN FILTERS ONLY) ──────────── */}
       {activeTab === 'delete' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-red-500 to-amber-500" />
 
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -611,14 +582,14 @@ export default function ImportDeleteLeads() {
                 Delete Leads Studio (User & Specific Date Target)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Filter and permanently delete leads assigned or created for a specific telecaller on a specific date.
+                Filter and permanently delete leads assigned to a specific telecaller, on a specific date, or by lead status.
               </p>
             </div>
           </div>
 
           <div className="space-y-6 max-w-4xl">
-            {/* Filter Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Clean 3-Column Filter Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Telecaller / User Selection */}
               <div>
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
@@ -656,7 +627,7 @@ export default function ImportDeleteLeads() {
                 />
               </div>
 
-              {/* Status Filter (Optional) */}
+              {/* Lead Process Status Filter */}
               <div>
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
                   Lead Status (Optional)
@@ -670,28 +641,8 @@ export default function ImportDeleteLeads() {
                   className="w-full h-11 px-3.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-500/15"
                 >
                   <option value="">All Statuses</option>
-                  {statusesList.map((st, i) => (
+                  {activeLeadStatuses.map((st, i) => (
                     <option key={i} value={st}>{st}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Campaign Drive Filter (Optional) */}
-              <div>
-                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
-                  Source / Tag (Optional)
-                </label>
-                <select
-                  value={deleteCampaign}
-                  onChange={(e) => {
-                    setDeleteCampaign(e.target.value);
-                    setMatchingLeadsCount(null);
-                  }}
-                  className="w-full h-11 px-3.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-500/15"
-                >
-                  <option value="">All Sources / Tags</option>
-                  {campaigns.map((c, i) => (
-                    <option key={i} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
@@ -708,14 +659,14 @@ export default function ImportDeleteLeads() {
                 </div>
                 <span className="text-xs text-rose-800/90 dark:text-rose-300 font-medium block mt-1">
                   {matchingLeadsCount !== null 
-                    ? `${matchingLeadsCount.toLocaleString()} lead(s) match ${deleteAgent ? `user '${deleteAgent}'` : 'selected filters'} ${deleteDate ? `on date '${deleteDate}'` : ''}.` 
+                    ? `${matchingLeadsCount.toLocaleString()} lead(s) match ${deleteAgent ? `user '${deleteAgent}'` : 'selected filters'} ${deleteDate ? `on date '${deleteDate}'` : ''} ${deleteStatus ? `with status '${deleteStatus}'` : ''}.` 
                     : 'Click "Preview Lead Count" to calculate matching leads before deletion.'}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={handlePreviewDeleteCount}
-                disabled={isCounting || (!deleteAgent && !deleteDate && !deleteStatus && !deleteCampaign)}
+                disabled={isCounting || (!deleteAgent && !deleteDate && !deleteStatus)}
                 className="h-10 px-5 bg-white dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-slate-700 text-xs font-black uppercase tracking-wider rounded-xl shadow-3xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 flex-shrink-0"
               >
                 {isCounting ? <Icons.Loader className="w-4 h-4 animate-spin" /> : <Icons.Search className="w-4 h-4" />}
@@ -736,7 +687,7 @@ export default function ImportDeleteLeads() {
             <button
               type="button"
               onClick={handleExecuteBulkDelete}
-              disabled={isDeleting || (!deleteAgent && !deleteDate && !deleteStatus && !deleteCampaign)}
+              disabled={isDeleting || (!deleteAgent && !deleteDate && !deleteStatus)}
               className="h-12 px-9 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2.5 cursor-pointer"
             >
               {isDeleting ? <Icons.Loader className="w-4.5 h-4.5 animate-spin" /> : <Icons.Trash2 className="w-4.5 h-4.5" />}
@@ -746,9 +697,9 @@ export default function ImportDeleteLeads() {
         </div>
       )}
 
-      {/* ── TAB 3: PURGE DUPLICATE LEADS STUDIO (EXTRA ONLY) ───────────────── */}
+      {/* ── TAB 3: PURGE DUPLICATE LEADS STUDIO (6-ATTRIBUTE MATCHING RULE) ──── */}
       {activeTab === 'duplicates' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden text-left">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500" />
 
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -760,12 +711,76 @@ export default function ImportDeleteLeads() {
                 Purge Extra Duplicate Leads Studio
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Scans duplicate phone numbers by Lead Status, User, Date, Month, or Year to delete ONLY extra duplicate copies (1 original lead is kept).
+                Scans and detects duplicate lead records by matching <b>Lead No</b>, <b>Lead Name</b>, <b>Phone Number</b>, <b>Created Date</b>, <b>Assigned To</b>, and <b>Assigned By</b>.
               </p>
             </div>
           </div>
 
           <div className="space-y-6 max-w-4xl">
+            {/* Scan Mode Selection Bar */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-2.5">
+                Duplicate Scanning Matching Criteria
+              </label>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <label
+                  onClick={() => {
+                    setScanMode('all_match');
+                    setDuplicateScanResult(null);
+                  }}
+                  className={`flex-1 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2.5 ${
+                    scanMode === 'all_match'
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="scanMode"
+                    checked={scanMode === 'all_match'}
+                    onChange={() => {}}
+                    className="accent-amber-600"
+                  />
+                  <div>
+                    <span className="block font-black uppercase text-[11px] text-amber-700 dark:text-amber-300">
+                      Full 6-Attribute Matching (Recommended)
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                      Matches Lead No + Lead Name + Phone + Date + Assigned To + Assigned By
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => {
+                    setScanMode('phone_only');
+                    setDuplicateScanResult(null);
+                  }}
+                  className={`flex-1 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-2.5 ${
+                    scanMode === 'phone_only'
+                      ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/20'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="scanMode"
+                    checked={scanMode === 'phone_only'}
+                    onChange={() => {}}
+                    className="accent-amber-600"
+                  />
+                  <div>
+                    <span className="block font-black uppercase text-[11px] text-amber-700 dark:text-amber-300">
+                      Phone Number Only Matching
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                      Matches duplicate contact numbers across all leads
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Filter Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Lead Status */}
@@ -782,7 +797,7 @@ export default function ImportDeleteLeads() {
                   className="w-full h-11 px-3.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/15"
                 >
                   <option value="">All Statuses</option>
-                  {statusesList.map((st, i) => (
+                  {activeLeadStatuses.map((st, i) => (
                     <option key={i} value={st}>{st}</option>
                   ))}
                 </select>
@@ -871,13 +886,13 @@ export default function ImportDeleteLeads() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/50 rounded-2xl border border-amber-200 dark:border-amber-800">
                   <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
-                    Duplicate Phone Groups
+                    Matching Duplicate Groups
                   </span>
                   <span className="text-2xl font-black text-amber-900 dark:text-amber-100 mt-1 block">
                     {duplicateScanResult.duplicateGroups.toLocaleString()}
                   </span>
                   <span className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5 block">
-                    Contact numbers with multiple entries
+                    {scanMode === 'all_match' ? 'Lead No, Name, Phone, Date, Assigned To/By match' : 'Contact numbers with multiple entries'}
                   </span>
                 </div>
 
@@ -901,7 +916,7 @@ export default function ImportDeleteLeads() {
                     {duplicateScanResult.duplicateGroups.toLocaleString()}
                   </span>
                   <span className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                    1st original lead kept safe per contact
+                    1st original lead kept safe per group
                   </span>
                 </div>
               </div>
@@ -915,7 +930,7 @@ export default function ImportDeleteLeads() {
                     </span>
                   </div>
                   <span className="text-xs text-amber-800/90 dark:text-amber-300 font-medium block mt-1">
-                    Click "Scan Extra Duplicates" to detect duplicate contact numbers matching selected filters.
+                    Click "Scan Extra Duplicates" to detect leads matching <b>Lead No</b>, <b>Lead Name</b>, <b>Phone</b>, <b>Created Date</b>, <b>Assigned To</b>, and <b>Assigned By</b>.
                   </span>
                 </div>
                 <button
@@ -935,7 +950,7 @@ export default function ImportDeleteLeads() {
               <Icons.ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div>
                 <span className="font-extrabold uppercase tracking-wider block">Duplicate Deletion Safety Rule</span>
-                Only <b>extra duplicate lead copies</b> (2nd, 3rd, etc.) sharing the same phone number will be deleted. The <b>1st original lead</b> record is ALWAYS safely preserved in your database.
+                A lead is recognized as a duplicate when <b>Lead No</b>, <b>Lead Name</b>, <b>Phone Number</b>, <b>Created Date</b>, <b>Assigned To</b>, and <b>Assigned By</b> match across records. Only <b>extra duplicate lead copies</b> (2nd, 3rd, etc.) will be deleted. The <b>1st original lead</b> record is ALWAYS safely preserved in your database.
               </div>
             </div>
 

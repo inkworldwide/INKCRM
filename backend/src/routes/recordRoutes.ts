@@ -2115,49 +2115,63 @@ router.post('/leads/duplicates-count', async (req: Request, res: Response): Prom
       query.$and = andConditions;
     }
 
-    // Find duplicates grouped by phone/mobile number
-    const agg = await CustomRecord.aggregate([
-      { $match: query },
-      {
-        $project: {
-          _id: 1,
-          createdAt: 1,
-          phone: {
-            $ifNull: [
-              '$data.phone',
-              { $ifNull: ['$data.mobile', { $ifNull: ['$data.contact', '$data.phoneNumber'] }] }
-            ]
-          }
-        }
-      },
-      {
-        $match: {
-          phone: { $exists: true, $nin: [null, ''] }
-        }
-      },
-      {
-        $group: {
-          _id: '$phone',
-          ids: { $push: '$_id' },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $match: {
-          count: { $gt: 1 }
-        }
+    // Fetch matching leads from MongoDB
+    const records = await CustomRecord.find(query).sort({ createdAt: 1 }).lean();
+
+    // Multi-attribute composite grouping map matching: Lead No, Lead Name, Created Date, Phone, Assigned To, Assigned By
+    const dupMap = new Map<string, any[]>();
+
+    records.forEach(r => {
+      const data = r.data || {};
+
+      const leadNo = (data.leadNo || data.lead_no || data.leadId || data.leadNumber || data.caseNo || '').toString().trim().toLowerCase();
+      const leadName = (data.customerName || data.customer || data.fullName || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '') || '').toString().trim().toLowerCase();
+      const phone = (data.phone || data.mobile || data.contactNum || data.contact_num || data.contact || data.phoneNumber || '').toString().replace(/[\s\-\+\(\)]/g, '');
+      
+      const createdDateObj = r.createdAt ? new Date(r.createdAt) : null;
+      const createdDate = createdDateObj && !isNaN(createdDateObj.getTime())
+        ? createdDateObj.toISOString().slice(0, 10)
+        : String(data.created_at || data.date || '').slice(0, 10);
+
+      const assignedTo = (data.assignedToName || data.assignedTo || data.telecaller || data.assignedAgent || '').toString().trim().toLowerCase();
+      const assignedBy = (data.assignedByName || data.assignedBy || '').toString().trim().toLowerCase();
+
+      let groupKey = '';
+      if (req.body.scanMode === 'phone_only') {
+        groupKey = phone ? `phone_${phone}` : '';
+      } else {
+        // Full matching key: Lead No + Lead Name + Phone + Created Date + Assigned To + Assigned By
+        const parts = [
+          `no:${leadNo}`,
+          `name:${leadName}`,
+          `ph:${phone}`,
+          `dt:${createdDate}`,
+          `to:${assignedTo}`,
+          `by:${assignedBy}`
+        ];
+        groupKey = parts.join('|');
       }
-    ]);
 
-    let duplicateGroups = agg.length;
+      if (groupKey) {
+        if (!dupMap.has(groupKey)) {
+          dupMap.set(groupKey, []);
+        }
+        dupMap.get(groupKey)!.push(r);
+      }
+    });
+
+    let duplicateGroups = 0;
     let extraDuplicatesCount = 0;
-    const idsToDelete: any[] = [];
+    const idsToDelete: string[] = [];
 
-    agg.forEach(group => {
-      // Keep 1st lead, mark 2nd, 3rd, etc. extra duplicate copies for deletion
-      const extraIds = group.ids.slice(1);
-      extraDuplicatesCount += extraIds.length;
-      idsToDelete.push(...extraIds.map((id: any) => id.toString()));
+    dupMap.forEach((groupLeads) => {
+      if (groupLeads.length > 1) {
+        duplicateGroups++;
+        // Keep 1st original lead, mark 2nd, 3rd, etc. extra duplicate copies for deletion
+        const extraLeads = groupLeads.slice(1);
+        extraDuplicatesCount += extraLeads.length;
+        extraLeads.forEach(el => idsToDelete.push(el._id.toString()));
+      }
     });
 
     res.status(200).json({
