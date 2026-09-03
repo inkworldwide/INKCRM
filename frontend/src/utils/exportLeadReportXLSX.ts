@@ -72,14 +72,50 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     return '';
   };
 
-  // Helper to extract Data Code string for sorting
+  // Helper to extract Data Code string for sorting and export with 100% reliability
   const getDataCodeStr = (lead: any) => {
-    const data = lead.data || lead;
-    const raw = extractField(
-      data,
-      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
+    if (!lead) return '';
+    const d = lead.data || lead;
+    
+    // 1. Direct targets & fuzzy extractField on lead.data
+    let raw = extractField(
+      d,
+      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
       ['datacode', 'leadcode', 'code']
-    ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code || lead?.dataCode || lead?.data_code || lead?.['Data Code'] || '';
+    );
+
+    // 2. Direct targets & fuzzy extractField on top-level lead
+    if (!raw && lead.data) {
+      raw = extractField(
+        lead,
+        ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
+        ['datacode', 'leadcode', 'code']
+      );
+    }
+
+    // 3. Scan all keys of d (case/space/symbol agnostic)
+    if (!raw && d && typeof d === 'object') {
+      const keys = Object.keys(d);
+      for (const k of keys) {
+        const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
+          const v = String(d[k] || '').trim();
+          if (v && v !== 'N/A' && v !== 'Unnamed') {
+            raw = v;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback: Check 2nd key (Column B) if Data Code column header was custom named
+      if (!raw && keys.length >= 2) {
+        const colBVal = String(d[keys[1]] || '').trim();
+        if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3) {
+          raw = colBVal;
+        }
+      }
+    }
+
     return String(raw || '').trim();
   };
 

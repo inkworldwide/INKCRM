@@ -1429,6 +1429,17 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       recordData.source = recordData.createdBy || recordData.createdByName || currentUserName;
     }
 
+    const dcVal = recordData.dataCode || recordData.data_code || recordData['Data Code'] || recordData['data code'] || recordData.datacode || recordData.DataCode || recordData.code;
+    if (dcVal) {
+      recordData.dataCode = dcVal;
+      recordData.data_code = dcVal;
+      recordData['Data Code'] = dcVal;
+      recordData['data code'] = dcVal;
+      recordData.datacode = dcVal;
+      recordData.DataCode = dcVal;
+      recordData.code = dcVal;
+    }
+
     if (recordData.assignedTo) {
       if (/^[0-9a-fA-F]{24}$/.test(String(recordData.assignedTo))) {
         const assignedUser = await User.findById(recordData.assignedTo).select('firstName lastName email');
@@ -1727,6 +1738,17 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     }
     if (!updateData.source || String(updateData.source).trim() === '' || String(updateData.source).trim() === 'Source') {
       updateData.source = oldValues.source || updateData.createdBy || updateData.createdByName || currentUserName;
+    }
+
+    const dcVal = updateData.dataCode || updateData.data_code || updateData['Data Code'] || updateData['data code'] || updateData.datacode || updateData.DataCode || updateData.code || oldValues.dataCode || oldValues.data_code || oldValues['Data Code'];
+    if (dcVal) {
+      updateData.dataCode = dcVal;
+      updateData.data_code = dcVal;
+      updateData['Data Code'] = dcVal;
+      updateData['data code'] = dcVal;
+      updateData.datacode = dcVal;
+      updateData.DataCode = dcVal;
+      updateData.code = dcVal;
     }
 
     if (updateData.assignedTo && updateData.assignedTo !== oldValues.assignedTo) {

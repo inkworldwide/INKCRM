@@ -144,12 +144,44 @@ export const getLeadCategory = (data: any): string => {
 };
 
 export const getLeadDataCode = (lead: any): string => {
+  if (!lead) return 'N/A';
   const data = lead?.data || lead;
-  const code = getLeadFieldValue(
+  
+  let code = getLeadFieldValue(
     data,
-    ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
+    ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
     ['datacode', 'leadcode', 'code']
   ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code;
+
+  if (!code && lead?.data) {
+    code = getLeadFieldValue(
+      lead,
+      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
+      ['datacode', 'leadcode', 'code']
+    );
+  }
+
+  // Scan all property keys on data object
+  if (!code && data && typeof data === 'object') {
+    const keys = Object.keys(data);
+    for (const k of keys) {
+      const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
+        const v = String(data[k] || '').trim();
+        if (v && v !== 'N/A' && v !== 'Unnamed') {
+          code = v;
+          break;
+        }
+      }
+    }
+    // Check 2nd key (Column B) if Data Code column header was custom named
+    if (!code && keys.length >= 2) {
+      const colBVal = String(data[keys[1]] || '').trim();
+      if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3) {
+        code = colBVal;
+      }
+    }
+  }
 
   if (code && String(code).trim() !== '' && String(code).trim() !== 'N/A' && String(code).trim() !== 'Unnamed') {
     return String(code).trim();
