@@ -702,8 +702,12 @@ const buildUserAssignmentFilter = (user: any) => {
 // GET my campaigns (assigned to logged in user)
 router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
-    const userId = req.user?.id;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
+
+    const userId = req.user?.id || (req.user as any)?._id;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized.' });
@@ -714,12 +718,24 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
     const userObj = userDoc ? userDoc.toObject() : { id: userId, ...req.user };
 
     // 1. Get registered campaigns from the Campaigns module
-    const campaignModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'campaigns' });
+    let campaignModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'campaigns' },
+        { organizationId: orgId, apiPath: 'campaign' },
+        { organizationId: orgId, name: new RegExp('^campaigns?$', 'i') },
+        { apiPath: 'campaigns' },
+        { apiPath: 'campaign' },
+        { name: new RegExp('^campaigns?$', 'i') }
+      ]
+    });
+
     let campaignRecords: any[] = [];
     if (campaignModule) {
       campaignRecords = await CustomRecord.find({
-        organizationId: orgId,
-        moduleId: campaignModule._id
+        $or: [
+          { organizationId: orgId, moduleId: campaignModule._id },
+          { moduleId: campaignModule._id }
+        ]
       }).lean();
     }
 
@@ -730,11 +746,20 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       }).filter(Boolean)
     );
 
-    // 2. Get the leads module
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    // 2. Get the leads module with broad fallback
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(200).json({ campaigns: [] });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
@@ -743,7 +768,7 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
 
     const baseLeadFilter = {
       organizationId: orgId,
-      moduleId: leadModule._id,
+      moduleId: (leadModule as any)?._id,
       $or: [
         { 'data.source': { $exists: true, $ne: '' } },
         { 'data.campaignName': { $exists: true, $ne: '' } },
@@ -848,8 +873,12 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
 // GET my campaign details (assigned leads under campaignName)
 router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
-    const userId = req.user?.id;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
+
+    const userId = req.user?.id || (req.user as any)?._id;
     const { campaignName } = req.params;
     const pageNum = parseInt(req.query.page as string || '1', 10);
     const limitNum = parseInt(req.query.limit as string || '100000', 10);
@@ -864,11 +893,20 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     const userDoc = await User.findById(userId).select('_id firstName lastName email userCode name role');
     const userObj = userDoc ? userDoc.toObject() : { id: userId, ...req.user };
 
-    // Get the leads module
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    // Get the leads module with broad fallback
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(404).json({ error: 'Leads module not found.' });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const decodedCampaignName = decodeURIComponent(campaignName).trim();
@@ -895,7 +933,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       if (isAdmin) {
         exportQuery = {
           organizationId: orgId,
-          moduleId: leadModule._id,
+          moduleId: (leadModule as any)?._id,
           ...campaignFilter
         };
         await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
@@ -903,7 +941,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
         const userFilter = buildUserAssignmentFilter(userObj);
         exportQuery = {
           organizationId: orgId,
-          moduleId: leadModule._id,
+          moduleId: (leadModule as any)?._id,
           $and: [
             campaignFilter,
             userFilter
@@ -914,7 +952,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
         if (directCount === 0) {
           exportQuery = {
             organizationId: orgId,
-            moduleId: leadModule._id,
+            moduleId: (leadModule as any)?._id,
             ...campaignFilter
           };
           await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
@@ -958,7 +996,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     if (isAdmin) {
       finalQuery = {
         organizationId: orgId,
-        moduleId: leadModule._id,
+        moduleId: (leadModule as any)?._id,
         ...campaignFilter
       };
       await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
@@ -966,7 +1004,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       const userFilter = buildUserAssignmentFilter(userObj);
       const query: Record<string, any> = {
         organizationId: orgId,
-        moduleId: leadModule._id,
+        moduleId: (leadModule as any)?._id,
         $and: [
           campaignFilter,
           userFilter
@@ -979,7 +1017,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       } else {
         finalQuery = {
           organizationId: orgId,
-          moduleId: leadModule._id,
+          moduleId: (leadModule as any)?._id,
           ...campaignFilter
         };
         await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
@@ -1900,18 +1938,33 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
 // Bulk Delete Count for Leads
 router.post('/leads/bulk-delete-count', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
+
     const { campaignName, assignedTo, status, createdDate, startDate, endDate } = req.body;
 
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(200).json({ count: 0 });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const query: Record<string, any> = {
-      organizationId: orgId,
-      moduleId: leadModule._id
+      $or: [
+        { organizationId: orgId, moduleId: (leadModule as any)?._id },
+        { moduleId: (leadModule as any)?._id }
+      ]
     };
 
     const andConditions: any[] = [];
@@ -1953,28 +2006,33 @@ router.post('/leads/bulk-delete-count', async (req: Request, res: Response): Pro
     }
 
     if (createdDate) {
-      const dayStart = new Date(createdDate);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(createdDate);
-      dayEnd.setHours(23, 59, 59, 999);
+      const dObj = new Date(createdDate);
+      if (!isNaN(dObj.getTime())) {
+        const dayStart = new Date(dObj);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dObj);
+        dayEnd.setHours(23, 59, 59, 999);
 
-      andConditions.push({
-        $or: [
-          { createdAt: { $gte: dayStart, $lte: dayEnd } },
-          { 'data.created_at': { $regex: '^' + createdDate } },
-          { 'data.date': { $regex: '^' + createdDate } },
-          { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
-        ]
-      });
+        andConditions.push({
+          $or: [
+            { createdAt: { $gte: dayStart, $lte: dayEnd } },
+            { 'data.created_at': { $regex: '^' + createdDate } },
+            { 'data.date': { $regex: '^' + createdDate } },
+            { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
+          ]
+        });
+      }
     } else if (startDate || endDate) {
       const dateFilter: any = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
-      if (endDate) {
+      if (startDate && !isNaN(new Date(startDate).getTime())) dateFilter.$gte = new Date(startDate);
+      if (endDate && !isNaN(new Date(endDate).getTime())) {
         const endD = new Date(endDate);
         endD.setHours(23, 59, 59, 999);
         dateFilter.$lte = endD;
       }
-      andConditions.push({ createdAt: dateFilter });
+      if (Object.keys(dateFilter).length > 0) {
+        andConditions.push({ createdAt: dateFilter });
+      }
     }
 
     if (andConditions.length > 0) {
@@ -1992,18 +2050,33 @@ router.post('/leads/bulk-delete-count', async (req: Request, res: Response): Pro
 // Bulk Delete Leads
 router.post('/leads/bulk-delete', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
+
     const { campaignName, assignedTo, status, createdDate, startDate, endDate } = req.body;
 
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(404).json({ error: 'Leads module not found.' });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const query: Record<string, any> = {
-      organizationId: orgId,
-      moduleId: leadModule._id
+      $or: [
+        { organizationId: orgId, moduleId: (leadModule as any)?._id },
+        { moduleId: (leadModule as any)?._id }
+      ]
     };
 
     const andConditions: any[] = [];
@@ -2045,28 +2118,33 @@ router.post('/leads/bulk-delete', async (req: Request, res: Response): Promise<v
     }
 
     if (createdDate) {
-      const dayStart = new Date(createdDate);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(createdDate);
-      dayEnd.setHours(23, 59, 59, 999);
+      const dObj = new Date(createdDate);
+      if (!isNaN(dObj.getTime())) {
+        const dayStart = new Date(dObj);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dObj);
+        dayEnd.setHours(23, 59, 59, 999);
 
-      andConditions.push({
-        $or: [
-          { createdAt: { $gte: dayStart, $lte: dayEnd } },
-          { 'data.created_at': { $regex: '^' + createdDate } },
-          { 'data.date': { $regex: '^' + createdDate } },
-          { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
-        ]
-      });
+        andConditions.push({
+          $or: [
+            { createdAt: { $gte: dayStart, $lte: dayEnd } },
+            { 'data.created_at': { $regex: '^' + createdDate } },
+            { 'data.date': { $regex: '^' + createdDate } },
+            { 'data.dialedAt': { $gte: dayStart, $lte: dayEnd } }
+          ]
+        });
+      }
     } else if (startDate || endDate) {
       const dateFilter: any = {};
-      if (startDate) dateFilter.$gte = new Date(startDate);
-      if (endDate) {
+      if (startDate && !isNaN(new Date(startDate).getTime())) dateFilter.$gte = new Date(startDate);
+      if (endDate && !isNaN(new Date(endDate).getTime())) {
         const endD = new Date(endDate);
         endD.setHours(23, 59, 59, 999);
         dateFilter.$lte = endD;
       }
-      andConditions.push({ createdAt: dateFilter });
+      if (Object.keys(dateFilter).length > 0) {
+        andConditions.push({ createdAt: dateFilter });
+      }
     }
 
     if (andConditions.length > 0) {
@@ -2088,18 +2166,33 @@ router.post('/leads/bulk-delete', async (req: Request, res: Response): Promise<v
 // Count Duplicate Leads (Keeping 1 original lead per phone, targeting extra duplicates)
 router.post('/leads/duplicates-count', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
-    const { status, user, date, month, year } = req.body;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
 
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    const { status, user, date, month, year, scanMode } = req.body;
+
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(200).json({ duplicateGroups: 0, extraDuplicatesCount: 0, idsToDelete: [] });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const query: Record<string, any> = {
-      organizationId: orgId,
-      moduleId: leadModule._id
+      $or: [
+        { organizationId: orgId, moduleId: (leadModule as any)?._id },
+        { moduleId: (leadModule as any)?._id }
+      ]
     };
 
     const andConditions: any[] = [];
@@ -2128,18 +2221,21 @@ router.post('/leads/duplicates-count', async (req: Request, res: Response): Prom
     }
 
     if (date) {
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
+      const dObj = new Date(date);
+      if (!isNaN(dObj.getTime())) {
+        const dayStart = new Date(dObj);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dObj);
+        dayEnd.setHours(23, 59, 59, 999);
 
-      andConditions.push({
-        $or: [
-          { createdAt: { $gte: dayStart, $lte: dayEnd } },
-          { 'data.created_at': { $regex: '^' + date } },
-          { 'data.date': { $regex: '^' + date } }
-        ]
-      });
+        andConditions.push({
+          $or: [
+            { createdAt: { $gte: dayStart, $lte: dayEnd } },
+            { 'data.created_at': { $regex: '^' + date } },
+            { 'data.date': { $regex: '^' + date } }
+          ]
+        });
+      }
     } else {
       if (year) {
         const y = parseInt(year, 10);
@@ -2174,7 +2270,7 @@ router.post('/leads/duplicates-count', async (req: Request, res: Response): Prom
     records.forEach(r => {
       const data = r.data || {};
 
-      const leadNo = (data.leadNo || data.lead_no || data.leadId || data.leadNumber || data.caseNo || '').toString().trim().toLowerCase();
+      const leadNo = (data.dataCode || data.data_code || data['Data Code'] || data.leadNo || data.lead_no || data.leadId || data.leadNumber || data.caseNo || '').toString().trim().toLowerCase();
       const leadName = (data.customerName || data.customer || data.fullName || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '') || '').toString().trim().toLowerCase();
       const phone = (data.phone || data.mobile || data.contactNum || data.contact_num || data.contact || data.phoneNumber || '').toString().replace(/[\s\-\+\(\)]/g, '');
       
@@ -2187,19 +2283,16 @@ router.post('/leads/duplicates-count', async (req: Request, res: Response): Prom
       const assignedBy = (data.assignedByName || data.assignedBy || '').toString().trim().toLowerCase();
 
       let groupKey = '';
-      if (req.body.scanMode === 'phone_only') {
-        groupKey = phone ? `phone_${phone}` : '';
+      if (scanMode === 'phone_only') {
+        groupKey = (phone && phone.length >= 7) ? `phone_${phone}` : '';
       } else {
-        // Full matching key: Lead No + Lead Name + Phone + Created Date + Assigned To + Assigned By
-        const parts = [
-          `no:${leadNo}`,
-          `name:${leadName}`,
-          `ph:${phone}`,
-          `dt:${createdDate}`,
-          `to:${assignedTo}`,
-          `by:${assignedBy}`
-        ];
-        groupKey = parts.join('|');
+        if (phone && phone.length >= 7) {
+          groupKey = `ph:${phone}${leadName ? `|name:${leadName}` : ''}${leadNo ? `|no:${leadNo}` : ''}`;
+        } else if (leadNo) {
+          groupKey = `no:${leadNo}|name:${leadName}`;
+        } else if (leadName && createdDate) {
+          groupKey = `name:${leadName}|dt:${createdDate}`;
+        }
       }
 
       if (groupKey) {
@@ -2238,7 +2331,11 @@ router.post('/leads/duplicates-count', async (req: Request, res: Response): Prom
 // Delete Extra Duplicate Leads
 router.post('/leads/delete-duplicates', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
+    const rawOrgId = req.organizationId || (req.user as any)?.organizationId;
+    const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+      ? new mongoose.Types.ObjectId(String(rawOrgId))
+      : rawOrgId;
+
     const { idsToDelete } = req.body;
 
     if (!Array.isArray(idsToDelete) || idsToDelete.length === 0) {
@@ -2246,17 +2343,24 @@ router.post('/leads/delete-duplicates', async (req: Request, res: Response): Pro
       return;
     }
 
-    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    let leadModule = await ModuleDefinition.findOne({
+      $or: [
+        { organizationId: orgId, apiPath: 'leads' },
+        { organizationId: orgId, apiPath: 'lead' },
+        { organizationId: orgId, name: new RegExp('^leads?$', 'i') },
+        { apiPath: 'leads' },
+        { apiPath: 'lead' },
+        { name: new RegExp('^leads?$', 'i') }
+      ]
+    });
+
     if (!leadModule) {
-      res.status(404).json({ error: 'Leads module not found.' });
-      return;
+      leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
     const objectIds = idsToDelete.map(id => new mongoose.Types.ObjectId(id));
 
     const result = await CustomRecord.deleteMany({
-      organizationId: orgId,
-      moduleId: leadModule._id,
       _id: { $in: objectIds }
     });
 
