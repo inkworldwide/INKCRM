@@ -1182,7 +1182,8 @@ router.get('/users', authenticate, async (req: Request, res: Response): Promise<
     const users = await User.find(query)
       .populate('roleId', 'name')
       .populate('reportingManager', 'firstName lastName email')
-      .select('-passwordHash -refreshTokens');
+      .select('-passwordHash -refreshTokens')
+      .lean();
     res.status(200).json(users);
   } catch (e) {
     res.status(500).json({ error: 'Failed to retrieve users.' });

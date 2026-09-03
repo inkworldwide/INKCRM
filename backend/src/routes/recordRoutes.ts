@@ -1283,7 +1283,8 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       .populate('updatedBy', 'firstName lastName name email')
       .sort(sortOption)
       .skip(skipNum)
-      .limit(limitNum);
+      .limit(limitNum)
+      .lean();
 
     // Resolve any User ObjectIds/hashes in data.assignedTo, data.assignedBy, data.psm to real names
     const userIdsToFetch = new Set<string>();

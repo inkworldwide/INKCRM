@@ -56,12 +56,20 @@ CustomRecordSchema.pre('save', function (next) {
 // Indexes for fast querying, aggregations, sorting & multi-tenant isolation
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedTo': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.telecaller': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedAgent': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedToName': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaignName': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.source': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaign': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaign_name': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.normalizedStatus': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.status': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dialStatus': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dataCode': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.data_code': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.phone': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.mobile': 1 });
 CustomRecordSchema.index({ organizationId: 1, 'data.email': 1 });
 CustomRecordSchema.index({ organizationId: 1, createdAt: -1 });
 

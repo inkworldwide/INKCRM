@@ -105,8 +105,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+// Serve static uploaded files with high-performance caching headers
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads'), { maxAge: '1d', etag: true }));
 
 // 6. Health, Ready, and Version check endpoints (placed before tenant resolver)
 app.get('/health', (req, res) => {

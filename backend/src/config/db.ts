@@ -17,8 +17,13 @@ export const connectDB = async (): Promise<void> => {
   mongoose.set('strictQuery', true);
 
   try {
-    // Attempt standard connection to local server
-    await mongoose.connect(connUri, { serverSelectionTimeoutMS: 2000 });
+    // Attempt standard connection to local server with optimized connection pool
+    await mongoose.connect(connUri, {
+      maxPoolSize: 100,
+      minPoolSize: 10,
+      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 5000
+    });
     console.log(`MongoDB Connected: ${mongoose.connection.host}`);
   } catch (err) {
     console.log('Local MongoDB service not running. Attempting to launch local mongod inside project...');
@@ -65,7 +70,12 @@ export const connectDB = async (): Promise<void> => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     try {
-      await mongoose.connect('mongodb://127.0.0.1:27017/inkcrm');
+      await mongoose.connect('mongodb://127.0.0.1:27017/inkcrm', {
+        maxPoolSize: 100,
+        minPoolSize: 10,
+        socketTimeoutMS: 45000,
+        serverSelectionTimeoutMS: 5000
+      });
       console.log(`MongoDB Connected (Project Folder): ${mongoose.connection.host}`);
     } catch (connectErr) {
       console.error('Failed to connect to the automatically started local database process:', connectErr);
