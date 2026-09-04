@@ -102,6 +102,9 @@ const parseLeadDate = (val: any): Date | null => {
   const s = String(val).trim();
   if (!s) return null;
 
+  const standard = new Date(s);
+  if (!isNaN(standard.getTime())) return standard;
+
   // Handles DD-MM-YYYY or DD/MM/YYYY e.g. "01-09-2026" or "01/09/2026"
   const ddmmyyyy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
   if (ddmmyyyy) {
@@ -122,8 +125,7 @@ const parseLeadDate = (val: any): Date | null => {
     if (!isNaN(parsed.getTime())) return parsed;
   }
 
-  const standard = new Date(s);
-  return isNaN(standard.getTime()) ? null : standard;
+  return null;
 };
 
 export default function TelecallerReportsPage() {
@@ -139,12 +141,9 @@ export default function TelecallerReportsPage() {
   ];
   const years = ['2024', '2025', '2026', '2027'];
 
-  // Month & Year Filter State (Defaulting to current Month & Year)
-  const currentMonthName = months[new Date().getMonth()];
-  const currentYearStr = new Date().getFullYear().toString();
-
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([currentMonthName]);
-  const [selectedYears, setSelectedYears] = useState<string[]>([currentYearStr]);
+  // Month & Year Filter State (Defaulting to empty = All Months & Years)
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>([]);
 
   useEffect(() => {
     fetchInitialData();
@@ -156,7 +155,7 @@ export default function TelecallerReportsPage() {
       const [usersRes, summaryRes, leadsRes] = await Promise.all([
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
         api.get('/reports/telecaller-summary').catch(() => ({ data: { telecallers: [] } })),
-        api.get('/records/leads?limit=100').catch(() => ({ data: [] }))
+        api.get('/records/leads?limit=5000').catch(() => ({ data: [] }))
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];

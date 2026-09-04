@@ -71,7 +71,7 @@ export default function MonthlyFunnelPage() {
     try {
       const [funnelRes, leadsRes, campRes, usersRes] = await Promise.all([
         api.get('/dashboard/funnel-stats?period=monthly').catch(() => ({ data: { total: 0, statusCounts: {}, monthlyMap: {} } })),
-        api.get('/records/leads?limit=100').catch(() => ({ data: { records: [] } })),
+        api.get('/records/leads?limit=5000').catch(() => ({ data: { records: [] } })),
         api.get('/records/campaigns?limit=100').catch(() => ({ data: { records: [] } })),
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] }))
       ]);

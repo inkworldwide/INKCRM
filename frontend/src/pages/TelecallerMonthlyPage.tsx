@@ -150,7 +150,7 @@ export default function TelecallerMonthlyPage() {
       const [usersRes, summaryRes, leadsRes] = await Promise.all([
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
         api.get('/reports/telecaller-summary').catch(() => ({ data: { telecallers: [] } })),
-        api.get('/records/leads?limit=100').catch(() => ({ data: [] }))
+        api.get('/records/leads?limit=5000').catch(() => ({ data: [] }))
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];
