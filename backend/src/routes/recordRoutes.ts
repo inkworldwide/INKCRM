@@ -1301,10 +1301,10 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
     // Apply Dynamic Reporting Manager Hierarchy filtering
     await HierarchyService.modifyRecordQuery(query, req.user as any, req.organizationId!);
 
-    // Pagination & Safety Hard Cap (Max 200 per page to protect Node.js heap & Mongo DB)
+    // Pagination & Safety Cap (Up to 10,000 per page for reporting)
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
     const rawLimit = parseInt(limit as string, 10) || 50;
-    const limitNum = Math.min(Math.max(1, rawLimit), 200);
+    const limitNum = Math.min(Math.max(1, rawLimit), 10000);
     const skipNum = (pageNum - 1) * limitNum;
 
     // Sorting

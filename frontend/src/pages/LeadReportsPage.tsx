@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import * as Icons from 'lucide-react';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
@@ -8,21 +7,36 @@ import MultiSelectDropdown from '../components/MultiSelectDropdown';
 import { exportLeadReportXLSX } from '../utils/exportLeadReportXLSX';
 import { maskPhoneNumber } from '../utils/phoneUtils';
 
-export default function LeadReportsPage() {
-  const [searchParams] = useSearchParams();
-  const initialCamp = searchParams.get('campaign');
+export const normalizeStatusName = (rawSt: string): string => {
+  if (!rawSt) return 'PENDING';
+  const s = rawSt.trim().toUpperCase();
 
+  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS') return 'HOT LEADS';
+  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS') return 'WARM LEADS';
+  if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
+  if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
+  if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
+  if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
+  if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
+  if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
+  if (s.includes('REJECT')) return 'REJECTED';
+  if (s.includes('FOLLOW')) return 'FOLLOWUP';
+  if (s.includes('DROP')) return 'DROPPED';
+  if (s === 'PENDING') return 'PENDING';
+
+  return s;
+};
+
+export default function LeadReportsPage() {
   const { showToast } = useToastStore();
   const [loading, setLoading] = useState(false);
   const [leads, setLeads] = useState<any[]>([]);
-  const [campaignsList, setCampaignsList] = useState<string[]>([]);
 
-  // Multi-Select Filter States with Checkboxes
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(['July']);
-  const [selectedYears, setSelectedYears] = useState<string[]>(['2026']);
+  // Multi-Select Filter States with Checkboxes (Default: Empty = All Selected)
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedLoanTypes, setSelectedLoanTypes] = useState<string[]>([]);
-  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>(initialCamp ? [initialCamp] : []);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -31,8 +45,8 @@ export default function LeadReportsPage() {
   const years = ['2024', '2025', '2026', '2027'];
   
   const statusOptions = [
-    'New', 'Hot', 'Warm', 'Cedil Pending', 'Document Pending',
-    'Approval Pending', 'Approved', 'Disbursed', 'Rejected', 'Followup', 'Dropped', 'Pending'
+    'Hot', 'Warm', 'Cedil Pending', 'Document Pending',
+    'Approval Pending', 'Approved', 'Disbursed', 'Rejected', 'Followup', 'Dropped', 'Pending', 'New'
   ];
 
   // Master Product Names matching website database (from Products module)
@@ -50,17 +64,9 @@ export default function LeadReportsPage() {
   const fetchReportData = async () => {
     setLoading(true);
     try {
-      const [leadsRes, campRes] = await Promise.all([
-        api.get('/records/leads?limit=100').catch(() => ({ data: [] })),
-        api.get('/records/campaigns?limit=100').catch(() => ({ data: [] }))
-      ]);
-
+      const leadsRes = await api.get('/records/leads?limit=5000').catch(() => ({ data: [] }));
       const allRecords = leadsRes.data?.records || leadsRes.data || [];
-      const fetchedCampaigns = (campRes.data?.records || []).map((c: any) => c.data?.campaignName || c.name).filter(Boolean);
-      const leadCampaigns = allRecords.map((l: any) => l.data?.campaign || l.data?.campaignName || l.campaignName).filter(Boolean);
-
       setLeads(allRecords);
-      setCampaignsList(Array.from(new Set([...fetchedCampaigns, ...leadCampaigns])));
     } catch (err) {
       console.error(err);
       showToast('Failed to load lead report data.', 'error');
@@ -78,24 +84,28 @@ export default function LeadReportsPage() {
   const filteredLeads = leads.filter((item) => {
     const data = item.data || {};
 
-    // Month & Year match
-    const dateVal = data.dialedAt || data.lastCallDate || item.createdAt || item.updatedAt || data.createdAt || data.date;
-    if (dateVal) {
-      const dateObj = new Date(dateVal);
-      if (!isNaN(dateObj.getTime())) {
-        const monthName = months[dateObj.getMonth()];
-        const yearStr = dateObj.getFullYear().toString();
-        
-        if (selectedMonths.length > 0 && !selectedMonths.includes(monthName)) return false;
-        if (selectedYears.length > 0 && !selectedYears.includes(yearStr)) return false;
+    // Month & Year match (only filter if explicit months/years are selected)
+    if (selectedMonths.length > 0 || selectedYears.length > 0) {
+      const dateVal = data.dialedAt || data.lastCallDate || item.createdAt || item.updatedAt || data.createdAt || data.date;
+      if (dateVal) {
+        const dateObj = new Date(dateVal);
+        if (!isNaN(dateObj.getTime())) {
+          const monthName = months[dateObj.getMonth()];
+          const yearStr = dateObj.getFullYear().toString();
+          
+          if (selectedMonths.length > 0 && !selectedMonths.includes(monthName)) return false;
+          if (selectedYears.length > 0 && !selectedYears.includes(yearStr)) return false;
+        }
       }
     }
 
-    const statusMatch = selectedStatuses.length === 0 || selectedStatuses.some(s => (data.status || '').toLowerCase() === s.toLowerCase());
-    
-    // Campaign match
-    const leadCamp = (data.campaign || data.campaignName || item.campaignName || '').trim();
-    const campaignMatch = selectedCampaigns.length === 0 || selectedCampaigns.some(c => c.toLowerCase() === leadCamp.toLowerCase() || leadCamp.toLowerCase().includes(c.toLowerCase()));
+    // Status match with robust status normalization
+    const statusMatch = selectedStatuses.length === 0 || selectedStatuses.some(s => {
+      const targetNorm = normalizeStatusName(s);
+      const rawSt = data.normalizedStatus || data.status || data.dialStatus || data.leadStatus || '';
+      const itemNorm = normalizeStatusName(rawSt);
+      return targetNorm === itemNorm || rawSt.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(rawSt.toLowerCase());
+    });
 
     // Match product/loanType with tolerance for defaults & substrings
     const rawLoan = (data.loanType || data.serviceType || data.product || 'SALARIED PERSONAL LOAN').trim().toLowerCase();
@@ -106,7 +116,7 @@ export default function LeadReportsPage() {
       return rawLoan.includes(selected) || selected.includes(rawLoan);
     });
 
-    return statusMatch && loanMatch && campaignMatch;
+    return statusMatch && loanMatch;
   });
 
   const exportCSV = () => {
@@ -126,7 +136,7 @@ export default function LeadReportsPage() {
   }, 0);
 
   const hotAndConvertedCount = filteredLeads.filter((item) => {
-    const st = (item.data?.status || item.status || '').toLowerCase();
+    const st = (item.data?.status || item.status || item.data?.dialStatus || '').toLowerCase();
     return st.includes('hot') || st.includes('approved') || st.includes('disbursed');
   }).length;
 
@@ -134,9 +144,9 @@ export default function LeadReportsPage() {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-4">
-      {/* 4 Vibrant Metric Hero Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Leads */}
+      {/* 3 Vibrant Metric Hero Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Card 1: Total Filtered Leads */}
         <div className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
           <div className="flex items-center justify-between">
@@ -152,7 +162,7 @@ export default function LeadReportsPage() {
               {filteredLeads.length}
             </span>
             <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md font-mono">
-              of {leads.length} Total
+              of {leads.length} Loaded
             </span>
           </div>
         </div>
@@ -198,30 +208,9 @@ export default function LeadReportsPage() {
             </span>
           </div>
         </div>
-
-        {/* Card 4: Campaigns in Scope */}
-        <div className="bg-white dark:bg-slate-900 border border-sky-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-blue-500" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Campaign Sources
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-xs">
-              <Icons.Layers className="w-4.5 h-4.5" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-              {campaignsList.length}
-            </span>
-            <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded-md font-mono">
-              Active Drives
-            </span>
-          </div>
-        </div>
       </div>
 
-      {/* FILTER CONTROL CARD (With Multi-Select Checkboxes) */}
+      {/* FILTER CONTROL CARD (Clean Lead-Only Filters) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-visible z-20">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
         
@@ -236,14 +225,14 @@ export default function LeadReportsPage() {
           </div>
           <button
             onClick={exportCSV}
-            className="h-9 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2"
+            className="h-9 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold uppercase tracking-wider rounded-xl shadow-3xs transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Icons.Download className="w-3.5 h-3.5" />
             Export Excel
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Select Month */}
           <MultiSelectDropdown
             label="Select Month"
@@ -260,15 +249,6 @@ export default function LeadReportsPage() {
             selectedValues={selectedYears}
             onChange={setSelectedYears}
             placeholder="-All Years-"
-          />
-
-          {/* Campaign Filter */}
-          <MultiSelectDropdown
-            label="Campaign Filter"
-            options={campaignsList.length > 0 ? campaignsList : ['No Active Campaigns']}
-            selectedValues={selectedCampaigns}
-            onChange={setSelectedCampaigns}
-            placeholder="-All Campaigns-"
           />
 
           {/* Lead Status */}
@@ -360,7 +340,7 @@ export default function LeadReportsPage() {
                   const email = rawEmail || 'N/A';
 
                   const loanType = data.loanType || data.leadCategory || data.serviceType || data.product || 'SALARIED PERSONAL LOAN';
-                  const status = data.status || 'New';
+                  const status = data.status || data.dialStatus || 'New';
                   const amount = data.amount || data.loanAmount || data.budget || 'N/A';
                   const agent = item.assignedTo?.name || data.assignedTo || data.assignedToName || data.psm || data.telecaller || 'Unassigned';
 
@@ -396,7 +376,7 @@ export default function LeadReportsPage() {
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border font-mono ${
                           status.toLowerCase() === 'disbursed' || status.toLowerCase() === 'approved'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
-                            : status.toLowerCase() === 'hot'
+                            : status.toLowerCase() === 'hot' || status.toLowerCase() === 'hot leads'
                             ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800'
                             : status.toLowerCase() === 'followup' || status.toLowerCase() === 'warm'
                             ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800'
