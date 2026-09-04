@@ -6,12 +6,13 @@ import fs from 'fs';
 let localDbProcess: any = null;
 
 export const connectDB = async (): Promise<void> => {
-  let connUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/inkcrm';
+  const dbName = process.env.MONGODB_DB_NAME || 'inkcrm_bank';
+  let connUri = process.env.MONGODB_URI || `mongodb://127.0.0.1:27017/${dbName}`;
 
   // Safety check: block any cloud Atlas connection strings
   if (connUri.includes('mongodb.net') || connUri.includes('mongodb+srv://') || connUri.includes('atlas')) {
-    console.log('Warning: Cloud database connection string detected. Forcing fallback to local database.');
-    connUri = 'mongodb://127.0.0.1:27017/inkcrm';
+    console.log('Warning: Cloud database connection string detected. Forcing fallback to local isolated database.');
+    connUri = `mongodb://127.0.0.1:27017/${dbName}`;
   }
 
   mongoose.set('strictQuery', true);
