@@ -72,9 +72,10 @@ export default function AnnualFunnelPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [leadsRes, campRes, usersRes] = await Promise.all([
-        api.get('/records/leads?limit=100000').catch(() => ({ data: { records: [] } })),
-        api.get('/records/campaigns?limit=10000').catch(() => ({ data: { records: [] } })),
+      const [funnelRes, leadsRes, campRes, usersRes] = await Promise.all([
+        api.get('/dashboard/funnel-stats?period=annual').catch(() => ({ data: { total: 0, statusCounts: {}, monthlyMap: {} } })),
+        api.get('/records/leads?limit=100').catch(() => ({ data: { records: [] } })),
+        api.get('/records/campaigns?limit=100').catch(() => ({ data: { records: [] } })),
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] }))
       ]);
 

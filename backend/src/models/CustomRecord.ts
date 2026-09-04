@@ -55,6 +55,8 @@ CustomRecordSchema.pre('save', function (next) {
 
 // Indexes for fast querying, aggregations, sorting & multi-tenant isolation
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdAt: 1, 'data.normalizedStatus': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedTo': 1, 'data.normalizedStatus': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedTo': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.telecaller': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedAgent': 1, createdAt: -1 });

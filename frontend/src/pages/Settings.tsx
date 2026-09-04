@@ -350,7 +350,7 @@ export default function Settings() {
         setUsers(resUsers.data || []);
       } else if (tabToApiPath[currentTab]) {
         const apiPath = tabToApiPath[currentTab];
-        const resModRecords = await api.get(`/records/${apiPath}?limit=1000`);
+        const resModRecords = await api.get(`/records/${apiPath}?limit=100`);
         setModuleRecords(resModRecords.data?.records || []);
 
         if (currentTab === 'bankingpartner') {

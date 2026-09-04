@@ -61,7 +61,7 @@ export default function ModuleView() {
     if (!campaignLeadsMap[campaignName]) {
       try {
         setLoadingCampaignLeads(prev => ({ ...prev, [campaignName]: true }));
-        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=100000`);
+        const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=100`);
         setCampaignLeadsMap(prev => ({ ...prev, [campaignName]: res.data.leads || [] }));
       } catch (err) {
         console.error(err);
@@ -143,23 +143,15 @@ export default function ModuleView() {
   const loadCampaignAssignmentsData = async (targetCampaign?: string) => {
     try {
       setCaLoadingStats(true);
-      const activeCamp = targetCampaign !== undefined ? targetCampaign : caSelectedCampaign;
-      const statsUrl = activeCamp
-        ? `/records/campaigns/allocation-stats?campaignName=${encodeURIComponent(activeCamp)}`
-        : '/records/campaigns/allocation-stats';
 
-      const [campaignsRes, myCampsRes, rolesRes, usersRes, statsRes] = await Promise.all([
+      const [campaignsRes, rolesRes, usersRes] = await Promise.all([
         api.get('/records/campaigns?limit=500').catch(() => ({ data: [] })),
-        api.get('/records/campaigns/my-campaigns').catch(() => ({ data: [] })),
         api.get('/auth/roles').catch(() => ({ data: [] })),
-        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
-        api.get(statsUrl).catch(() => ({ data: {} }))
+        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] }))
       ]);
 
-      // 1. Process & extract all unique campaign names
+      // 1. Process & extract registered campaign names strictly from Campaigns module (separating Campaigns from raw Lead imports)
       const regCamps = Array.isArray(campaignsRes.data) ? campaignsRes.data : (campaignsRes.data?.records || campaignsRes.data?.campaigns || []);
-      const myCamps = Array.isArray(myCampsRes.data) ? myCampsRes.data : (myCampsRes.data?.campaigns || myCampsRes.data?.records || []);
-
       const campMap = new Map<string, any>();
 
       regCamps.forEach((c: any) => {
@@ -170,30 +162,32 @@ export default function ModuleView() {
         }
       });
 
-      myCamps.forEach((c: any) => {
-        const d = c.data || c || {};
-        const name = String(c.campaignName || d.campaignName || d.name || d.source || '').trim();
-        if (name && !campMap.has(name.toLowerCase())) {
-          campMap.set(name.toLowerCase(), { _id: c._id || name, name, raw: c });
-        }
-      });
-
-      // Default fallback campaigns if none registered yet
-      if (campMap.size === 0) {
-        ['Direct Lead Import', 'Website Leads', 'Referral Leads'].forEach(name => {
-          campMap.set(name.toLowerCase(), { _id: name, name });
-        });
-      }
-
       const allCampaignOptions = Array.from(campMap.values());
       setCaCampaigns(allCampaignOptions);
 
-      if (allCampaignOptions.length > 0 && !caSelectedCampaign && !targetCampaign) {
-        setCaSelectedCampaign(allCampaignOptions[0].name);
+      const activeCamp = targetCampaign || caSelectedCampaign || (allCampaignOptions.length > 0 ? allCampaignOptions[0].name : '');
+      setCaSelectedCampaign(activeCamp);
+
+      // 2. Fetch allocation stats FOR THE SELECTED CAMPAIGN ONLY
+      if (activeCamp) {
+        const statsRes = await api.get(`/records/campaigns/allocation-stats?campaignName=${encodeURIComponent(activeCamp)}`).catch(() => ({ data: {} }));
+        setCaAllocatedStats(statsRes.data?.stats || {});
+        setCaDialedStats(statsRes.data?.dialedStats || {});
+      } else {
+        setCaAllocatedStats({});
+        setCaDialedStats({});
       }
 
-      // 2. Process Roles
-      const fetchedRoles = Array.isArray(rolesRes.data) ? rolesRes.data : (rolesRes.data?.roles || []);
+      // 3. Process Roles (with system default fallbacks)
+      let fetchedRoles = Array.isArray(rolesRes.data) ? rolesRes.data : (rolesRes.data?.roles || []);
+      if (!Array.isArray(fetchedRoles) || fetchedRoles.length === 0) {
+        fetchedRoles = [
+          { _id: 'telecaller_role', name: 'TELI CALLER' },
+          { _id: 'admin_role', name: 'ADMIN' },
+          { _id: 'super_admin_role', name: 'Super Admin' },
+          { _id: 'sales_manager_role', name: 'ARIA SALES MANAGER' }
+        ];
+      }
       setCaRoles(fetchedRoles);
 
       // Auto-select Telecaller role (or 1st role) if not selected
@@ -206,23 +200,21 @@ export default function ModuleView() {
         setCaSelectedRole(activeRoleId);
       }
 
-      // 3. Process & auto-populate active employees into the table
+      // 4. Process & auto-populate active employees into the table
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data?.users || []);
       if (fetchedUsers.length > 0) {
         let filtered = fetchedUsers;
         if (activeRoleId) {
           filtered = fetchedUsers.filter((u: any) => {
             const uRoleId = u.roleId?._id || u.roleId || u.role?._id || u.role;
-            return String(uRoleId) === String(activeRoleId) && u.isActive !== false;
+            const uRoleName = u.roleId?.name || u.role?.name || String(u.role || '');
+            return (String(uRoleId) === String(activeRoleId) || uRoleName.toLowerCase() === String(activeRoleId).toLowerCase()) && u.isActive !== false;
           });
         }
         const finalAgents = filtered.length > 0 ? filtered : fetchedUsers;
         setCaAgents(finalAgents);
         setCaSelectedAgents(finalAgents.map((u: any) => u._id));
       }
-
-      setCaAllocatedStats(statsRes.data?.stats || {});
-      setCaDialedStats(statsRes.data?.dialedStats || {});
     } catch (err) {
       console.error('Failed to load campaign assignments metadata:', err);
     } finally {
@@ -230,39 +222,45 @@ export default function ModuleView() {
     }
   };
 
-  useEffect(() => {
-    if (apiPath === 'campaignassignments' && caSelectedCampaign) {
-      loadCampaignAssignmentsData(caSelectedCampaign);
+  const handleCampaignChange = (campaignName: string) => {
+    setCaSelectedCampaign(campaignName);
+    if (campaignName) {
+      api.get(`/records/campaigns/allocation-stats?campaignName=${encodeURIComponent(campaignName)}`)
+        .then(res => {
+          setCaAllocatedStats(res.data?.stats || {});
+          setCaDialedStats(res.data?.dialedStats || {});
+        })
+        .catch(err => console.error(err));
     }
-  }, [caSelectedCampaign, apiPath]);
+  };
 
-  useEffect(() => {
-    if (apiPath === 'campaignassignments' && caSelectedRole) {
-      handleLoadAgents();
+  const handleRoleChange = (roleId: string) => {
+    setCaSelectedRole(roleId);
+    if (roleId) {
+      handleLoadAgents(roleId);
     }
-  }, [caSelectedRole, apiPath]);
+  };
 
-  const handleLoadAgents = async () => {
-    if (!caSelectedRole) {
-      showToast('Please select an Agent Type.', 'warning');
-      return;
-    }
+  const handleLoadAgents = async (roleIdToUse?: string) => {
+    const targetRole = roleIdToUse || caSelectedRole;
     setCaLoadingAgents(true);
     try {
       const res = await api.get('/auth/users?purpose=dropdown');
       const allUsers = res.data || [];
-      const filtered = allUsers.filter((u: any) => {
-        const uRoleId = u.roleId?._id || u.roleId || u.role?._id || u.role;
-        return String(uRoleId) === String(caSelectedRole) && u.isActive !== false;
-      });
-      setCaAgents(filtered);
-      setCaSelectedAgents(filtered.map((u: any) => u._id));
-      if (filtered.length === 0) {
-        showToast('No active agents found for this role.', 'info');
+      let filtered = allUsers;
+      if (targetRole && targetRole !== 'ALL') {
+        filtered = allUsers.filter((u: any) => {
+          const uRoleId = u.roleId?._id || u.roleId || u.role?._id || u.role;
+          const uRoleName = u.roleId?.name || u.role?.name || String(u.role || '');
+          const roleMatch = String(uRoleId) === String(targetRole) || uRoleName.toLowerCase() === String(targetRole).toLowerCase();
+          return roleMatch && u.isActive !== false;
+        });
       }
+      const finalAgents = filtered.length > 0 ? filtered : allUsers;
+      setCaAgents(finalAgents);
+      setCaSelectedAgents(finalAgents.map((u: any) => u._id));
     } catch (err: any) {
       console.error('Failed to load agents:', err);
-      showToast(err.response?.data?.error || 'Failed to load agents.', 'error');
     } finally {
       setCaLoadingAgents(false);
     }
@@ -566,14 +564,30 @@ export default function ModuleView() {
   };
 
   const renderCampaignAssignments = () => {
+    const getAgentStats = (agent: any) => {
+      const fn = (agent.firstName || '').trim();
+      const ln = (agent.lastName || '').trim();
+      const fullName = `${fn} ${ln}`.trim() || agent.name || agent.username || agent.email || '';
+      const agentId = String(agent._id || agent.id || '');
+      const allocated = (caAllocatedStats[fullName] !== undefined)
+        ? caAllocatedStats[fullName]
+        : ((caAllocatedStats[agentId] !== undefined)
+          ? caAllocatedStats[agentId]
+          : (caAllocatedStats[fn] || 0));
+      const dialed = (caDialedStats[fullName] !== undefined)
+        ? caDialedStats[fullName]
+        : ((caDialedStats[agentId] !== undefined)
+          ? caDialedStats[agentId]
+          : (caDialedStats[fn] || 0));
+      return { fullName, allocated, dialed };
+    };
+
     const totalAgentAllocated = caAgents.reduce((sum: number, agent: any) => {
-      const fullName = `${agent.firstName} ${agent.lastName}`;
-      return sum + (caAllocatedStats[fullName] || 0);
+      return sum + getAgentStats(agent).allocated;
     }, 0);
 
     const totalAgentDialed = caAgents.reduce((sum: number, agent: any) => {
-      const fullName = `${agent.firstName} ${agent.lastName}`;
-      return sum + (caDialedStats[fullName] || 0);
+      return sum + getAgentStats(agent).dialed;
     }, 0);
 
     const dialRate = totalAgentAllocated > 0 ? Math.round((totalAgentDialed / totalAgentAllocated) * 100) : 0;
@@ -678,21 +692,13 @@ export default function ModuleView() {
                 <Icons.Zap className="w-4.5 h-4.5" />
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between">
-              <div>
-                <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {totalAgentAllocated.toLocaleString()}
-                </span>
-                <span className="text-[10px] text-slate-400 block font-semibold">
-                  {totalAgentDialed.toLocaleString()} Dialed ({dialRate}%)
-                </span>
-              </div>
-              <div className="w-16 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/60 dark:border-slate-700/60">
-                <div 
-                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all" 
-                  style={{ width: `${Math.max(dialRate, 4)}%` }} 
-                />
-              </div>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {totalAgentAllocated.toLocaleString()}
+              </span>
+              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md">
+                Allocated Leads
+              </span>
             </div>
           </div>
         </div>
@@ -720,7 +726,7 @@ export default function ModuleView() {
               </label>
               <select 
                 value={caSelectedCampaign} 
-                onChange={e => setCaSelectedCampaign(e.target.value)} 
+                onChange={e => handleCampaignChange(e.target.value)} 
                 className="w-full h-11 px-4 text-xs font-semibold bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 transition-all cursor-pointer shadow-inner-sm"
               >
                 <option value="">Select Campaign</option>
@@ -739,12 +745,12 @@ export default function ModuleView() {
               </label>
               <select 
                 value={caSelectedRole} 
-                onChange={e => setCaSelectedRole(e.target.value)} 
+                onChange={e => handleRoleChange(e.target.value)} 
                 className="w-full h-11 px-4 text-xs font-semibold bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 transition-all cursor-pointer shadow-inner-sm"
               >
                 <option value="">Select Role</option>
                 {caRoles.map((r: any) => (
-                  <option key={r._id} value={r._id}>{r.name}</option>
+                  <option key={r._id || r.id || r.name} value={r._id || r.id || r.name}>{r.name}</option>
                 ))}
               </select>
             </div>
@@ -752,7 +758,7 @@ export default function ModuleView() {
             <div className="flex gap-2.5">
               <button 
                 type="button" 
-                onClick={handleLoadAgents}
+                onClick={() => handleLoadAgents()}
                 className="flex-1 h-11 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 disabled={caLoadingAgents}
               >
@@ -911,14 +917,11 @@ export default function ModuleView() {
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Reporting Manager</th>
                   <th className="py-3 px-4 text-center">Total Allocated #</th>
-                  <th className="py-3 px-4 text-center">Total Dialed #</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                 {caAgents.map((agent: any) => {
-                  const fullName = `${agent.firstName} ${agent.lastName}`;
-                  const allocated = caAllocatedStats[fullName] || 0;
-                  const dialed = caDialedStats[fullName] || 0;
+                  const { fullName, allocated } = getAgentStats(agent);
                   const isChecked = caSelectedAgents.includes(agent._id);
                   
                   return (
@@ -978,17 +981,12 @@ export default function ModuleView() {
                           {allocated}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 min-w-[3rem] shadow-3xs">
-                          {dialed}
-                        </span>
-                      </td>
                     </tr>
                   );
                 })}
                 {caAgents.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-14 text-center">
+                    <td colSpan={5} className="py-14 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/20">
                         <Icons.Users className="w-6 h-6" />
                       </div>

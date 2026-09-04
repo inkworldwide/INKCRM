@@ -8,6 +8,7 @@ import User from '../models/User';
 import { authenticate } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
 import { HierarchyService } from '../utils/hierarchy';
+import { SummaryService } from '../utils/summaryService';
 
 export const normalizeStatusName = (rawSt: string): string => {
   if (!rawSt) return 'PENDING';
@@ -37,16 +38,15 @@ router.use(requireTenant);
 // 1. Get Dashboard Layout for User
 router.get('/layout', async (req: Request, res: Response): Promise<void> => {
   try {
-    // Attempt to locate a user-specific dashboard layout
+    const userReq = req as any;
     let layout = await DashboardLayout.findOne({
-      organizationId: req.organizationId,
-      userId: req.user?.id
+      organizationId: userReq.organizationId,
+      userId: userReq.user?.id
     });
 
-    // Fallback: locate the organization's default dashboard layout
     if (!layout) {
       layout = await DashboardLayout.findOne({
-        organizationId: req.organizationId,
+        organizationId: userReq.organizationId,
         isDefault: true
       });
     }
@@ -60,11 +60,12 @@ router.get('/layout', async (req: Request, res: Response): Promise<void> => {
 // 2. Save/Update Dashboard Layout
 router.put('/layout', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userReq = req as any;
     const { widgets } = req.body;
 
     let layout = await DashboardLayout.findOne({
-      organizationId: req.organizationId,
-      userId: req.user?.id
+      organizationId: userReq.organizationId,
+      userId: userReq.user?.id
     });
 
     if (layout) {
@@ -72,8 +73,8 @@ router.put('/layout', async (req: Request, res: Response): Promise<void> => {
       await layout.save();
     } else {
       layout = await DashboardLayout.create({
-        organizationId: req.organizationId,
-        userId: req.user?.id,
+        organizationId: userReq.organizationId,
+        userId: userReq.user?.id,
         name: 'My Dashboard',
         widgets
       });
@@ -88,8 +89,16 @@ router.put('/layout', async (req: Request, res: Response): Promise<void> => {
 // 3. Fetch Real-time Metadata KPI Counts
 router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
   try {
-    const orgId = req.organizationId;
-    
+    const userReq = req as any;
+    const orgId = userReq.organizationId;
+    const userIdStr = userReq.user?.id || (userReq.user as any)?._id || 'user';
+    const cacheKey = `dashboard_full_${orgId}_${userIdStr}`;
+    const cachedDashboard = SummaryService.getCache(cacheKey);
+    if (cachedDashboard) {
+      res.status(200).json(cachedDashboard);
+      return;
+    }
+
     // Find Lead and Deal Module Definitions
     const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
     const dealModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'deals' });
@@ -108,8 +117,8 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Apply Dynamic Reporting Manager Hierarchy filtering
-    await HierarchyService.modifyRecordQuery(leadQuery, req.user as any, orgId!);
-    await HierarchyService.modifyRecordQuery(dealQuery, req.user as any, orgId!);
+    await HierarchyService.modifyRecordQuery(leadQuery, userReq.user, orgId!);
+    await HierarchyService.modifyRecordQuery(dealQuery, userReq.user, orgId!);
 
     const statusCounts: Record<string, number> = {};
     const pipelineData: Record<string, number> = {
@@ -131,41 +140,49 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
     endOfToday.setHours(23, 59, 59, 999);
 
     if (leadModule) {
-      // 1. Group leads count by status dynamically (checking normalizedStatus first)
-      const leadAgg = await CustomRecord.aggregate([
-        { $match: leadQuery },
-        {
-          $project: {
-            st: {
-              $ifNull: [
-                '$data.normalizedStatus',
-                {
-                  $ifNull: [
-                    '$data.status',
-                    { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
-                  ]
-                }
-              ]
-            }
-          }
-        },
-        { $group: { _id: '$st', count: { $sum: 1 } } }
-      ]);
+      // 1. Group leads count by status dynamically using SummaryService cache
+      const summaryData = await SummaryService.getDashboardMetrics(orgId!, leadModule._id);
       
-      leadAgg.forEach(item => {
-        if (item._id) {
-          const rawName = item._id.toString().trim();
-          const canonical = normalizeStatusName(rawName);
-          const uppercaseName = rawName.toUpperCase();
-          const count = Number(item.count || 0);
-
-          // Use a Set to ensure item.count is added EXACTLY ONCE to each distinct key!
-          const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
-          uniqueKeys.forEach(k => {
-            statusCounts[k] = (statusCounts[k] || 0) + count;
-          });
+      if (summaryData && Object.keys(summaryData).length > 0) {
+        for (const [key, count] of Object.entries(summaryData)) {
+          statusCounts[key] = Number(count || 0);
+          statusCounts[key.toUpperCase()] = Number(count || 0);
         }
-      });
+      } else {
+        const leadAgg = await CustomRecord.aggregate([
+          { $match: leadQuery },
+          {
+            $project: {
+              st: {
+                $ifNull: [
+                  '$data.normalizedStatus',
+                  {
+                    $ifNull: [
+                      '$data.status',
+                      { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          { $group: { _id: '$st', count: { $sum: 1 } } }
+        ]);
+        
+        leadAgg.forEach(item => {
+          if (item._id) {
+            const rawName = item._id.toString().trim();
+            const canonical = normalizeStatusName(rawName);
+            const uppercaseName = rawName.toUpperCase();
+            const count = Number(item.count || 0);
+
+            const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
+            uniqueKeys.forEach(k => {
+              statusCounts[k] = (statusCounts[k] || 0) + count;
+            });
+          }
+        });
+      }
 
       // 2. Count & fetch Today's followups
       const followUpQuery: any = {
@@ -273,10 +290,10 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       statusCounts['ALL LEADS'] = totalProcessSum;
 
       const activityQuery: Record<string, any> = { organizationId: orgId };
-      const isSuper = await HierarchyService.isSuperAdmin(req.user?.roleId);
+      const isSuper = await HierarchyService.isSuperAdmin(userReq.user?.roleId);
       if (!isSuper) {
-        const descendants = await HierarchyService.getSubordinateUserIds(req.user?.id as string, orgId!);
-        const allowedUserIds = [new mongoose.Types.ObjectId(req.user?.id), ...descendants];
+        const descendants = await HierarchyService.getSubordinateUserIds(userReq.user?.id as string, orgId!);
+        const allowedUserIds = [new mongoose.Types.ObjectId(userReq.user?.id), ...descendants];
         activityQuery.userId = { $in: allowedUserIds };
       }
 
@@ -314,38 +331,84 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       };
 
       const campLeadQuery: Record<string, any> = { ...baseLeadFilter };
-      await HierarchyService.modifyRecordQuery(campLeadQuery, req.user as any, orgId!);
-      const allCampaignLeads = await CustomRecord.find(campLeadQuery).lean();
-
-      // Group leads by campaign name
-      const campaignGroups: Record<string, any[]> = {};
-      allCampaignLeads.forEach((lead: any) => {
-        const d = lead.data || {};
-        const rawSource = (d.campaignName || d.campaign || d.campaign_name || d.source)?.toString().trim();
-        if (rawSource) {
-          const lower = rawSource.toLowerCase();
-          const genericSources = ['website', 'referral', 'cold call', 'social media', 'google ads', 'facebook ads', 'walk-in', 'direct'];
-          const isRegistered = registeredCampaignNames.size === 0 || registeredCampaignNames.has(lower);
-          if (isRegistered && (registeredCampaignNames.has(lower) || !genericSources.includes(lower))) {
-            const canonical = campaignRecords.find(c => {
-              const cd = c.data || {};
-              return (cd.campaignName || cd.name || cd.source || '').toString().trim().toLowerCase() === lower;
-            });
-            const campName = canonical ? (canonical.data?.campaignName || canonical.data?.name || rawSource) : rawSource;
-            if (!campaignGroups[campName]) {
-              campaignGroups[campName] = [];
+      await HierarchyService.modifyRecordQuery(campLeadQuery, userReq.user, orgId!);
+      const aggCampaignResults = await CustomRecord.aggregate([
+        { $match: campLeadQuery },
+        {
+          $project: {
+            rawName: {
+              $ifNull: ['$data.campaignName', { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }]
+            },
+            isDialed: {
+              $cond: [
+                {
+                  $or: [
+                    { $ifNull: ['$data.dialedAt', false] },
+                    { $gt: ['$data.callAttempts', 0] },
+                    {
+                      $and: [
+                        { $ne: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ''] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, 'yet to call'] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, 'not called'] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, 'new'] }
+                      ]
+                    },
+                    {
+                      $and: [
+                        { $ne: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ''] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.status', ''] } }, 'new'] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.status', ''] } }, 'yet to call'] },
+                        { $ne: [{ $toLower: { $ifNull: ['$data.status', ''] } }, 'not called'] }
+                      ]
+                    }
+                  ]
+                },
+                1,
+                0
+              ]
             }
-            campaignGroups[campName].push(lead);
+          }
+        },
+        {
+          $group: {
+            _id: { $toLower: '$rawName' },
+            rawCampName: { $first: '$rawName' },
+            total: { $sum: 1 },
+            dialed: { $sum: '$isDialed' }
+          }
+        }
+      ]);
+
+      const campaignGroups: Record<string, { total: number; dialed: number }> = {};
+      const genericSources = ['website', 'referral', 'cold call', 'social media', 'google ads', 'facebook ads', 'walk-in', 'direct'];
+
+      aggCampaignResults.forEach((item: any) => {
+        if (item._id) {
+          const rawName = item._id.toString().trim().toLowerCase();
+          if (rawName) {
+            const isRegistered = registeredCampaignNames.size === 0 || registeredCampaignNames.has(rawName);
+            if (isRegistered && (registeredCampaignNames.has(rawName) || !genericSources.includes(rawName))) {
+              const canonical = campaignRecords.find((c: any) => {
+                const cd = c.data || {};
+                return (cd.campaignName || cd.name || cd.source || '').toString().trim().toLowerCase() === rawName;
+              });
+              const campName = canonical ? (canonical.data?.campaignName || canonical.data?.name || item.rawCampName || rawName) : (item.rawCampName || rawName);
+              if (!campaignGroups[campName]) {
+                campaignGroups[campName] = { total: 0, dialed: 0 };
+              }
+              campaignGroups[campName].total += Number(item.total || 0);
+              campaignGroups[campName].dialed += Number(item.dialed || 0);
+            }
           }
         }
       });
 
       // Also include registered campaigns that have 0 leads assigned
-      campaignRecords.forEach(c => {
+      campaignRecords.forEach((c: any) => {
         const d = c.data || {};
         const name = (d.campaignName || d.name || d.source || '').toString().trim();
         if (name && !campaignGroups[name]) {
-          campaignGroups[name] = [];
+          campaignGroups[name] = { total: 0, dialed: 0 };
         }
       });
 
@@ -358,18 +421,10 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
 
       const activeNamesList: string[] = [];
 
-      Object.keys(campaignGroups).forEach(campName => {
-        const gLeads = campaignGroups[campName];
-        const assigned = gLeads.length;
-        const dialedCount = gLeads.filter(l => {
-          const d = l.data || {};
-          const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
-          const st = (d.status || '').toString().trim().toLowerCase();
-          const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
-          const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
-          const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
-          return hasDialedStatus || (hasCalls && hasDialStatus);
-        }).length;
+      Object.keys(campaignGroups).forEach((campName: string) => {
+        const group = campaignGroups[campName];
+        const assigned = group.total;
+        const dialedCount = group.dialed;
 
         totalLeadsAllocated += assigned;
         totalLeadsDialed += dialedCount;
@@ -405,7 +460,7 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         activeCampaignNames
       };
 
-      res.status(200).json({
+      const metricsPayload = {
         statusCounts,
         pipelineData,
         dealStatus,
@@ -417,7 +472,9 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         totalLeads,
         recentActivities,
         campaignMetrics
-      });
+      };
+      SummaryService.setCache(cacheKey, metricsPayload);
+      res.status(200).json(metricsPayload);
       return;
     }
 
@@ -436,6 +493,91 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Metrics Error:', error);
     res.status(500).json({ error: 'Failed to retrieve dashboard KPI metrics.' });
+  }
+});
+
+// 4. Fetch Aggregated Funnel Stats (Daily, Monthly, Annual)
+router.get('/funnel-stats', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userReq = req as any;
+    const orgId = userReq.organizationId;
+    const period = (req.query.period as string || 'daily').toLowerCase();
+
+    const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
+    if (!leadModule) {
+      res.status(200).json({ total: 0, statusCounts: {}, monthlyMap: {} });
+      return;
+    }
+
+    const now = new Date();
+    let startDate: Date;
+    let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    if (period === 'daily') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    } else if (period === 'monthly') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    } else { // annual
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    }
+
+    const matchQuery: any = {
+      organizationId: orgId,
+      moduleId: leadModule._id,
+      createdAt: { $gte: startDate, $lte: endDate }
+    };
+
+    await HierarchyService.modifyRecordQuery(matchQuery, userReq.user, orgId!);
+
+    const aggResults = await CustomRecord.aggregate([
+      { $match: matchQuery },
+      {
+        $project: {
+          st: {
+            $ifNull: [
+              '$data.normalizedStatus',
+              {
+                $ifNull: ['$data.status', { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }]
+              }
+            ]
+          },
+          month: { $month: '$createdAt' }
+        }
+      },
+      {
+        $group: {
+          _id: { st: { $toUpper: '$st' }, month: '$month' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const statusCounts: Record<string, number> = {};
+    let total = 0;
+    const monthlyMap: Record<number, number> = {};
+
+    aggResults.forEach(item => {
+      const rawSt = item._id?.st || 'PENDING';
+      const norm = normalizeStatusName(rawSt);
+      statusCounts[norm] = (statusCounts[norm] || 0) + item.count;
+      statusCounts[rawSt] = (statusCounts[rawSt] || 0) + item.count;
+      total += item.count;
+
+      const m = item._id?.month;
+      if (m) {
+        monthlyMap[m] = (monthlyMap[m] || 0) + item.count;
+      }
+    });
+
+    res.status(200).json({
+      period,
+      total,
+      statusCounts,
+      monthlyMap
+    });
+  } catch (error) {
+    console.error('Funnel Stats Error:', error);
+    res.status(500).json({ error: 'Failed to compute funnel statistics.' });
   }
 });
 

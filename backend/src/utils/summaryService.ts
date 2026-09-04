@@ -126,4 +126,20 @@ export class SummaryService {
     memoryCache.set(cacheKey, { data: result, timestamp: Date.now() });
     return result;
   }
+
+  /**
+   * Generic In-Memory Cache Helper (30s TTL)
+   */
+  public static getCache(key: string): any | null {
+    const cached = memoryCache.get(key);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      this.logCache(key, true, 0);
+      return cached.data;
+    }
+    return null;
+  }
+
+  public static setCache(key: string, data: any) {
+    memoryCache.set(key, { data, timestamp: Date.now() });
+  }
 }

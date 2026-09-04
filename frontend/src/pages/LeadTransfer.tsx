@@ -40,7 +40,7 @@ export default function LeadTransfer() {
       setLoading(true);
       const usersRes = await api.get('/auth/users?purpose=dropdown');
       setUsers(usersRes.data);
-      const leadsRes = await api.get('/records/leads?limit=10000');
+      const leadsRes = await api.get('/records/leads?limit=100');
       setLeads(leadsRes.data.records || leadsRes.data || []);
     } catch (err) {
       console.error('Failed to fetch data for lead transfer:', err);

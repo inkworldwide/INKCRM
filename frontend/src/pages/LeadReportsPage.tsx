@@ -51,8 +51,8 @@ export default function LeadReportsPage() {
     setLoading(true);
     try {
       const [leadsRes, campRes] = await Promise.all([
-        api.get('/records/leads?limit=100000').catch(() => ({ data: [] })),
-        api.get('/records/campaigns?limit=1000').catch(() => ({ data: [] }))
+        api.get('/records/leads?limit=100').catch(() => ({ data: [] })),
+        api.get('/records/campaigns?limit=100').catch(() => ({ data: [] }))
       ]);
 
       const allRecords = leadsRes.data?.records || leadsRes.data || [];

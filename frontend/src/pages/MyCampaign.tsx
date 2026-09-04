@@ -210,6 +210,8 @@ export default function MyCampaign() {
   // Website In-App Call Popup Modal state
   const [callModalLead, setCallModalLead] = useState<{ lead: LeadRecord; phone: string; name: string } | null>(null);
 
+  const [campaignPagination, setCampaignPagination] = useState<{ total: number; dialed: number; yetToDial: number } | null>(null);
+
   // Fetch campaigns
   const fetchCampaigns = async () => {
     try {
@@ -225,11 +227,19 @@ export default function MyCampaign() {
   };
 
   // Fetch lead details for active campaign
-  const fetchLeadDetails = async (campaignName: string, limitVal: number = 200) => {
+  const fetchLeadDetails = async (campaignName: string, limitVal: number = 5000) => {
     try {
       setLoadingLeads(true);
       const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=${limitVal}`);
       setLeads(res.data.leads || []);
+      
+      if (res.data.pagination) {
+        setCampaignPagination({
+          total: res.data.pagination.total || (res.data.leads || []).length,
+          dialed: res.data.pagination.dialed || 0,
+          yetToDial: res.data.pagination.yetToDial ?? Math.max(0, (res.data.pagination.total || 0) - (res.data.pagination.dialed || 0))
+        });
+      }
       
       // Initialize states
       const initialStates: Record<string, LeadState> = {};
@@ -878,6 +888,10 @@ export default function MyCampaign() {
               return true;
             });
 
+            const displayTotalAllocated = campaignPagination?.total ?? activeCampaign?.totalAssigned ?? leads.length;
+            const displayTotalDialed = campaignPagination?.dialed ?? activeCampaign?.dialed ?? dialedLeadsList.length;
+            const displayTotalYetToDial = campaignPagination?.yetToDial ?? activeCampaign?.yetToDial ?? yetToDialLeadsList.length;
+
             return (
               <div className="space-y-4">
                 {/* METRICS GRID - CLICKABLE CARDS FOR FILTERING */}
@@ -897,7 +911,7 @@ export default function MyCampaign() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Yet To Dial</p>
-                        <p className="text-xl font-black text-amber-600 dark:text-amber-400">{yetToDialLeadsList.length}</p>
+                        <p className="text-xl font-black text-amber-600 dark:text-amber-400">{displayTotalYetToDial.toLocaleString()}</p>
                       </div>
                     </div>
                     {dialFilter === 'yet_to_dial' && (
@@ -920,7 +934,7 @@ export default function MyCampaign() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Dialed</p>
-                        <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{dialedLeadsList.length}</p>
+                        <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{displayTotalDialed.toLocaleString()}</p>
                       </div>
                     </div>
                     {dialFilter === 'dialed' && (
@@ -943,7 +957,7 @@ export default function MyCampaign() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Allocated</p>
-                        <p className="text-xl font-black text-slate-900 dark:text-white">{leads.length}</p>
+                        <p className="text-xl font-black text-slate-900 dark:text-white">{displayTotalAllocated.toLocaleString()}</p>
                       </div>
                     </div>
                     {dialFilter === 'all' && (
@@ -977,7 +991,7 @@ export default function MyCampaign() {
                       <Icons.Clock className="w-3.5 h-3.5" />
                       <span>Yet To Dial</span>
                       <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">
-                        {yetToDialLeadsList.length}
+                        {displayTotalYetToDial.toLocaleString()}
                       </span>
                     </button>
 
@@ -992,7 +1006,7 @@ export default function MyCampaign() {
                       <Icons.PhoneCall className="w-3.5 h-3.5" />
                       <span>Dialed</span>
                       <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">
-                        {dialedLeadsList.length}
+                        {displayTotalDialed.toLocaleString()}
                       </span>
                     </button>
 
@@ -1007,7 +1021,7 @@ export default function MyCampaign() {
                       <Icons.Layers className="w-3.5 h-3.5" />
                       <span>All Leads</span>
                       <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white/20">
-                        {leads.length}
+                        {displayTotalAllocated.toLocaleString()}
                       </span>
                     </button>
                   </div>

@@ -37,18 +37,19 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_access_token_key_12345';
     const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken;
 
-    req.user = decoded;
+    const reqAny = req as any;
+    reqAny.user = decoded;
     
     // Also enforce that the user's tenant matches the request tenant context if specified
-    if (req.organizationId && req.organizationId.toString() !== decoded.organizationId) {
+    if (reqAny.organizationId && reqAny.organizationId.toString() !== decoded.organizationId) {
       res.status(403).json({ error: 'Cross-tenant access forbidden. Access denied.' });
       return;
     }
 
     // Automatically bind organizationId from user if not resolved yet
-    if (!req.organizationId) {
+    if (!reqAny.organizationId) {
       const mongoose = require('mongoose');
-      req.organizationId = new mongoose.Types.ObjectId(decoded.organizationId);
+      reqAny.organizationId = new mongoose.Types.ObjectId(decoded.organizationId);
     }
 
     next();

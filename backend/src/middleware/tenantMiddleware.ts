@@ -39,7 +39,7 @@ export const resolveTenant = async (
       return next();
     }
 
-    req.organizationId = organization._id as mongoose.Types.ObjectId;
+    (req as any).organizationId = organization._id as mongoose.Types.ObjectId;
     next();
   } catch (error) {
     console.error('Error resolving tenant:', error);
@@ -49,7 +49,7 @@ export const resolveTenant = async (
 
 // Middleware to force a tenant to be loaded for protected tenant routes
 export const requireTenant = (req: Request, res: Response, next: NextFunction): void => {
-  if (!req.organizationId) {
+  if (!(req as any).organizationId) {
     res.status(400).json({ error: 'Tenant context (x-tenant-id header or subdomain) is required for this operation.' });
     return;
   }

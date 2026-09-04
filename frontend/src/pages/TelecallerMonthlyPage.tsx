@@ -147,9 +147,10 @@ export default function TelecallerMonthlyPage() {
   const fetchMonthlyData = async () => {
     setLoading(true);
     try {
-      const [usersRes, leadsRes] = await Promise.all([
+      const [usersRes, summaryRes, leadsRes] = await Promise.all([
         api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
-        api.get('/records/leads?limit=100000').catch(() => ({ data: [] }))
+        api.get('/reports/telecaller-summary').catch(() => ({ data: { telecallers: [] } })),
+        api.get('/records/leads?limit=100').catch(() => ({ data: [] }))
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [];
