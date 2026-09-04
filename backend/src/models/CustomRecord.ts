@@ -66,6 +66,7 @@ CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.campaign_name':
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.normalizedStatus': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.status': 1, createdAt: -1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dialStatus': 1, createdAt: -1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.followUpDate': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dataCode': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.data_code': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.phone': 1 });

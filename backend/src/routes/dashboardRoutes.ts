@@ -171,10 +171,11 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       const followUpQuery: any = {
         ...leadQuery
       };
+      const todayStr = startOfToday.toISOString().split('T')[0];
       const timeFilter = {
         $or: [
           { 'data.followUpDate': { $gte: startOfToday, $lte: endOfToday } },
-          { 'data.followUpDate': { $regex: '^' + startOfToday.toISOString().split('T')[0] } }
+          { 'data.followUpDate': todayStr }
         ]
       };
       if (followUpQuery.$or) {
@@ -194,7 +195,8 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       todayFollowupsList = await CustomRecord.find(followUpQuery)
         .populate('createdBy', 'firstName lastName name email')
         .sort({ 'data.followUpDate': 1 })
-        .limit(10);
+        .limit(10)
+        .lean();
 
       // 3. Count & fetch Upcoming followups (future dates)
       const upcomingQuery: any = {
@@ -203,7 +205,7 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
       const futureFilter = {
         $or: [
           { 'data.followUpDate': { $gt: endOfToday } },
-          { 'data.followUpDate': { $gt: endOfToday.toISOString().split('T')[0] } }
+          { 'data.followUpDate': { $gt: todayStr } }
         ]
       };
       if (upcomingQuery.$or) {
@@ -219,11 +221,12 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         Object.assign(upcomingQuery, futureFilter);
       }
 
+      const upcomingFollowupsCount = await CustomRecord.countDocuments(upcomingQuery);
       const upcomingFollowupsList = await CustomRecord.find(upcomingQuery)
         .populate('createdBy', 'firstName lastName name email')
         .sort({ 'data.followUpDate': 1 })
-        .limit(10);
-      const upcomingFollowupsCount = upcomingFollowupsList.length;
+        .limit(10)
+        .lean();
 
       let isUpcoming = false;
       if (todayFollowupsCount === 0 && upcomingFollowupsCount > 0) {
