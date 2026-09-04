@@ -793,54 +793,82 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
     }
 
     // High-performance MongoDB Aggregation Pipeline (< 15ms execution time for 200k+ leads)
-    const aggregatedCampaigns = await CustomRecord.aggregate([
-      { $match: finalQuery },
-      {
-        $project: {
-          campaignName: {
-            $ifNull: [
-              '$data.campaignName',
-              { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }
-            ]
-          },
-          createdAt: '$createdAt',
-          isDialed: {
-            $cond: [
-              {
-                $or: [
-                  { $gt: ['$data.callAttempts', 0] },
-                  { $gt: ['$data.dialedAt', null] },
-                  { $gt: ['$data.lastCallDate', null] },
-                  {
-                    $and: [
-                      { $ne: [{ $ifNull: ['$data.dialStatus', ''] }, ''] },
-                      { $nin: [{ $toLower: '$data.dialStatus' }, ['yet to call', 'not called', 'new', '']] }
-                    ]
-                  },
-                  {
-                    $and: [
-                      { $ne: [{ $ifNull: ['$data.status', ''] }, ''] },
-                      { $nin: [{ $toLower: '$data.status' }, ['yet to call', 'not called', 'new', '']] }
-                    ]
-                  }
-                ]
-              },
-              1,
-              0
-            ]
+    let aggregatedCampaigns: any[] = [];
+    try {
+      aggregatedCampaigns = await CustomRecord.aggregate([
+        { $match: finalQuery },
+        {
+          $project: {
+            campaignName: {
+              $ifNull: [
+                '$data.campaignName',
+                { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }
+              ]
+            },
+            createdAt: '$createdAt',
+            isDialed: {
+              $cond: [
+                {
+                  $or: [
+                    { $gt: [{ $ifNull: ['$data.callAttempts', 0] }, 0] },
+                    { $gt: ['$data.dialedAt', null] },
+                    { $gt: ['$data.lastCallDate', null] },
+                    {
+                      $and: [
+                        { $ne: [{ $ifNull: ['$data.dialStatus', ''] }, ''] },
+                        { $nin: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                      ]
+                    },
+                    {
+                      $and: [
+                        { $ne: [{ $ifNull: ['$data.status', ''] }, ''] },
+                        { $nin: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                      ]
+                    }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: { $toLower: { $ifNull: ['$campaignName', ''] } },
+            rawCampaignName: { $first: '$campaignName' },
+            totalAssigned: { $sum: 1 },
+            dialed: { $sum: '$isDialed' },
+            firstCreatedAt: { $min: '$createdAt' }
           }
         }
-      },
-      {
-        $group: {
-          _id: { $toLower: '$campaignName' },
-          rawCampaignName: { $first: '$campaignName' },
-          totalAssigned: { $sum: 1 },
-          dialed: { $sum: '$isDialed' },
-          firstCreatedAt: { $min: '$createdAt' }
+      ]);
+    } catch (aggErr) {
+      console.error('Aggregation failed in my-campaigns, falling back to query:', aggErr);
+      const leadsFallback = await CustomRecord.find(finalQuery).select('data createdAt').lean();
+      const tempMap = new Map<string, any>();
+      leadsFallback.forEach((l: any) => {
+        const d = l.data || {};
+        const cName = String(d.campaignName || d.campaign || d.campaign_name || d.source || '').trim();
+        if (cName) {
+          const lowerKey = cName.toLowerCase();
+          const existing = tempMap.get(lowerKey) || {
+            _id: lowerKey,
+            rawCampaignName: cName,
+            totalAssigned: 0,
+            dialed: 0,
+            firstCreatedAt: l.createdAt
+          };
+          existing.totalAssigned += 1;
+          const st = String(d.status || d.dialStatus || '').trim().toLowerCase();
+          if (st && st !== 'yet to call' && st !== 'not called' && st !== 'new') {
+            existing.dialed += 1;
+          }
+          tempMap.set(lowerKey, existing);
         }
-      }
-    ]);
+      });
+      aggregatedCampaigns = Array.from(tempMap.values());
+    }
 
     const result = aggregatedCampaigns
       .map(item => {
