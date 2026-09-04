@@ -1087,7 +1087,11 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       ]
     });
 
-    const leadsQuery = CustomRecord.find(finalQuery).sort({ createdAt: -1 }).skip(skipNum).limit(limitNum);
+    const leadsQuery = CustomRecord.find(finalQuery)
+      .select('data createdAt updatedAt createdBy updatedBy')
+      .sort({ createdAt: -1 })
+      .skip(skipNum)
+      .limit(limitNum);
     const leads = await leadsQuery.lean();
 
     res.status(200).json({ 
