@@ -148,13 +148,79 @@ export default function ModuleView() {
         ? `/records/campaigns/allocation-stats?campaignName=${encodeURIComponent(activeCamp)}`
         : '/records/campaigns/allocation-stats';
 
-      const [campaignsRes, rolesRes, statsRes] = await Promise.all([
-        api.get('/records/campaigns?limit=100'),
-        api.get('/auth/roles'),
-        api.get(statsUrl)
+      const [campaignsRes, myCampsRes, rolesRes, usersRes, statsRes] = await Promise.all([
+        api.get('/records/campaigns?limit=500').catch(() => ({ data: [] })),
+        api.get('/records/campaigns/my-campaigns').catch(() => ({ data: [] })),
+        api.get('/auth/roles').catch(() => ({ data: [] })),
+        api.get('/auth/users?purpose=dropdown').catch(() => ({ data: [] })),
+        api.get(statsUrl).catch(() => ({ data: {} }))
       ]);
-      setCaCampaigns(campaignsRes.data?.records || []);
-      setCaRoles(rolesRes.data || []);
+
+      // 1. Process & extract all unique campaign names
+      const regCamps = Array.isArray(campaignsRes.data) ? campaignsRes.data : (campaignsRes.data?.records || campaignsRes.data?.campaigns || []);
+      const myCamps = Array.isArray(myCampsRes.data) ? myCampsRes.data : (myCampsRes.data?.campaigns || myCampsRes.data?.records || []);
+
+      const campMap = new Map<string, any>();
+
+      regCamps.forEach((c: any) => {
+        const d = c.data || c || {};
+        const name = String(d.campaignName || d.name || d.source || c.campaignName || '').trim();
+        if (name && !campMap.has(name.toLowerCase())) {
+          campMap.set(name.toLowerCase(), { _id: c._id || name, name, raw: c });
+        }
+      });
+
+      myCamps.forEach((c: any) => {
+        const d = c.data || c || {};
+        const name = String(c.campaignName || d.campaignName || d.name || d.source || '').trim();
+        if (name && !campMap.has(name.toLowerCase())) {
+          campMap.set(name.toLowerCase(), { _id: c._id || name, name, raw: c });
+        }
+      });
+
+      // Default fallback campaigns if none registered yet
+      if (campMap.size === 0) {
+        ['Direct Lead Import', 'Website Leads', 'Referral Leads'].forEach(name => {
+          campMap.set(name.toLowerCase(), { _id: name, name });
+        });
+      }
+
+      const allCampaignOptions = Array.from(campMap.values());
+      setCaCampaigns(allCampaignOptions);
+
+      if (allCampaignOptions.length > 0 && !caSelectedCampaign && !targetCampaign) {
+        setCaSelectedCampaign(allCampaignOptions[0].name);
+      }
+
+      // 2. Process Roles
+      const fetchedRoles = Array.isArray(rolesRes.data) ? rolesRes.data : (rolesRes.data?.roles || []);
+      setCaRoles(fetchedRoles);
+
+      // Auto-select Telecaller role (or 1st role) if not selected
+      let activeRoleId = caSelectedRole;
+      if (!activeRoleId && fetchedRoles.length > 0) {
+        const teleRole = fetchedRoles.find((r: any) =>
+          ['telecaller', 'teli caller', 'agent', 'sales'].includes(String(r.name || '').trim().toLowerCase())
+        );
+        activeRoleId = teleRole ? teleRole._id : fetchedRoles[0]._id;
+        setCaSelectedRole(activeRoleId);
+      }
+
+      // 3. Process & auto-populate active employees into the table
+      const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data?.users || []);
+      if (fetchedUsers.length > 0) {
+        let filtered = fetchedUsers;
+        if (activeRoleId) {
+          filtered = fetchedUsers.filter((u: any) => {
+            const uRoleId = u.roleId?._id || u.roleId || u.role?._id || u.role;
+            return String(uRoleId) === String(activeRoleId) && u.isActive !== false;
+          });
+        }
+        const finalAgents = filtered.length > 0 ? filtered : fetchedUsers;
+        setCaAgents(finalAgents);
+        setCaSelectedAgents(finalAgents.map((u: any) => u._id));
+      }
+
       setCaAllocatedStats(statsRes.data?.stats || {});
       setCaDialedStats(statsRes.data?.dialedStats || {});
     } catch (err) {
@@ -169,6 +235,12 @@ export default function ModuleView() {
       loadCampaignAssignmentsData(caSelectedCampaign);
     }
   }, [caSelectedCampaign, apiPath]);
+
+  useEffect(() => {
+    if (apiPath === 'campaignassignments' && caSelectedRole) {
+      handleLoadAgents();
+    }
+  }, [caSelectedRole, apiPath]);
 
   const handleLoadAgents = async () => {
     if (!caSelectedRole) {
@@ -653,8 +725,9 @@ export default function ModuleView() {
               >
                 <option value="">Select Campaign</option>
                 {caCampaigns.map((c: any) => {
-                  const name = c.data?.campaignName;
-                  return <option key={c._id} value={name}>{name}</option>;
+                  const name = typeof c === 'string' ? c : (c.name || c.data?.campaignName || c.data?.campaign_name || c.data?.name || c.data?.source || c.campaignName || 'Campaign');
+                  const keyVal = c._id || name;
+                  return <option key={keyVal} value={name}>{name}</option>;
                 })}
               </select>
             </div>
