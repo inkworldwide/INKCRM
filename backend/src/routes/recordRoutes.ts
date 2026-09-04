@@ -870,16 +870,20 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       aggregatedCampaigns = Array.from(tempMap.values());
     }
 
+    if (registeredCampaignNames.size === 0) {
+      res.status(200).json({ campaigns: [] });
+      return;
+    }
+
     const result = aggregatedCampaigns
       .map(item => {
         const rawSource = (item.rawCampaignName || item._id || '').toString().trim();
         if (!rawSource) return null;
 
         const lower = rawSource.toLowerCase();
-        const genericSources = ['website', 'referral', 'cold call', 'social media', 'google ads', 'facebook ads', 'walk-in', 'direct'];
-        const isRegistered = registeredCampaignNames.size === 0 || registeredCampaignNames.has(lower);
 
-        if (!isRegistered && genericSources.includes(lower)) {
+        // Strict Campaign vs Lead separation: Only show campaigns registered in Campaigns Module!
+        if (!registeredCampaignNames.has(lower)) {
           return null;
         }
 
