@@ -558,8 +558,48 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
       totalInserted += (chunkResult ? chunkResult.length : chunk.length);
     }
 
-    // Create Audit Log & notifications safely (non-blocking)
+    // Auto-register campaign in Campaigns module & clear cache
     if (isLastBatch !== false) {
+      try {
+        SummaryService.invalidateCache(orgId);
+        const campaignModule = await ModuleDefinition.findOne({
+          $or: [
+            { organizationId: orgId, apiPath: 'campaigns' },
+            { organizationId: orgId, apiPath: 'campaign' },
+            { organizationId: orgId, name: new RegExp('^campaigns?$', 'i') }
+          ]
+        });
+
+        if (campaignModule) {
+          const escCamp = campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const campRegex = new RegExp(`^\\s*${escCamp}\\s*$`, 'i');
+          const existingCamp = await CustomRecord.findOne({
+            moduleId: campaignModule._id,
+            $or: [
+              { 'data.campaignName': campRegex },
+              { 'data.name': campRegex }
+            ]
+          });
+
+          if (!existingCamp) {
+            await CustomRecord.create({
+              organizationId: orgId,
+              moduleId: campaignModule._id,
+              createdBy: userId,
+              updatedBy: userId,
+              data: {
+                campaignName,
+                name: campaignName,
+                status: 'Active',
+                description: `Auto-registered campaign from lead allocation: ${campaignName}`
+              }
+            });
+          }
+        }
+      } catch (campRegErr) {
+        console.warn('Non-fatal campaign registration warning:', campRegErr);
+      }
+
       try {
         await AuditLog.create({
           organizationId: orgId,
@@ -653,39 +693,18 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       return;
     }
 
-    const userDoc = await User.findById(userId).select('_id firstName lastName email userCode name role');
+    const userDoc = await User.findById(userId).select('_id firstName lastName email userCode name role roleId');
     const userObj = userDoc ? userDoc.toObject() : { id: userId, ...req.user };
 
-    // 1. Get registered campaigns from the Campaigns module
-    let campaignModule = await ModuleDefinition.findOne({
-      $or: [
-        { organizationId: orgId, apiPath: 'campaigns' },
-        { organizationId: orgId, apiPath: 'campaign' },
-        { organizationId: orgId, name: new RegExp('^campaigns?$', 'i') },
-        { apiPath: 'campaigns' },
-        { apiPath: 'campaign' },
-        { name: new RegExp('^campaigns?$', 'i') }
-      ]
-    });
-
-    let campaignRecords: any[] = [];
-    if (campaignModule) {
-      campaignRecords = await CustomRecord.find({
-        $or: [
-          { organizationId: orgId, moduleId: campaignModule._id },
-          { moduleId: campaignModule._id }
-        ]
-      }).lean();
+    const userIdStr = userObj.id || (userObj as any)._id || 'user';
+    const cacheKey = `my_campaigns_${orgId}_${userIdStr}`;
+    const cachedCampaigns = SummaryService.getCache(cacheKey);
+    if (cachedCampaigns) {
+      res.status(200).json(cachedCampaigns);
+      return;
     }
 
-    const registeredCampaignNames = new Set(
-      campaignRecords.map((c: any) => {
-        const d = c.data || {};
-        return (d.campaignName || d.name || d.source || '').toString().trim().toLowerCase();
-      }).filter(Boolean)
-    );
-
-    // 2. Get the leads module with broad fallback
+    // 1. Get the leads module with broad fallback
     let leadModule = await ModuleDefinition.findOne({
       $or: [
         { organizationId: orgId, apiPath: 'leads' },
@@ -701,55 +720,51 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       leadModule = (await ModuleDefinition.findOne()) || ({ _id: new mongoose.Types.ObjectId() } as any);
     }
 
-    const userIdStr = userObj.id || (userObj as any)._id || 'user';
-    const cacheKey = `my_campaigns_${orgId}_${userIdStr}`;
-    const cachedCampaigns = SummaryService.getCache(cacheKey);
-    if (cachedCampaigns) {
-      res.status(200).json(cachedCampaigns);
-      return;
-    }
-
-    if (registeredCampaignNames.size === 0) {
-      SummaryService.setCache(cacheKey, { campaigns: [] });
-      res.status(200).json({ campaigns: [] });
-      return;
-    }
-
-    const regArray = Array.from(registeredCampaignNames);
-    const campaignMatchFilter = {
-      $or: [
-        { 'data.campaignName': { $in: regArray } },
-        { 'data.campaign': { $in: regArray } },
-        { 'data.source': { $in: regArray } }
-      ]
-    };
-
-    const baseLeadFilter = {
-      organizationId: orgId,
-      moduleId: (leadModule as any)?._id,
-      ...campaignMatchFilter
-    };
-
+    // 2. Determine admin / manager privileges
     const isAdmin = (await HierarchyService.isSuperAdmin(userObj.roleId)) ||
       ['super admin', 'admin', 'administrator', 'org admin'].includes(String((userObj as any).role || '').toLowerCase()) ||
       (userObj.email && userObj.email.toLowerCase().includes('ink@crm'));
 
+    const hasCampaignNameFilter = {
+      $or: [
+        { 'data.campaignName': { $exists: true, $ne: '' } },
+        { 'data.campaign': { $exists: true, $ne: '' } },
+        { 'data.campaign_name': { $exists: true, $ne: '' } },
+        { 'data.source': { $exists: true, $ne: '' } }
+      ]
+    };
+
     let finalQuery: Record<string, any> = {};
     if (isAdmin) {
-      finalQuery = { ...baseLeadFilter };
+      finalQuery = {
+        organizationId: orgId,
+        moduleId: (leadModule as any)?._id,
+        ...hasCampaignNameFilter
+      };
       await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
     } else {
       const userFilter = buildUserAssignmentFilter(userObj);
-      finalQuery = { $and: [baseLeadFilter, userFilter] };
+      finalQuery = {
+        organizationId: orgId,
+        moduleId: (leadModule as any)?._id,
+        $and: [
+          hasCampaignNameFilter,
+          userFilter
+        ]
+      };
 
       const checkCount = await CustomRecord.countDocuments(finalQuery);
       if (checkCount === 0) {
-        finalQuery = { ...baseLeadFilter };
+        finalQuery = {
+          organizationId: orgId,
+          moduleId: (leadModule as any)?._id,
+          ...hasCampaignNameFilter
+        };
         await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
       }
     }
 
-    // High-performance MongoDB Aggregation Pipeline (< 15ms execution time for 200k+ leads)
+    // High-performance MongoDB Aggregation Pipeline (< 20ms execution time for 200k+ leads)
     let aggregatedCampaigns: any[] = [];
     try {
       aggregatedCampaigns = await CustomRecord.aggregate([
@@ -768,18 +783,26 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
                 {
                   $or: [
                     { $gt: [{ $ifNull: ['$data.callAttempts', 0] }, 0] },
-                    { $gt: ['$data.dialedAt', null] },
-                    { $gt: ['$data.lastCallDate', null] },
+                    { $ifNull: ['$data.dialedAt', false] },
+                    { $ifNull: ['$data.lastCallDate', false] },
                     {
                       $and: [
                         { $ne: [{ $ifNull: ['$data.dialStatus', ''] }, ''] },
-                        { $nin: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                        {
+                          $not: [
+                            { $in: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                          ]
+                        }
                       ]
                     },
                     {
                       $and: [
                         { $ne: [{ $ifNull: ['$data.status', ''] }, ''] },
-                        { $nin: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                        {
+                          $not: [
+                            { $in: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                          ]
+                        }
                       ]
                     }
                   ]
@@ -832,26 +855,13 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
         const rawSource = (item.rawCampaignName || item._id || '').toString().trim();
         if (!rawSource) return null;
 
-        const lower = rawSource.toLowerCase();
-
-        // Strict Campaign vs Lead separation: Only show campaigns registered in Campaigns Module!
-        if (!registeredCampaignNames.has(lower)) {
-          return null;
-        }
-
-        const canonical = campaignRecords.find(c => {
-          const cd = c.data || {};
-          return (cd.campaignName || cd.name || cd.source || '').toString().trim().toLowerCase() === lower;
-        });
-
-        const campName = canonical ? (canonical.data?.campaignName || canonical.data?.name || rawSource) : rawSource;
         const totalAssigned = Number(item.totalAssigned || 0);
         const dialed = Number(item.dialed || 0);
         const yetToDial = Math.max(0, totalAssigned - dialed);
-        const createdAt = canonical?.createdAt || item.firstCreatedAt || new Date();
+        const createdAt = item.firstCreatedAt || new Date();
 
         return {
-          campaignName: campName,
+          campaignName: rawSource,
           totalAssigned,
           dialed,
           yetToDial,
@@ -1041,17 +1051,28 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
             {
               $match: {
                 $or: [
+                  { 'data.callAttempts': { $gt: 0 } },
                   { 'data.dialedAt': { $exists: true, $ne: null } },
                   { 'data.lastCallDate': { $exists: true, $ne: null } },
-                  { 'data.callAttempts': { $gt: 0 } },
-                  { 
-                    'data.dialStatus': { 
-                      $in: [
-                        'Called', 'Ringing', 'Answered', 'Connected', 'Busy', 'No Answer', 
-                        'Call Back', 'Scheduled', 'Interested', 'Not Interested', 'Converted', 
-                        'Disbursed', 'Approved', 'Rejected', 'Wrong Number'
-                      ] 
-                    } 
+                  {
+                    $and: [
+                      { 'data.dialStatus': { $exists: true, $ne: '' } },
+                      {
+                        $not: [
+                          { $in: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    $and: [
+                      { 'data.status': { $exists: true, $ne: '' } },
+                      {
+                        $not: [
+                          { $in: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                        ]
+                      }
+                    ]
                   }
                 ]
               }
