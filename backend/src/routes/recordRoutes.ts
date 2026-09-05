@@ -228,7 +228,18 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
                   { 'data.dialedAt': { $exists: true, $ne: null } },
                   { 'data.lastCallDate': { $exists: true, $ne: null } },
                   { 'data.callAttempts': { $gt: 0 } },
-                  { 'data.dialStatus': { $exists: true, $nin: [null, ''] } }
+                  {
+                    'data.dialStatus': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
+                  },
+                  {
+                    'data.status': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
+                  }
                 ]
               }
             },
@@ -253,7 +264,18 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
                   { 'data.dialedAt': { $exists: true, $ne: null } },
                   { 'data.lastCallDate': { $exists: true, $ne: null } },
                   { 'data.callAttempts': { $gt: 0 } },
-                  { 'data.dialStatus': { $exists: true, $nin: [null, ''] } }
+                  {
+                    'data.dialStatus': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
+                  },
+                  {
+                    'data.status': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
+                  }
                 ]
               }
             },

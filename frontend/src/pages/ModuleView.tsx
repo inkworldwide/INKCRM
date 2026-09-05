@@ -1885,7 +1885,11 @@ export default function ModuleView() {
                           const rawPct = allocated > 0 ? (dialed / allocated) * 100 : 0;
                           const isCompleted = dialed >= allocated && allocated > 0;
                           const isInProgress = dialed > 0 && !isCompleted;
-                          const progressText = isCompleted ? '100%' : isInProgress ? (rawPct < 1 ? `${rawPct.toFixed(1)}%` : `${Math.round(rawPct)}%`) : '0%';
+                          const progressText = isCompleted
+                            ? '100%'
+                            : isInProgress
+                              ? (rawPct < 1 ? `${rawPct.toFixed(1)}%` : rawPct >= 99.9 ? '99.9%' : `${Math.floor(rawPct)}%`)
+                              : '0%';
                           const createdDateStr = new Date(rec.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date(rec.createdAt).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
