@@ -171,15 +171,34 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     const city = String(extractField(data, ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'presentAddress', 'fullAddress']) || 'N/A').trim();
     const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || 'SALARIED PERSONAL LOAN').trim();
     const caseDetails = String(extractField(data, ['caseDetails', 'case_details', 'caseStatus', 'details', 'description']) || 'N/A').trim();
-    const status = String(
-      data.normalizedStatus ||
-      (data.status && data.status !== 'New' ? data.status : '') ||
-      (data.dialStatus && data.dialStatus !== 'Yet To Call' ? data.dialStatus : '') ||
-      data.leadStatus ||
-      data.status ||
-      data.dialStatus ||
-      'YET TO CALL'
-    ).trim();
+    const getStatus = (d: any) => {
+      if (!d) return 'YET TO CALL';
+      const ignoreValues = ['YET TO CALL', 'NOT CALLED', 'NEW', 'CAMPAIGN_DIAL', 'UNASSIGNED', ''];
+      
+      const ds = String(d.dialStatus || '').trim();
+      if (ds && !ignoreValues.includes(ds.toUpperCase())) {
+        return ds.toUpperCase();
+      }
+
+      const st = String(d.status || '').trim();
+      if (st && !ignoreValues.includes(st.toUpperCase())) {
+        return st.toUpperCase();
+      }
+
+      const norm = String(d.normalizedStatus || '').trim();
+      if (norm && !ignoreValues.includes(norm.toUpperCase())) {
+        return norm.toUpperCase();
+      }
+
+      const ls = String(d.leadStatus || '').trim();
+      if (ls && !ignoreValues.includes(ls.toUpperCase())) {
+        return ls.toUpperCase();
+      }
+
+      const fallback = String(d.dialStatus || d.status || d.normalizedStatus || d.leadStatus || 'YET TO CALL').trim().toUpperCase();
+      return fallback === 'CAMPAIGN_DIAL' ? 'YET TO CALL' : (fallback || 'YET TO CALL');
+    };
+    const status = getStatus(data);
     const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').replace(/<[^>]*>/g, '').trim();
     const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || 'N/A').trim();
 

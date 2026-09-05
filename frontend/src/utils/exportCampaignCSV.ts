@@ -219,14 +219,34 @@ export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => 
     }
 
     // 10. Dial Status
-    const rawSt = data.normalizedStatus ||
-      (data.status && data.status !== 'New' ? data.status : '') ||
-      (data.dialStatus && data.dialStatus !== 'Yet To Call' ? data.dialStatus : '') ||
-      data.leadStatus ||
-      data.status ||
-      data.dialStatus ||
-      'YET TO CALL';
-    const dialStatus = String(rawSt).trim().toUpperCase();
+    const getDialStatus = (d: any) => {
+      if (!d) return 'YET TO CALL';
+      const ignoreValues = ['YET TO CALL', 'NOT CALLED', 'NEW', 'CAMPAIGN_DIAL', 'UNASSIGNED', ''];
+      
+      const ds = String(d.dialStatus || '').trim();
+      if (ds && !ignoreValues.includes(ds.toUpperCase())) {
+        return ds.toUpperCase();
+      }
+
+      const st = String(d.status || '').trim();
+      if (st && !ignoreValues.includes(st.toUpperCase())) {
+        return st.toUpperCase();
+      }
+
+      const norm = String(d.normalizedStatus || '').trim();
+      if (norm && !ignoreValues.includes(norm.toUpperCase())) {
+        return norm.toUpperCase();
+      }
+
+      const ls = String(d.leadStatus || '').trim();
+      if (ls && !ignoreValues.includes(ls.toUpperCase())) {
+        return ls.toUpperCase();
+      }
+
+      const fallback = String(d.dialStatus || d.status || d.normalizedStatus || d.leadStatus || 'YET TO CALL').trim().toUpperCase();
+      return fallback === 'CAMPAIGN_DIAL' ? 'YET TO CALL' : (fallback || 'YET TO CALL');
+    };
+    const dialStatus = getDialStatus(data);
 
     // 11. Dailed Datetime
     const notDialedList = ['YET TO CALL', 'NOT CALLED', 'NEW', ''];
