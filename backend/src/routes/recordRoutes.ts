@@ -1055,24 +1055,16 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
                   { 'data.dialedAt': { $exists: true, $ne: null } },
                   { 'data.lastCallDate': { $exists: true, $ne: null } },
                   {
-                    $and: [
-                      { 'data.dialStatus': { $exists: true, $ne: '' } },
-                      {
-                        $not: [
-                          { $in: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
-                        ]
-                      }
-                    ]
+                    'data.dialStatus': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
                   },
                   {
-                    $and: [
-                      { 'data.status': { $exists: true, $ne: '' } },
-                      {
-                        $not: [
-                          { $in: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
-                        ]
-                      }
-                    ]
+                    'data.status': {
+                      $exists: true,
+                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                    }
                   }
                 ]
               }
