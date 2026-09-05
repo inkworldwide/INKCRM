@@ -227,16 +227,10 @@ export default function RecordForm() {
       });
       defaults['country'] = 'INDIA';
       if (apiPath === 'leads') {
-        const passedCamp = location.state?.campaignName || location.state?.campaign || location.state?.source;
-        if (passedCamp && String(passedCamp).trim() !== '') {
-          defaults['source'] = String(passedCamp).trim();
-          defaults['campaignName'] = String(passedCamp).trim();
-        } else {
-          const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : '';
-          if (loggedInName) {
-            defaults['source'] = loggedInName;
-          }
-        }
+        const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : 'System';
+        defaults['source'] = loggedInName;
+        defaults['createdBy'] = loggedInName;
+        defaults['createdByName'] = loggedInName;
       }
       
       // Merge values passed from campaign calling card
@@ -308,25 +302,17 @@ export default function RecordForm() {
         recordValues.firmName = recordValues.company;
       }
 
-      // Ensure SOURCE & campaignName prioritize actual campaign drive name over user name
-      const campaignSource = (
-        recordValues.campaignName ||
-        recordValues.campaign ||
-        recordValues.campaign_name ||
-        location.state?.campaignName ||
-        location.state?.campaign ||
-        recordValues.source
-      );
-
+      // Ensure SOURCE is strictly set to the Lead Creator User Name (e.g. md Khasim, K. Tanaz K, Reshma R)
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
-      const creatorName = recordValues.createdBy || recordValues.createdByName || recordValues.creator || recordValues.assignedBy || loggedInUserFullName;
-
-      if (campaignSource && String(campaignSource).trim() !== '' && String(campaignSource).trim() !== 'Source') {
-        recordValues.source = String(campaignSource).trim();
-        recordValues.campaignName = String(campaignSource).trim();
-      } else if (!recordValues.source || String(recordValues.source).trim() === '' || String(recordValues.source).trim() === 'Source') {
-        recordValues.source = creatorName;
+      let creatorName = recordValues.createdBy || recordValues.createdByName || recordValues.creator || recordValues.assignedBy || loggedInUserFullName;
+      if (typeof creatorName === 'object' && creatorName !== null) {
+        creatorName = [creatorName.firstName, creatorName.lastName].filter(Boolean).join(' ') || creatorName.name || creatorName.email || loggedInUserFullName;
       }
+      creatorName = String(creatorName || loggedInUserFullName).trim();
+
+      recordValues.source = creatorName;
+      recordValues.createdBy = creatorName;
+      recordValues.createdByName = creatorName;
       if (!recordValues.createdBy) {
         recordValues.createdBy = creatorName;
         recordValues.createdByName = creatorName;
@@ -510,21 +496,15 @@ export default function RecordForm() {
         data.assignedBy = userFullName;
         data.assignedByName = userFullName;
       }
-      const campaignSourceSubmit = (
-        data.campaignName ||
-        data.campaign ||
-        data.campaign_name ||
-        location.state?.campaignName ||
-        location.state?.campaign ||
-        data.source
-      );
-
-      if (campaignSourceSubmit && String(campaignSourceSubmit).trim() !== '' && String(campaignSourceSubmit).trim() !== 'Source') {
-        data.source = String(campaignSourceSubmit).trim();
-        data.campaignName = String(campaignSourceSubmit).trim();
-      } else if (!data.source || String(data.source).trim() === '' || String(data.source).trim() === 'Source') {
-        data.source = data.createdBy || data.createdByName || userFullName;
+      let submitCreator = data.createdBy || data.createdByName || data.assignedBy || userFullName;
+      if (typeof submitCreator === 'object' && submitCreator !== null) {
+        submitCreator = [submitCreator.firstName, submitCreator.lastName].filter(Boolean).join(' ') || submitCreator.name || submitCreator.email || userFullName;
       }
+      submitCreator = String(submitCreator || userFullName).trim();
+
+      data.source = submitCreator;
+      data.createdBy = submitCreator;
+      data.createdByName = submitCreator;
       if (data.assignedTo) {
         data.assignedToName = data.assignedTo;
         data.telecaller = data.assignedTo;
@@ -672,7 +652,8 @@ export default function RecordForm() {
     const labelClass = 'text-[11px] font-bold text-[#1F2937] dark:text-slate-200 uppercase tracking-wider block mb-1.5';
 
     if (field.name === 'source' && apiPath === 'leads') {
-      const currentSourceVal = watchedValues[field.name] || watchedValues['campaignName'] || watchedValues['campaign'] || location.state?.campaignName || location.state?.source || '';
+      const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+      const creatorSourceVal = watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || loggedInUserFullName;
       return (
         <div key={field.name} className="space-y-1.5 text-left">
           <label className={labelClass}>
@@ -683,8 +664,8 @@ export default function RecordForm() {
             readOnly
             placeholder={field.label}
             {...register(field.name)}
-            title={currentSourceVal}
-            value={currentSourceVal}
+            title={creatorSourceVal}
+            value={creatorSourceVal}
             className={`${inputBase} bg-slate-100/80 text-[#111827] dark:text-slate-200 font-bold cursor-not-allowed border-[#EAE4DA] dark:border-slate-700 overflow-hidden text-ellipsis whitespace-nowrap`}
           />
         </div>
