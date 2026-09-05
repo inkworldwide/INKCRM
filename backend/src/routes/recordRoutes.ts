@@ -187,22 +187,30 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
       return;
     }
 
-    if (!campaignName || campaignName === 'Select Campaign') {
+    if (campaignName === 'Select Campaign') {
       res.status(200).json({ stats: {}, dialedStats: {}, campaignAllocatedStats: {}, campaignDialedStats: {} });
       return;
     }
 
     let matchCriteria: any = { organizationId: orgId, moduleId: leadModule._id };
+    await HierarchyService.modifyRecordQuery(matchCriteria, req.user as any, orgId!);
     
-    if (campaignName !== 'ALL') {
+    if (campaignName && campaignName !== 'ALL') {
       const escName = campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       const campRegex = new RegExp(`^\\s*${escName}\\s*$`, 'i');
-      matchCriteria.$or = [
-        { 'data.campaignName': campRegex },
-        { 'data.source': campRegex },
-        { 'data.campaign': campRegex },
-        { 'data.campaign_name': campRegex }
-      ];
+      const campFilter = {
+        $or: [
+          { 'data.campaignName': campRegex },
+          { 'data.source': campRegex },
+          { 'data.campaign': campRegex },
+          { 'data.campaign_name': campRegex }
+        ]
+      };
+      if (matchCriteria.$and) {
+        matchCriteria.$and.push(campFilter);
+      } else {
+        matchCriteria = { $and: [matchCriteria, campFilter] };
+      }
     }
 
     // High performance single-pass $facet aggregation for user allocation and campaign stats

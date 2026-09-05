@@ -171,7 +171,15 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     const city = String(extractField(data, ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'presentAddress', 'fullAddress']) || 'N/A').trim();
     const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || 'SALARIED PERSONAL LOAN').trim();
     const caseDetails = String(extractField(data, ['caseDetails', 'case_details', 'caseStatus', 'details', 'description']) || 'N/A').trim();
-    const status = String(data.status || 'New').trim();
+    const status = String(
+      data.normalizedStatus ||
+      (data.status && data.status !== 'New' ? data.status : '') ||
+      (data.dialStatus && data.dialStatus !== 'Yet To Call' ? data.dialStatus : '') ||
+      data.leadStatus ||
+      data.status ||
+      data.dialStatus ||
+      'YET TO CALL'
+    ).trim();
     const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').replace(/<[^>]*>/g, '').trim();
     const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || 'N/A').trim();
 

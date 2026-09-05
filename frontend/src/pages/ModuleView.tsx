@@ -1892,6 +1892,10 @@ export default function ModuleView() {
                             hour12: true
                           });
 
+                          const isDeactive = (rec.data?.status || '').toString().toLowerCase().includes('deactiv') ||
+                            (rec.data?.status || '').toString().toLowerCase().includes('inactiv') ||
+                            rec.data?.isActive === false || rec.isActive === false;
+
                           return (
                             <tr key={rec._id} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/60 transition-colors">
                               <td className="px-6 py-4.5 font-bold text-slate-900 dark:text-white">
@@ -1907,9 +1911,15 @@ export default function ModuleView() {
                                     >
                                       {name}
                                     </Link>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.2 rounded">
-                                      Active Campaign
-                                    </span>
+                                    {isDeactive ? (
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
+                                        Deactive Campaign
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                                        Active Campaign
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </td>

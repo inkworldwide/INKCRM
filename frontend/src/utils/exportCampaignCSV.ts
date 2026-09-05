@@ -219,7 +219,13 @@ export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => 
     }
 
     // 10. Dial Status
-    const rawSt = data.status || data.dialStatus || data.leadStatus || 'YET TO CALL';
+    const rawSt = data.normalizedStatus ||
+      (data.status && data.status !== 'New' ? data.status : '') ||
+      (data.dialStatus && data.dialStatus !== 'Yet To Call' ? data.dialStatus : '') ||
+      data.leadStatus ||
+      data.status ||
+      data.dialStatus ||
+      'YET TO CALL';
     const dialStatus = String(rawSt).trim().toUpperCase();
 
     // 11. Dailed Datetime
