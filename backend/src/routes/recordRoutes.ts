@@ -550,7 +550,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
           createdByName: importerUserName,
           assignedBy: importerUserName,
           assignedByName: importerUserName,
-          source: importerUserName || campaignName,
+          source: campaignName || importerUserName,
           campaignName: campaignName,
           assignedTo: assignedAgent
         }
@@ -1551,7 +1551,11 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       recordData.assignedBy = currentUserName;
       recordData.assignedByName = currentUserName;
     }
-    if (!recordData.source || String(recordData.source).trim() === '' || String(recordData.source).trim() === 'Source') {
+    const campSource = recordData.campaignName || recordData.campaign || recordData.campaign_name;
+    if (campSource && String(campSource).trim() !== '' && String(campSource).trim() !== 'Source') {
+      recordData.source = String(campSource).trim();
+      recordData.campaignName = String(campSource).trim();
+    } else if (!recordData.source || String(recordData.source).trim() === '' || String(recordData.source).trim() === 'Source') {
       recordData.source = recordData.createdBy || recordData.createdByName || currentUserName;
     }
 
@@ -1685,7 +1689,11 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         record.data.createdBy = creatorName;
         record.data.createdByName = creatorName;
       }
-      if (!record.data.source || String(record.data.source).trim() === '' || String(record.data.source).trim() === 'Source') {
+      const campSource = record.data.campaignName || record.data.campaign || record.data.campaign_name;
+      if (campSource && String(campSource).trim() !== '' && String(campSource).trim() !== 'Source') {
+        record.data.source = String(campSource).trim();
+        record.data.campaignName = String(campSource).trim();
+      } else if (!record.data.source || String(record.data.source).trim() === '' || String(record.data.source).trim() === 'Source') {
         record.data.source = creatorName || 'System';
       }
 
@@ -1862,7 +1870,11 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       updateData.createdBy = oldValues.createdBy || currentUserName;
       updateData.createdByName = oldValues.createdByName || oldValues.createdBy || currentUserName;
     }
-    if (!updateData.source || String(updateData.source).trim() === '' || String(updateData.source).trim() === 'Source') {
+    const campSource = updateData.campaignName || updateData.campaign || updateData.campaign_name || oldValues.campaignName || oldValues.campaign;
+    if (campSource && String(campSource).trim() !== '' && String(campSource).trim() !== 'Source') {
+      updateData.source = String(campSource).trim();
+      updateData.campaignName = String(campSource).trim();
+    } else if (!updateData.source || String(updateData.source).trim() === '' || String(updateData.source).trim() === 'Source') {
       updateData.source = oldValues.source || updateData.createdBy || updateData.createdByName || currentUserName;
     }
 

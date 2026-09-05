@@ -227,9 +227,15 @@ export default function RecordForm() {
       });
       defaults['country'] = 'INDIA';
       if (apiPath === 'leads') {
-        const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : '';
-        if (loggedInName) {
-          defaults['source'] = loggedInName;
+        const passedCamp = location.state?.campaignName || location.state?.campaign || location.state?.source;
+        if (passedCamp && String(passedCamp).trim() !== '') {
+          defaults['source'] = String(passedCamp).trim();
+          defaults['campaignName'] = String(passedCamp).trim();
+        } else {
+          const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : '';
+          if (loggedInName) {
+            defaults['source'] = loggedInName;
+          }
         }
       }
       
@@ -302,11 +308,23 @@ export default function RecordForm() {
         recordValues.firmName = recordValues.company;
       }
 
-      // Ensure SOURCE & createdBy are populated with actual lead creator user/agent name
+      // Ensure SOURCE & campaignName prioritize actual campaign drive name over user name
+      const campaignSource = (
+        recordValues.campaignName ||
+        recordValues.campaign ||
+        recordValues.campaign_name ||
+        location.state?.campaignName ||
+        location.state?.campaign ||
+        recordValues.source
+      );
+
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
       const creatorName = recordValues.createdBy || recordValues.createdByName || recordValues.creator || recordValues.assignedBy || loggedInUserFullName;
 
-      if (!recordValues.source || String(recordValues.source).trim() === '' || String(recordValues.source).trim() === 'Source') {
+      if (campaignSource && String(campaignSource).trim() !== '' && String(campaignSource).trim() !== 'Source') {
+        recordValues.source = String(campaignSource).trim();
+        recordValues.campaignName = String(campaignSource).trim();
+      } else if (!recordValues.source || String(recordValues.source).trim() === '' || String(recordValues.source).trim() === 'Source') {
         recordValues.source = creatorName;
       }
       if (!recordValues.createdBy) {
@@ -492,7 +510,19 @@ export default function RecordForm() {
         data.assignedBy = userFullName;
         data.assignedByName = userFullName;
       }
-      if (!data.source || String(data.source).trim() === '' || String(data.source).trim() === 'Source') {
+      const campaignSourceSubmit = (
+        data.campaignName ||
+        data.campaign ||
+        data.campaign_name ||
+        location.state?.campaignName ||
+        location.state?.campaign ||
+        data.source
+      );
+
+      if (campaignSourceSubmit && String(campaignSourceSubmit).trim() !== '' && String(campaignSourceSubmit).trim() !== 'Source') {
+        data.source = String(campaignSourceSubmit).trim();
+        data.campaignName = String(campaignSourceSubmit).trim();
+      } else if (!data.source || String(data.source).trim() === '' || String(data.source).trim() === 'Source') {
         data.source = data.createdBy || data.createdByName || userFullName;
       }
       if (data.assignedTo) {
@@ -642,6 +672,7 @@ export default function RecordForm() {
     const labelClass = 'text-[11px] font-bold text-[#1F2937] dark:text-slate-200 uppercase tracking-wider block mb-1.5';
 
     if (field.name === 'source' && apiPath === 'leads') {
+      const currentSourceVal = watchedValues[field.name] || watchedValues['campaignName'] || watchedValues['campaign'] || location.state?.campaignName || location.state?.source || '';
       return (
         <div key={field.name} className="space-y-1.5 text-left">
           <label className={labelClass}>
@@ -652,7 +683,9 @@ export default function RecordForm() {
             readOnly
             placeholder={field.label}
             {...register(field.name)}
-            className={`${inputBase} bg-slate-100/80 text-[#111827] font-semibold cursor-not-allowed border-[#EAE4DA]`}
+            title={currentSourceVal}
+            value={currentSourceVal}
+            className={`${inputBase} bg-slate-100/80 text-[#111827] dark:text-slate-200 font-bold cursor-not-allowed border-[#EAE4DA] dark:border-slate-700 overflow-hidden text-ellipsis whitespace-nowrap`}
           />
         </div>
       );
