@@ -3,6 +3,7 @@ import ReportDefinition from '../models/ReportDefinition';
 import { ReportBuilderService } from '../services/reportBuilder';
 import { authenticate } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
+import { HierarchyService } from '../utils/hierarchy';
 
 const router = Router();
 
@@ -113,8 +114,11 @@ router.get('/telecaller-summary', async (req: Request, res: Response): Promise<v
       return;
     }
 
+    const matchQuery: Record<string, any> = { organizationId: orgId, moduleId: leadModule._id };
+    await HierarchyService.modifyRecordQuery(matchQuery, req.user as any, orgId!);
+
     const aggResults = await CustomRecord.aggregate([
-      { $match: { organizationId: orgId, moduleId: leadModule._id } },
+      { $match: matchQuery },
       {
         $project: {
           assignedTo: { $ifNull: ['$data.assignedTo', { $ifNull: ['$data.telecaller', '$data.assignedAgent'] }] },
@@ -210,8 +214,11 @@ router.get('/campaign-summary', async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    const matchQuery: Record<string, any> = { organizationId: orgId, moduleId: leadModule._id };
+    await HierarchyService.modifyRecordQuery(matchQuery, req.user as any, orgId!);
+
     const aggResults = await CustomRecord.aggregate([
-      { $match: { organizationId: orgId, moduleId: leadModule._id } },
+      { $match: matchQuery },
       {
         $project: {
           campaign: {

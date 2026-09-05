@@ -78,25 +78,39 @@ export class HierarchyService {
 
     const allowedUsers = await User.find({ _id: { $in: allowedUserIds } }).select('_id firstName lastName email userCode');
 
+    const strIds = allowedUserIds.map(id => id.toString());
     const searchCriteria: any[] = [
       { createdBy: { $in: allowedUserIds } },
-      { 'data.assignedTo': { $in: allowedUserIds.map(id => id.toString()) } }
+      { 'data.assignedTo': { $in: strIds } },
+      { 'data.telecaller': { $in: strIds } },
+      { 'data.assignedAgent': { $in: strIds } },
+      { 'data.psm': { $in: strIds } },
+      { 'data.assignedToUserId': { $in: strIds } },
+      { assignedTo: { $in: allowedUserIds } }
     ];
 
     allowedUsers.forEach(u => {
       const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
-      if (fullName) {
-        const escName = fullName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        searchCriteria.push({ 'data.assignedTo': new RegExp('^\\s*' + escName + '\\s*$', 'i') });
-      }
+      const terms: string[] = [];
+      if (fullName) terms.push(fullName);
       if (u.email) {
-        const escEmail = u.email.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        searchCriteria.push({ 'data.assignedTo': new RegExp('^\\s*' + escEmail + '\\s*$', 'i') });
+        terms.push(u.email.trim());
+        const emailPrefix = u.email.trim().split('@')[0];
+        if (emailPrefix && emailPrefix !== u.email.trim()) {
+          terms.push(emailPrefix);
+        }
       }
-      if (u.userCode) {
-        const escCode = u.userCode.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        searchCriteria.push({ 'data.assignedTo': new RegExp('^\\s*' + escCode + '\\s*$', 'i') });
-      }
+      if (u.userCode) terms.push(u.userCode.trim());
+
+      terms.forEach(term => {
+        const escTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp('^\\s*' + escTerm + '\\s*$', 'i');
+        searchCriteria.push({ 'data.assignedTo': regex });
+        searchCriteria.push({ 'data.telecaller': regex });
+        searchCriteria.push({ 'data.assignedAgent': regex });
+        searchCriteria.push({ 'data.assignedToName': regex });
+        searchCriteria.push({ 'data.psm': regex });
+      });
     });
 
     const hierarchyFilter = { $or: searchCriteria };
@@ -186,17 +200,33 @@ export class HierarchyService {
     const creatorId = record.createdBy ? record.createdBy.toString() : '';
     if (allowedUserIds.includes(creatorId)) return true;
 
-    const assignedTo = record.data?.get ? record.data.get('assignedTo') : record.data?.assignedTo;
-    if (!assignedTo) return false;
+    const assignedValues = [
+      record.data?.get ? record.data.get('assignedTo') : record.data?.assignedTo,
+      record.data?.get ? record.data.get('telecaller') : record.data?.telecaller,
+      record.data?.get ? record.data.get('assignedAgent') : record.data?.assignedAgent,
+      record.data?.get ? record.data.get('assignedToName') : record.data?.assignedToName,
+      record.data?.get ? record.data.get('psm') : record.data?.psm,
+      record.assignedTo ? record.assignedTo.toString() : null
+    ].filter(Boolean).map(v => String(v).trim().toLowerCase());
+
+    if (assignedValues.length === 0) return false;
 
     const allowedUsers = await User.find({ _id: { $in: allowedUserIds } }).select('_id firstName lastName email userCode');
 
     for (const u of allowedUsers) {
-      if (assignedTo === u._id.toString()) return true;
-      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
-      if (fullName && assignedTo.trim().toLowerCase() === fullName.toLowerCase()) return true;
-      if (u.email && assignedTo.trim().toLowerCase() === u.email.toLowerCase()) return true;
-      if (u.userCode && assignedTo.trim().toLowerCase() === u.userCode.toLowerCase()) return true;
+      const uId = u._id.toString().toLowerCase();
+      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+      const email = (u.email || '').trim().toLowerCase();
+      const emailPrefix = email ? email.split('@')[0] : '';
+      const userCode = (u.userCode || '').trim().toLowerCase();
+
+      for (const val of assignedValues) {
+        if (val === uId) return true;
+        if (fullName && val === fullName) return true;
+        if (email && val === email) return true;
+        if (emailPrefix && val === emailPrefix) return true;
+        if (userCode && val === userCode) return true;
+      }
     }
 
     return false;

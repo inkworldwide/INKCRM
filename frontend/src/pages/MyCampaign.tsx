@@ -227,7 +227,7 @@ export default function MyCampaign() {
   };
 
   // Fetch lead details for active campaign
-  const fetchLeadDetails = async (campaignName: string, limitVal: number = 5000) => {
+  const fetchLeadDetails = async (campaignName: string, limitVal: number = 100000) => {
     try {
       setLoadingLeads(true);
       const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=${limitVal}`);

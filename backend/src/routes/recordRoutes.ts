@@ -647,25 +647,53 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
   }
 });
 
-// Helper to build user-assignment filter for My Campaigns
-const buildUserAssignmentFilter = (user: any) => {
+// Helper to build user-assignment filter for My Campaigns (supports subordinates & email username prefixes)
+const buildUserAssignmentFilter = async (user: any, orgId?: any) => {
   const uId = String(user._id || user.id || '');
-  const uEmail = (user.email || '').toString().trim();
-  const uName = (user.name || `${user.firstName || ''} ${user.lastName || ''}`).toString().trim();
-  const uCode = (user.userCode || '').toString().trim();
 
-  const userOrConditions: any[] = [
-    { 'data.assignedTo': uId },
-    { 'data.assignedToUserId': uId },
-    { 'data.telecaller': uId },
-    { 'data.assignedAgent': uId }
-  ];
-
-  if (mongoose.Types.ObjectId.isValid(uId)) {
-    userOrConditions.push({ assignedTo: new mongoose.Types.ObjectId(uId) });
+  let allowedUserDocs: any[] = [user];
+  if (orgId && uId && mongoose.Types.ObjectId.isValid(uId)) {
+    try {
+      const descendants = await HierarchyService.getSubordinateUserIds(uId, orgId);
+      if (descendants.length > 0) {
+        const subUsers = await User.find({ _id: { $in: descendants } }).select('_id firstName lastName email userCode name').lean();
+        allowedUserDocs = [...allowedUserDocs, ...subUsers];
+      }
+    } catch (e) {}
   }
 
-  const textMatchTerms = [uName, uEmail, uCode].filter(Boolean);
+  const userOrConditions: any[] = [];
+  const textMatchTerms = new Set<string>();
+
+  allowedUserDocs.forEach(u => {
+    const id = String(u._id || u.id || '');
+    if (id) {
+      userOrConditions.push({ 'data.assignedTo': id });
+      userOrConditions.push({ 'data.assignedToUserId': id });
+      userOrConditions.push({ 'data.telecaller': id });
+      userOrConditions.push({ 'data.assignedAgent': id });
+      userOrConditions.push({ 'data.psm': id });
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        userOrConditions.push({ assignedTo: new mongoose.Types.ObjectId(id) });
+      }
+    }
+
+    const email = (u.email || '').toString().trim();
+    if (email) {
+      textMatchTerms.add(email);
+      const emailPrefix = email.split('@')[0];
+      if (emailPrefix && emailPrefix !== email) {
+        textMatchTerms.add(emailPrefix);
+      }
+    }
+
+    const name = (u.name || `${u.firstName || ''} ${u.lastName || ''}`).toString().trim();
+    if (name) textMatchTerms.add(name);
+
+    const code = (u.userCode || '').toString().trim();
+    if (code) textMatchTerms.add(code);
+  });
+
   textMatchTerms.forEach(term => {
     const escTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp('^\\s*' + escTerm + '\\s*$', 'i');
@@ -673,6 +701,7 @@ const buildUserAssignmentFilter = (user: any) => {
     userOrConditions.push({ 'data.telecaller': regex });
     userOrConditions.push({ 'data.assignedAgent': regex });
     userOrConditions.push({ 'data.assignedToName': regex });
+    userOrConditions.push({ 'data.psm': regex });
   });
 
   return { $or: userOrConditions };
@@ -743,7 +772,7 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       };
       await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
     } else {
-      const userFilter = buildUserAssignmentFilter(userObj);
+      const userFilter = await buildUserAssignmentFilter(userObj, orgId);
       finalQuery = {
         organizationId: orgId,
         moduleId: (leadModule as any)?._id,
@@ -947,7 +976,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
         };
         await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
       } else {
-        const userFilter = buildUserAssignmentFilter(userObj);
+        const userFilter = await buildUserAssignmentFilter(userObj, orgId);
         exportQuery = {
           organizationId: orgId,
           moduleId: (leadModule as any)?._id,
@@ -1018,7 +1047,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       };
       await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
     } else {
-      const userFilter = buildUserAssignmentFilter(userObj);
+      const userFilter = await buildUserAssignmentFilter(userObj, orgId);
       const query: Record<string, any> = {
         organizationId: orgId,
         moduleId: (leadModule as any)?._id,
@@ -1723,7 +1752,7 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       // Allow update if user created record OR if record is assigned to user OR if hierarchy grants access
       const isCreator = record.createdBy?.toString() === String(req.user?.id);
       
-      const assignmentFilter = buildUserAssignmentFilter(userObj);
+      const assignmentFilter = await buildUserAssignmentFilter(userObj, req.organizationId);
       const isAssigned = await CustomRecord.exists({
         _id: id,
         organizationId: req.organizationId,
