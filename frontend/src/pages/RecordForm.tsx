@@ -304,19 +304,33 @@ export default function RecordForm() {
 
       // Ensure SOURCE is strictly set to the Lead Creator User Name (e.g. md Khasim, K. Tanaz K, Reshma R)
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
-      let creatorName = recordValues.createdBy || recordValues.createdByName || recordValues.creator || recordValues.assignedBy || loggedInUserFullName;
-      if (typeof creatorName === 'object' && creatorName !== null) {
-        creatorName = [creatorName.firstName, creatorName.lastName].filter(Boolean).join(' ') || creatorName.name || creatorName.email || loggedInUserFullName;
+      const topCreatedBy = recordRes.data?.createdBy;
+      let creatorName = '';
+      if (topCreatedBy && typeof topCreatedBy === 'object') {
+        creatorName = [topCreatedBy.firstName, topCreatedBy.lastName].filter(Boolean).join(' ') || topCreatedBy.name || topCreatedBy.email || '';
+      } else if (typeof topCreatedBy === 'string' && topCreatedBy.trim() && !/^[0-9a-fA-F]{24}$/.test(topCreatedBy.trim())) {
+        creatorName = topCreatedBy.trim();
       }
-      creatorName = String(creatorName || loggedInUserFullName).trim();
+
+      if (!creatorName) {
+        const topCreatedByName = recordRes.data?.createdByName;
+        if (typeof topCreatedByName === 'string' && topCreatedByName.trim()) {
+          creatorName = topCreatedByName.trim();
+        }
+      }
+
+      if (!creatorName) {
+        creatorName = recordValues.createdByName || recordValues.createdBy || recordValues.creator || recordValues.source || '';
+      }
+
+      if (!creatorName) {
+        creatorName = loggedInUserFullName;
+      }
+      creatorName = String(creatorName).trim();
 
       recordValues.source = creatorName;
       recordValues.createdBy = creatorName;
       recordValues.createdByName = creatorName;
-      if (!recordValues.createdBy) {
-        recordValues.createdBy = creatorName;
-        recordValues.createdByName = creatorName;
-      }
 
       // Default currency
       if (!recordValues.currency) {
@@ -488,19 +502,37 @@ export default function RecordForm() {
       }
 
       const userFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
-      if (!data.createdBy) {
-        data.createdBy = userFullName;
-        data.createdByName = userFullName;
-      }
       if (!data.assignedBy) {
         data.assignedBy = userFullName;
         data.assignedByName = userFullName;
       }
-      let submitCreator = data.createdBy || data.createdByName || data.assignedBy || userFullName;
-      if (typeof submitCreator === 'object' && submitCreator !== null) {
-        submitCreator = [submitCreator.firstName, submitCreator.lastName].filter(Boolean).join(' ') || submitCreator.name || submitCreator.email || userFullName;
+      const isEditMode = Boolean(id && id !== 'new');
+      let submitCreator = '';
+
+      if (isEditMode) {
+        const topCreatedBy = watchedValues['createdBy'] || watchedValues['createdByName'] || data.createdBy || data.createdByName || data.source;
+        if (topCreatedBy && typeof topCreatedBy === 'object') {
+          const c = topCreatedBy as any;
+          submitCreator = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || c.email || '';
+        } else if (typeof topCreatedBy === 'string' && topCreatedBy.trim() && !/^[0-9a-fA-F]{24}$/.test(topCreatedBy.trim())) {
+          submitCreator = topCreatedBy.trim();
+        }
       }
-      submitCreator = String(submitCreator || userFullName).trim();
+
+      if (!submitCreator) {
+        const fallbackObj = data.createdBy || data.createdByName;
+        if (typeof fallbackObj === 'object' && fallbackObj !== null) {
+          const c = fallbackObj as any;
+          submitCreator = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || c.email || '';
+        } else if (typeof fallbackObj === 'string' && fallbackObj.trim()) {
+          submitCreator = fallbackObj.trim();
+        }
+      }
+
+      if (!submitCreator) {
+        submitCreator = userFullName;
+      }
+      submitCreator = String(submitCreator).trim();
 
       data.source = submitCreator;
       data.createdBy = submitCreator;
