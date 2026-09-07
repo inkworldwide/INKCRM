@@ -161,5 +161,7 @@ const UserSchema = new Schema<IUser>(
 
 // Indexes
 UserSchema.index({ organizationId: 1 });
+UserSchema.index({ organizationId: 1, reportingManager: 1 });
+UserSchema.index({ reportingManager: 1 });
 
 export default mongoose.model<IUser>('User', UserSchema);

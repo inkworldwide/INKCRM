@@ -20,12 +20,18 @@ export class HierarchyService {
     userId: string | mongoose.Types.ObjectId,
     orgId: string | mongoose.Types.ObjectId
   ): Promise<mongoose.Types.ObjectId[]> {
-    const allUsers = await User.find({ organizationId: orgId }).select('_id reportingManager');
+    if (!userId || !orgId) return [];
+
+    const rootIdStr = userId.toString();
+
+    // Fetch all users for this organization with only necessary fields
+    const allUsers = await User.find({ organizationId: orgId }).select('_id reportingManager').lean();
     
+    // Map of managerId -> array of subordinate userIds
     const userMap = new Map<string, string[]>();
     allUsers.forEach(u => {
       if (u.reportingManager) {
-        const managerIdStr = u.reportingManager.toString();
+        const managerIdStr = String(u.reportingManager);
         if (!userMap.has(managerIdStr)) {
           userMap.set(managerIdStr, []);
         }
@@ -33,14 +39,16 @@ export class HierarchyService {
       }
     });
 
+    const visited = new Set<string>([rootIdStr]);
     const descendants: string[] = [];
-    const queue: string[] = [userId.toString()];
+    const queue: string[] = [rootIdStr];
     
     while (queue.length > 0) {
       const current = queue.shift()!;
       const subs = userMap.get(current) || [];
       subs.forEach(s => {
-        if (!descendants.includes(s)) {
+        if (!visited.has(s)) {
+          visited.add(s);
           descendants.push(s);
           queue.push(s);
         }
