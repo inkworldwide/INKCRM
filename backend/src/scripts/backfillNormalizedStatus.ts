@@ -25,6 +25,9 @@ export async function runBackfill() {
   for (let doc = await cursor.next(); doc != null; doc = await cursor.next()) {
     totalProcessed++;
     const data = doc.data instanceof Map ? Object.fromEntries(doc.data) : (doc.data || {});
+    if (data.isCampaignDialOnly || data.normalizedStatus === 'CAMPAIGN_DIAL') {
+      continue;
+    }
     const rawSt = data.status || data.dialStatus || data.leadStatus || 'PENDING';
     const normalized = normalizeStatusName(rawSt);
 

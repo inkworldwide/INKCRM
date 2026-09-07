@@ -140,49 +140,40 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
     endOfToday.setHours(23, 59, 59, 999);
 
     if (leadModule) {
-      // 1. Group leads count by status dynamically using SummaryService cache
-      const summaryData = await SummaryService.getDashboardMetrics(orgId!, leadModule._id);
-      
-      if (summaryData && Object.keys(summaryData).length > 0) {
-        for (const [key, count] of Object.entries(summaryData)) {
-          statusCounts[key] = Number(count || 0);
-          statusCounts[key.toUpperCase()] = Number(count || 0);
-        }
-      } else {
-        const leadAgg = await CustomRecord.aggregate([
-          { $match: leadQuery },
-          {
-            $project: {
-              st: {
-                $ifNull: [
-                  '$data.normalizedStatus',
-                  {
-                    $ifNull: [
-                      '$data.status',
-                      { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
-                    ]
-                  }
-                ]
-              }
+      // 1. Group leads count by status using leadQuery (with hierarchy filtering applied)
+      const leadAgg = await CustomRecord.aggregate([
+        { $match: leadQuery },
+        {
+          $project: {
+            st: {
+              $ifNull: [
+                '$data.normalizedStatus',
+                {
+                  $ifNull: [
+                    '$data.status',
+                    { $ifNull: ['$data.dialStatus', '$data.leadStatus'] }
+                  ]
+                }
+              ]
             }
-          },
-          { $group: { _id: '$st', count: { $sum: 1 } } }
-        ]);
-        
-        leadAgg.forEach(item => {
-          if (item._id) {
-            const rawName = item._id.toString().trim();
-            const canonical = normalizeStatusName(rawName);
-            const uppercaseName = rawName.toUpperCase();
-            const count = Number(item.count || 0);
-
-            const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
-            uniqueKeys.forEach(k => {
-              statusCounts[k] = (statusCounts[k] || 0) + count;
-            });
           }
-        });
-      }
+        },
+        { $group: { _id: '$st', count: { $sum: 1 } } }
+      ]);
+      
+      leadAgg.forEach(item => {
+        if (item._id) {
+          const rawName = item._id.toString().trim();
+          const canonical = normalizeStatusName(rawName);
+          const uppercaseName = rawName.toUpperCase();
+          const count = Number(item.count || 0);
+
+          const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
+          uniqueKeys.forEach(k => {
+            statusCounts[k] = (statusCounts[k] || 0) + count;
+          });
+        }
+      });
 
       // 2. Count & fetch Today's followups
       const followUpQuery: any = {

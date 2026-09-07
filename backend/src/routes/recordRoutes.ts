@@ -1203,54 +1203,30 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
     };
 
     // Support ?status=HOT LEADS or ?data.status=HOT LEADS or ?followup=today
-    const USE_INDEXED_STATUS_QUERY = process.env.USE_INDEXED_STATUS_QUERY !== 'false';
-
     const rawStatusParam = req.query.status || req.query.leadStatus || req.query['data.status'] || req.query['data.normalizedStatus'];
     if (typeof rawStatusParam === 'string' && rawStatusParam.trim()) {
       const cleanVal = rawStatusParam.trim();
       const normVal = normalizeStatusName(cleanVal);
-      const statusFilter = USE_INDEXED_STATUS_QUERY
-        ? { 'data.normalizedStatus': normVal }
-        : {
-            $or: [
-              { 'data.normalizedStatus': normVal },
-              { 'data.status': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') },
-              { 'data.leadStatus': new RegExp(`^\\s*${cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i') }
-            ]
-          };
+      const escVal = cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const escNorm = normVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+      const statusFilter = {
+        $or: [
+          { 'data.normalizedStatus': normVal },
+          { 'data.normalizedStatus': cleanVal },
+          { 'data.status': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
+          { 'data.status': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') },
+          { 'data.dialStatus': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
+          { 'data.dialStatus': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') },
+          { 'data.leadStatus': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
+          { 'data.leadStatus': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') }
+        ]
+      };
 
       if (query.$and) {
         query.$and.push(statusFilter);
       } else {
         query.$and = [statusFilter];
-      }
-    } else if (apiPath.toLowerCase() === 'leads' && !req.query.followup && (!search || typeof search !== 'string' || !search.trim())) {
-      // When viewing ALL LEADS without a status filter, restrict to lead process statuses for 100% count alignment
-      const CANONICAL_PROCESS_STATUSES = [
-        'HOT LEADS',
-        'WARM LEADS',
-        'CEBIL PENDING',
-        'DOCUMENT PENDING',
-        'APPROVAL PENDING',
-        'APPROVED BUT NOT DISBUSE',
-        'DISBUSED',
-        'REJECTED',
-        'FOLLOWUP',
-        'DROPPED',
-        'PENDING'
-      ];
-
-      const leadProcessFilter = {
-        $or: [
-          { 'data.normalizedStatus': { $in: CANONICAL_PROCESS_STATUSES } },
-          { 'data.status': { $in: ['Hot', 'HOT', 'HOT LEADS', 'Warm', 'WARM', 'WARM LEADS', 'Document Pending', 'DOCUMENT PENDING', 'Disbursed', 'DISBUSED', 'Followup', 'FOLLOWUP', 'Dropped', 'DROPPED', 'Rejected', 'REJECTED', 'CEBIL PENDING', 'APPROVAL PENDING', 'APPROVED BUT NOT DISBUSE', 'PENDING'] } }
-        ]
-      };
-
-      if (query.$and) {
-        query.$and.push(leadProcessFilter);
-      } else {
-        query.$and = [leadProcessFilter];
       }
     }
 
