@@ -434,7 +434,12 @@ export default function MyCampaign() {
 
       await api.put(`/records/leads/${lead._id}`, payload);
       
-      showToast('Lead saved successfully! Moved to next lead.', 'success');
+      showAlertModal({
+        title: 'LEAD SAVED SUCCESSFULLY',
+        message: 'Lead updated successfully and moved to next lead.',
+        buttonText: 'CONTINUE CALLING',
+        type: 'success'
+      });
 
       // 1. Immediately update lead.data in local state so it is marked as dialed and hides from Yet To Dial list instantly!
       setLeads(prevLeads => prevLeads.map(l => l._id === lead._id ? {
@@ -454,7 +459,14 @@ export default function MyCampaign() {
         }
       } : l));
 
-      // 2. Update active campaign counters seamlessly
+      // 2. Instantly update campaign pagination metrics in local state
+      setCampaignPagination(prev => prev ? {
+        ...prev,
+        dialed: prev.dialed + 1,
+        yetToDial: Math.max(0, prev.yetToDial - 1)
+      } : prev);
+
+      // 3. Instantly update active campaign state counters
       if (activeCampaign) {
         setActiveCampaign(prev => prev ? {
           ...prev,
@@ -463,7 +475,19 @@ export default function MyCampaign() {
         } : prev);
       }
 
-      // 3. Smoothly scroll to top so next lead is in view
+      // 4. Instantly update overall campaigns list state
+      setCampaigns(prevCamps => prevCamps.map(c => {
+        if (activeCampaign && c.campaignName.toLowerCase() === activeCampaign.campaignName.toLowerCase()) {
+          return {
+            ...c,
+            dialed: c.dialed + 1,
+            yetToDial: Math.max(0, c.yetToDial - 1)
+          };
+        }
+        return c;
+      }));
+
+      // 5. Smoothly scroll to top so next lead is in view
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       // Refresh overall campaign list silently in background
