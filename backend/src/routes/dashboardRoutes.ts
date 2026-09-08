@@ -161,17 +161,42 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
         { $group: { _id: '$st', count: { $sum: 1 } } }
       ]);
       
+      const canonicalCountsMap: Record<string, number> = {};
       leadAgg.forEach(item => {
         if (item._id) {
           const rawName = item._id.toString().trim();
           const canonical = normalizeStatusName(rawName);
-          const uppercaseName = rawName.toUpperCase();
           const count = Number(item.count || 0);
+          canonicalCountsMap[canonical] = (canonicalCountsMap[canonical] || 0) + count;
+        }
+      });
 
-          const uniqueKeys = new Set<string>([canonical, uppercaseName, rawName]);
-          uniqueKeys.forEach(k => {
-            statusCounts[k] = (statusCounts[k] || 0) + count;
-          });
+      Object.entries(canonicalCountsMap).forEach(([canonical, totalCount]) => {
+        statusCounts[canonical] = totalCount;
+        statusCounts[canonical.toUpperCase()] = totalCount;
+        if (canonical === 'HOT LEADS') {
+          statusCounts['HOT'] = totalCount;
+          statusCounts['HOT LEAD'] = totalCount;
+          statusCounts['Hot'] = totalCount;
+          statusCounts['Hot Lead'] = totalCount;
+        } else if (canonical === 'WARM LEADS') {
+          statusCounts['WARM'] = totalCount;
+          statusCounts['WARM LEAD'] = totalCount;
+          statusCounts['Warm'] = totalCount;
+          statusCounts['Warm Lead'] = totalCount;
+        } else if (canonical === 'APPROVED BUT NOT DISBUSE') {
+          statusCounts['APPROVED'] = totalCount;
+          statusCounts['APPROVED BUT NOT DISBURSED'] = totalCount;
+        }
+      });
+
+      leadAgg.forEach(item => {
+        if (item._id) {
+          const rawName = item._id.toString().trim();
+          const canonical = normalizeStatusName(rawName);
+          const totalCount = canonicalCountsMap[canonical] || 0;
+          statusCounts[rawName] = totalCount;
+          statusCounts[rawName.toUpperCase()] = totalCount;
         }
       });
 

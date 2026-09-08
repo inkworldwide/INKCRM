@@ -1232,16 +1232,22 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       const escVal = cleanVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
       const escNorm = normVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
+      const synonyms: string[] = [cleanVal, normVal];
+      if (normVal === 'HOT LEADS') synonyms.push('HOT', 'HOT LEAD', 'HOT LEADS', 'Hot', 'Hot Lead');
+      if (normVal === 'WARM LEADS') synonyms.push('WARM', 'WARM LEAD', 'WARM LEADS', 'Warm', 'Warm Lead');
+      if (normVal === 'APPROVED BUT NOT DISBUSE') synonyms.push('APPROVED', 'APPROVED BUT NOT DISBUSE', 'APPROVED BUT NOT DISBURSED');
+      if (normVal === 'FOLLOWUP') synonyms.push('FOLLOWUP', 'FOLLOW UP', 'Followup', 'Follow Up');
+      if (normVal === 'DROPPED') synonyms.push('DROPPED', 'DROPP', 'Dropped');
+
+      const synonymRegexes = Array.from(new Set(synonyms)).map(s => new RegExp(`^\\s*${s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i'));
+
       const statusFilter = {
         $or: [
           { 'data.normalizedStatus': normVal },
           { 'data.normalizedStatus': cleanVal },
-          { 'data.status': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
-          { 'data.status': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') },
-          { 'data.dialStatus': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
-          { 'data.dialStatus': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') },
-          { 'data.leadStatus': new RegExp(`^\\s*${escVal}\\s*$`, 'i') },
-          { 'data.leadStatus': new RegExp(`^\\s*${escNorm}\\s*$`, 'i') }
+          { 'data.status': { $in: synonymRegexes } },
+          { 'data.dialStatus': { $in: synonymRegexes } },
+          { 'data.leadStatus': { $in: synonymRegexes } }
         ]
       };
 
