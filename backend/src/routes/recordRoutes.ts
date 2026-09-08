@@ -1930,8 +1930,24 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         const c = record.createdBy as any;
         creatorName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || c.email || '';
       }
+      if (!creatorName && record.createdBy && mongoose.Types.ObjectId.isValid(String(record.createdBy))) {
+        const userDoc = await User.findById(record.createdBy).select('firstName lastName name email');
+        if (userDoc) {
+          creatorName = `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || (userDoc as any).name || userDoc.email;
+        }
+      }
       if (!creatorName) {
         creatorName = (record as any).createdByName || dataObj.createdByName || dataObj.createdBy || '';
+      }
+      if (!creatorName) {
+        const src = String(dataObj.source || '').trim();
+        const assTo = String(dataObj.assignedTo || dataObj.assignedToName || dataObj.telecaller || '').trim();
+        if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+          creatorName = src;
+        }
+      }
+      if (!creatorName) {
+        creatorName = dataObj.assignedBy || dataObj.assignedByName || 'System';
       }
       if (creatorName) {
         dataObj.createdBy = creatorName;
@@ -2124,11 +2140,24 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       const c = record.createdBy as any;
       originalCreatorName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || c.email || '';
     }
-    if (!originalCreatorName) {
-      originalCreatorName = oldValues.createdByName || oldValues.createdBy || oldValues.source || '';
+    if (!originalCreatorName && record.createdBy && mongoose.Types.ObjectId.isValid(String(record.createdBy))) {
+      const userDoc = await User.findById(record.createdBy).select('firstName lastName name email');
+      if (userDoc) {
+        originalCreatorName = `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || (userDoc as any).name || userDoc.email;
+      }
     }
     if (!originalCreatorName) {
-      originalCreatorName = currentUserName;
+      originalCreatorName = oldValues.createdByName || oldValues.createdBy || '';
+    }
+    if (!originalCreatorName) {
+      const src = String(oldValues.source || '').trim();
+      const assTo = String(oldValues.assignedTo || oldValues.assignedToName || oldValues.telecaller || '').trim();
+      if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+        originalCreatorName = src;
+      }
+    }
+    if (!originalCreatorName) {
+      originalCreatorName = oldValues.assignedBy || currentUserName;
     }
 
     updateData.createdBy = originalCreatorName;

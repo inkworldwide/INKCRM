@@ -3,6 +3,7 @@ import app from './app';
 import { connectDB, disconnectDB } from './config/db';
 import Organization from './models/Organization';
 import { seedDatabase } from './utils/seeder';
+import { autoFixLeadSources } from './utils/fixLeadSourceCreator';
 import { logger } from './utils/logger';
 import dotenv from 'dotenv';
 
@@ -40,6 +41,9 @@ const startServer = async () => {
       await seedDatabase(false);
       logger.info('Auto-seeding completed.');
     }
+
+    // Auto-correct lead source and creator names for existing database records
+    autoFixLeadSources().catch(err => logger.error('Background autoFixLeadSources error:', err));
 
     server = app.listen(PORT, () => {
       logger.info(`=================================`);

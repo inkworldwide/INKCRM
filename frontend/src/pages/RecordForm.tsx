@@ -320,11 +320,19 @@ export default function RecordForm() {
       }
 
       if (!creatorName) {
-        creatorName = recordValues.createdByName || recordValues.createdBy || recordValues.creator || recordValues.source || '';
+        creatorName = recordValues.createdByName || recordValues.createdBy || recordValues.creator || '';
       }
 
       if (!creatorName) {
-        creatorName = loggedInUserFullName;
+        const src = String(recordValues.source || '').trim();
+        const assTo = String(recordValues.assignedTo || recordValues.assignedToName || recordValues.telecaller || '').trim();
+        if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+          creatorName = src;
+        }
+      }
+
+      if (!creatorName) {
+        creatorName = recordValues.assignedBy || loggedInUserFullName;
       }
       creatorName = String(creatorName).trim();
 
@@ -510,7 +518,7 @@ export default function RecordForm() {
       let submitCreator = '';
 
       if (isEditMode) {
-        const topCreatedBy = watchedValues['createdBy'] || watchedValues['createdByName'] || data.createdBy || data.createdByName || data.source;
+        const topCreatedBy = watchedValues['createdBy'] || watchedValues['createdByName'] || data.createdBy || data.createdByName;
         if (topCreatedBy && typeof topCreatedBy === 'object') {
           const c = topCreatedBy as any;
           submitCreator = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || c.email || '';
