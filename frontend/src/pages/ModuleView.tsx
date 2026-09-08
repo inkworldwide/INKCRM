@@ -1077,12 +1077,23 @@ export default function ModuleView() {
   const getAllocatedNumbers = (name: string) => {
     const key = (name || '').toLowerCase().trim();
     if (campAllocStats[key] !== undefined) return campAllocStats[key];
+    const matchingRec = data?.records?.find((r: any) => {
+      const rName = (r.data?.campaignName || r.data?.source || r.data?.campaign || r.data?.name || r.name || '').toLowerCase().trim();
+      return rName === key;
+    });
+    if (matchingRec && matchingRec.data?.allocatedLeads !== undefined) return Number(matchingRec.data.allocatedLeads);
+    if (matchingRec && matchingRec.data?.totalAssigned !== undefined) return Number(matchingRec.data.totalAssigned);
     return 0;
   };
 
   const getDialedNumbers = (name: string) => {
     const key = (name || '').toLowerCase().trim();
     if (campDialedStats[key] !== undefined) return campDialedStats[key];
+    const matchingRec = data?.records?.find((r: any) => {
+      const rName = (r.data?.campaignName || r.data?.source || r.data?.campaign || r.data?.name || r.name || '').toLowerCase().trim();
+      return rName === key;
+    });
+    if (matchingRec && matchingRec.data?.dialed !== undefined) return Number(matchingRec.data.dialed);
     return 0;
   };
 

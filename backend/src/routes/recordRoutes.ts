@@ -1218,6 +1218,213 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign') {
+      const rawOrgId = req.organizationId;
+      const orgId = (rawOrgId && mongoose.Types.ObjectId.isValid(String(rawOrgId)))
+        ? new mongoose.Types.ObjectId(String(rawOrgId))
+        : rawOrgId;
+
+      // 1. Get campaign module definition
+      let campaignModule: any = moduleDef;
+      if (!campaignModule) {
+        campaignModule = await ModuleDefinition.findOne({
+          $or: [
+            { organizationId: orgId, apiPath: 'campaigns' },
+            { organizationId: orgId, apiPath: 'campaign' },
+            { organizationId: orgId, name: new RegExp('^campaigns?$', 'i') }
+          ]
+        });
+      }
+
+      // 2. Get lead module definition
+      let leadModule = await ModuleDefinition.findOne({
+        $or: [
+          { organizationId: orgId, apiPath: 'leads' },
+          { organizationId: orgId, apiPath: 'lead' },
+          { organizationId: orgId, name: new RegExp('^leads?$', 'i') }
+        ]
+      });
+
+      // 3. Aggregate lead records grouped by campaign name
+      let leadCampaignStats: any[] = [];
+      if (leadModule) {
+        const leadMatch: any = { organizationId: orgId, moduleId: leadModule._id };
+        await HierarchyService.modifyRecordQuery(leadMatch, req.user as any, orgId!);
+
+        leadCampaignStats = await CustomRecord.aggregate([
+          { $match: leadMatch },
+          {
+            $project: {
+              campaignName: {
+                $ifNull: [
+                  '$data.campaignName',
+                  { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }
+                ]
+              },
+              createdAt: '$createdAt',
+              isDialed: {
+                $cond: [
+                  {
+                    $or: [
+                      { $gt: [{ $ifNull: ['$data.callAttempts', 0] }, 0] },
+                      { $ifNull: ['$data.dialedAt', false] },
+                      { $ifNull: ['$data.lastCallDate', false] },
+                      {
+                        $and: [
+                          { $ne: [{ $ifNull: ['$data.dialStatus', ''] }, ''] },
+                          {
+                            $not: [
+                              { $in: [{ $toLower: { $ifNull: ['$data.dialStatus', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        $and: [
+                          { $ne: [{ $ifNull: ['$data.status', ''] }, ''] },
+                          {
+                            $not: [
+                              { $in: [{ $toLower: { $ifNull: ['$data.status', ''] } }, ['yet to call', 'not called', 'new', '']] }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            $group: {
+              _id: { $toLower: { $ifNull: ['$campaignName', ''] } },
+              rawCampaignName: { $first: '$campaignName' },
+              totalAssigned: { $sum: 1 },
+              dialed: { $sum: '$isDialed' },
+              firstCreatedAt: { $min: '$createdAt' }
+            }
+          }
+        ]);
+      }
+
+      // 4. Fetch existing campaign documents in CustomRecord under campaignModule
+      const existingCampaignDocs = campaignModule
+        ? await CustomRecord.find({ organizationId: orgId, moduleId: campaignModule._id }).lean()
+        : [];
+
+      const createdNames = new Set<string>();
+      const mergedRecords: any[] = [];
+
+      // First include explicit campaign records
+      for (const doc of existingCampaignDocs) {
+        const cName = String(doc.data?.campaignName || doc.data?.name || doc.data?.source || doc.data?.campaign || '').trim();
+        const lowerKey = cName.toLowerCase();
+        if (lowerKey) createdNames.add(lowerKey);
+
+        const matchedLeadStat = leadCampaignStats.find(s => (s._id || '').toLowerCase() === lowerKey);
+        const allocated = matchedLeadStat ? Number(matchedLeadStat.totalAssigned || 0) : Number(doc.data?.allocatedLeads || doc.data?.totalAssigned || 0);
+        const dialed = matchedLeadStat ? Number(matchedLeadStat.dialed || 0) : Number(doc.data?.dialed || 0);
+        const yetToDial = Math.max(0, allocated - dialed);
+
+        mergedRecords.push({
+          ...doc,
+          data: {
+            ...doc.data,
+            campaignName: cName || doc.data?.campaignName || 'Unnamed Campaign',
+            name: cName || doc.data?.name || 'Unnamed Campaign',
+            allocatedLeads: allocated,
+            totalAssigned: allocated,
+            dialed,
+            yetToDial,
+            status: doc.data?.status || 'Active'
+          }
+        });
+      }
+
+      // Next, auto-create missing campaign records from lead stats
+      for (const leadStat of leadCampaignStats) {
+        const rawName = String(leadStat.rawCampaignName || leadStat._id || '').trim();
+        const lowerKey = rawName.toLowerCase();
+        if (!rawName || createdNames.has(lowerKey)) continue;
+
+        createdNames.add(lowerKey);
+        const allocated = Number(leadStat.totalAssigned || 0);
+        const dialed = Number(leadStat.dialed || 0);
+        const yetToDial = Math.max(0, allocated - dialed);
+        const createdAt = leadStat.firstCreatedAt || new Date();
+
+        let newCampDoc: any = null;
+        if (campaignModule) {
+          try {
+            newCampDoc = await CustomRecord.create({
+              organizationId: orgId,
+              moduleId: campaignModule._id,
+              createdBy: (req.user as any)?.id || (req.user as any)?._id,
+              updatedBy: (req.user as any)?.id || (req.user as any)?._id,
+              createdAt,
+              data: {
+                campaignName: rawName,
+                name: rawName,
+                status: 'Active',
+                allocatedLeads: allocated,
+                totalAssigned: allocated,
+                dialed,
+                yetToDial,
+                description: `Auto-created from lead drive ${rawName}`
+              }
+            });
+            newCampDoc = newCampDoc.toObject();
+          } catch (e) {
+            console.warn('Non-fatal error auto-creating campaign document:', e);
+          }
+        }
+
+        mergedRecords.push(newCampDoc || {
+          _id: `auto_${lowerKey}`,
+          organizationId: orgId,
+          moduleId: campaignModule?._id,
+          createdAt,
+          updatedAt: createdAt,
+          data: {
+            campaignName: rawName,
+            name: rawName,
+            status: 'Active',
+            allocatedLeads: allocated,
+            totalAssigned: allocated,
+            dialed,
+            yetToDial
+          }
+        });
+      }
+
+      // Global Search filter if provided
+      let finalRecords = mergedRecords;
+      if (search && typeof search === 'string' && search.trim()) {
+        const q = search.trim().toLowerCase();
+        finalRecords = finalRecords.filter((r: any) => {
+          const cName = String(r.data?.campaignName || r.data?.name || '').toLowerCase();
+          return cName.includes(q);
+        });
+      }
+
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const rawLimit = parseInt(limit as string, 10) || 50;
+      const limitNum = Math.min(Math.max(1, rawLimit), 10000);
+
+      res.status(200).json({
+        records: finalRecords,
+        pagination: {
+          total: finalRecords.length,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(finalRecords.length / limitNum) || 1
+        }
+      });
+      return;
+    }
+
     // Construct Query Filters
     const query: Record<string, any> = {
       organizationId: req.organizationId,
