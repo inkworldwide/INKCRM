@@ -742,9 +742,11 @@ const buildUserAssignmentFilter = async (user: any, orgId?: any) => {
     userOrConditions.push({ 'data.assignedTo': regex });
     userOrConditions.push({ 'data.telecaller': regex });
     userOrConditions.push({ 'data.assignedAgent': regex });
-    userOrConditions.push({ 'data.assignedToName': regex });
-    userOrConditions.push({ 'data.psm': regex });
   });
+
+  if (userOrConditions.length === 0) {
+    return {};
+  }
 
   return { $or: userOrConditions };
 };
@@ -960,8 +962,8 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
 
     const userId = req.user?.id || (req.user as any)?._id;
     const { campaignName } = req.params;
-    const pageNum = parseInt(req.query.page as string || '1', 10);
-    const limitNum = parseInt(req.query.limit as string || '100000', 10);
+    const pageNum = Math.max(1, parseInt(req.query.page as string || '1', 10));
+    const limitNum = Math.max(1, parseInt(req.query.limit as string || '25', 10));
     const skipNum = (pageNum - 1) * limitNum;
     const isExport = req.query.export === 'true';
 

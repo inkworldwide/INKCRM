@@ -210,7 +210,9 @@ export default function MyCampaign() {
   // Website In-App Call Popup Modal state
   const [callModalLead, setCallModalLead] = useState<{ lead: LeadRecord; phone: string; name: string } | null>(null);
 
-  const [campaignPagination, setCampaignPagination] = useState<{ total: number; dialed: number; yetToDial: number } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [campaignPagination, setCampaignPagination] = useState<{ total: number; dialed: number; yetToDial: number; page: number; limit: number; totalPages: number } | null>(null);
 
   // Fetch campaigns
   const fetchCampaigns = async () => {
@@ -226,18 +228,23 @@ export default function MyCampaign() {
     }
   };
 
-  // Fetch lead details for active campaign
-  const fetchLeadDetails = async (campaignName: string, limitVal: number = 100000) => {
+  // Fetch lead details for active campaign with 25 items per page pagination
+  const fetchLeadDetails = async (campaignName: string, pageVal: number = 1, limitVal: number = 25) => {
     try {
       setLoadingLeads(true);
-      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?limit=${limitVal}`);
+      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?page=${pageVal}&limit=${limitVal}`);
       setLeads(res.data.leads || []);
+      setCurrentPage(pageVal);
+      setPageSize(limitVal);
       
       if (res.data.pagination) {
         setCampaignPagination({
           total: res.data.pagination.total || (res.data.leads || []).length,
           dialed: res.data.pagination.dialed || 0,
-          yetToDial: res.data.pagination.yetToDial ?? Math.max(0, (res.data.pagination.total || 0) - (res.data.pagination.dialed || 0))
+          yetToDial: res.data.pagination.yetToDial ?? Math.max(0, (res.data.pagination.total || 0) - (res.data.pagination.dialed || 0)),
+          page: res.data.pagination.page || pageVal,
+          limit: res.data.pagination.limit || limitVal,
+          totalPages: res.data.pagination.totalPages || Math.ceil((res.data.pagination.total || 0) / limitVal) || 1
         });
       }
       
@@ -291,7 +298,8 @@ export default function MyCampaign() {
     sessionStorage.setItem('inkcrm_active_campaign_name', campaign.campaignName);
     setDialFilter(initialFilter);
     setVisibleCount(50);
-    fetchLeadDetails(campaign.campaignName);
+    setCurrentPage(1);
+    fetchLeadDetails(campaign.campaignName, 1, 25);
   };
 
   const handleBack = () => {
@@ -766,8 +774,10 @@ export default function MyCampaign() {
                 </button>
               )}
               {(() => {
-                const pct = activeCampaign.totalAssigned > 0 
-                  ? Math.round((activeCampaign.dialed / activeCampaign.totalAssigned) * 100)
+                const displayAllocated = campaignPagination?.total ?? activeCampaign.totalAssigned ?? 0;
+                const displayDialed = campaignPagination?.dialed ?? activeCampaign.dialed ?? 0;
+                const pct = displayAllocated > 0 
+                  ? Math.round((displayDialed / displayAllocated) * 100)
                   : 0;
                 return (
                   <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-xl min-w-[160px]">
@@ -1328,19 +1338,44 @@ export default function MyCampaign() {
                   </div>
                 )}
 
-                {/* LOAD MORE LEADS BUTTON & PAGINATION CONTROL */}
-                {visibleCount < displayedLeads.length && (
-                  <div className="flex flex-col items-center justify-center py-6 space-y-2.5 border-t border-slate-200/80 dark:border-slate-800 mt-6 bg-slate-50/50 dark:bg-slate-900/40 rounded-2xl p-4">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      Showing <span className="font-extrabold text-slate-900 dark:text-white font-mono">{Math.min(visibleCount, displayedLeads.length).toLocaleString()}</span> of <span className="font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{displayedLeads.length.toLocaleString()}</span> leads
-                    </p>
-                    <button
-                      onClick={() => setVisibleCount(prev => prev + 100)}
-                      className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider active:scale-95"
-                    >
-                      <Icons.ChevronDown className="w-4 h-4 stroke-[2.5]" />
-                      <span>Load More Leads ({(displayedLeads.length - visibleCount).toLocaleString()} remaining)</span>
-                    </button>
+                {/* 25-LEADS PAGINATION FOOTER CONTROL */}
+                {activeCampaign && campaignPagination && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-[#111827] p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs mt-4">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Showing <span className="font-bold text-slate-900 dark:text-white font-mono">{((currentPage - 1) * pageSize + 1).toLocaleString()}</span> to <span className="font-bold text-slate-900 dark:text-white font-mono">{Math.min(currentPage * pageSize, campaignPagination.total).toLocaleString()}</span> of <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">{campaignPagination.total.toLocaleString()}</span> leads
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={currentPage <= 1 || loadingLeads}
+                        onClick={() => {
+                          const nextP = currentPage - 1;
+                          fetchLeadDetails(activeCampaign.campaignName, nextP, pageSize);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-slate-200 transition-all flex items-center gap-1 shadow-3xs"
+                      >
+                        <Icons.ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Previous</span>
+                      </button>
+
+                      <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 font-mono px-3 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+                        Page {currentPage} of {campaignPagination.totalPages || 1}
+                      </span>
+
+                      <button
+                        disabled={currentPage >= (campaignPagination.totalPages || 1) || loadingLeads}
+                        onClick={() => {
+                          const nextP = currentPage + 1;
+                          fetchLeadDetails(activeCampaign.campaignName, nextP, pageSize);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all flex items-center gap-1 active:scale-95"
+                      >
+                        <span>Next</span>
+                        <Icons.ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
