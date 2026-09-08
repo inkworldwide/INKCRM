@@ -46,8 +46,8 @@ export default function LeadReportsPage() {
   const years = ['2024', '2025', '2026', '2027'];
   
   const statusOptions = [
-    'Hot', 'Warm', 'Cedil Pending', 'Document Pending',
-    'Approval Pending', 'Approved', 'Disbursed', 'Rejected', 'Followup', 'Dropped', 'Pending', 'New'
+    'Hot', 'Warm', 'CALL BACK', 'GIVEN LOGIN', 'CIBIL PENDING', 'Document Pending',
+    'Status Pending', 'Approval Pending', 'Approved', 'Disbursed', 'Reject', 'Followup', 'Dropped', 'Pending', 'New'
   ];
 
   // Master Product Names matching website database (from Products module)
@@ -411,7 +411,7 @@ export default function LeadReportsPage() {
                   const firmLocationStr = [firm, location].filter(Boolean).join(' • ') || 'N/A';
 
                   const loanType = data.loanType || data.leadCategory || data.serviceType || data.product || 'SALARIED PERSONAL LOAN';
-                  const status = data.status || data.dialStatus || 'New';
+                  const status = data.status || data.leadStatus || data.normalizedStatus || (data.dialStatus !== 'CAMPAIGN_DIAL' ? data.dialStatus : '') || 'New';
                   const amount = data.amount || data.loanAmount || data.budget || 'N/A';
                   const agent = item.assignedTo?.name || data.assignedTo || data.assignedToName || data.psm || data.telecaller || 'Unassigned';
 

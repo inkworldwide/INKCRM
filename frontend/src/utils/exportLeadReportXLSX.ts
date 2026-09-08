@@ -172,34 +172,33 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     const city = String(extractField(data, ['city', 'location', 'district', 'state', 'address', 'place', 'area', 'presentAddress', 'fullAddress']) || 'N/A').trim();
     const loanProduct = String(extractField(data, ['loanProduct', 'loanType', 'product', 'serviceType', 'leadCategory', 'category', 'lead_category']) || 'SALARIED PERSONAL LOAN').trim();
     const caseDetails = String(extractField(data, ['caseDetails', 'case_details', 'caseStatus', 'details', 'description']) || 'N/A').trim();
-    const getStatus = (d: any) => {
-      if (!d) return 'YET TO CALL';
-      const ignoreValues = ['YET TO CALL', 'NOT CALLED', 'NEW', 'CAMPAIGN_DIAL', 'UNASSIGNED', ''];
-      
-      const ds = String(d.dialStatus || '').trim();
-      if (ds && !ignoreValues.includes(ds.toUpperCase())) {
-        return ds.toUpperCase();
-      }
+    const getLeadStatus = (d: any) => {
+      if (!d) return 'New';
+      const ignoreValues = ['CAMPAIGN_DIAL', 'UNASSIGNED', ''];
 
       const st = String(d.status || '').trim();
-      if (st && !ignoreValues.includes(st.toUpperCase())) {
-        return st.toUpperCase();
-      }
-
-      const norm = String(d.normalizedStatus || '').trim();
-      if (norm && !ignoreValues.includes(norm.toUpperCase())) {
-        return norm.toUpperCase();
+      if (st && st !== 'N/A' && !ignoreValues.includes(st.toUpperCase())) {
+        return st;
       }
 
       const ls = String(d.leadStatus || '').trim();
-      if (ls && !ignoreValues.includes(ls.toUpperCase())) {
-        return ls.toUpperCase();
+      if (ls && ls !== 'N/A' && !ignoreValues.includes(ls.toUpperCase())) {
+        return ls;
       }
 
-      const fallback = String(d.dialStatus || d.status || d.normalizedStatus || d.leadStatus || 'YET TO CALL').trim().toUpperCase();
-      return fallback === 'CAMPAIGN_DIAL' ? 'YET TO CALL' : (fallback || 'YET TO CALL');
+      const norm = String(d.normalizedStatus || '').trim();
+      if (norm && norm !== 'N/A' && !ignoreValues.includes(norm.toUpperCase())) {
+        return norm;
+      }
+
+      const ds = String(d.dialStatus || '').trim();
+      if (ds && ds !== 'N/A' && !ignoreValues.includes(ds.toUpperCase()) && ds.toUpperCase() !== 'YET TO CALL') {
+        return ds;
+      }
+
+      return st || ls || norm || ds || 'New';
     };
-    const status = getStatus(data);
+    const status = getLeadStatus(data);
     const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').replace(/<[^>]*>/g, '').trim();
     const emailAddress = String(extractField(data, ['email', 'emailAddress', 'email_address', 'mail'], ['email', 'mail']) || 'N/A').trim();
     const leadSource = String(extractField(data, ['source', 'leadSource', 'lead_source', 'sourceName', 'createdBy', 'createdByName', 'campaign', 'campaignName']) || 'Direct Import').trim();
