@@ -997,10 +997,28 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
 
     const campaignFilter = {
       $or: [
-        { 'data.source': campaignRegex },
         { 'data.campaignName': campaignRegex },
-        { 'data.campaign': campaignRegex },
-        { 'data.campaign_name': campaignRegex }
+        {
+          $and: [
+            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
+            { 'data.campaign': campaignRegex }
+          ]
+        },
+        {
+          $and: [
+            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
+            { $or: [{ 'data.campaign': { $exists: false } }, { 'data.campaign': null }, { 'data.campaign': '' }] },
+            { 'data.campaign_name': campaignRegex }
+          ]
+        },
+        {
+          $and: [
+            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
+            { $or: [{ 'data.campaign': { $exists: false } }, { 'data.campaign': null }, { 'data.campaign': '' }] },
+            { $or: [{ 'data.campaign_name': { $exists: false } }, { 'data.campaign_name': null }, { 'data.campaign_name': '' }] },
+            { 'data.source': campaignRegex }
+          ]
+        }
       ]
     };
 

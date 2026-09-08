@@ -52,15 +52,15 @@ export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => 
   const headers = [
     'Slno',
     'Data Code',
-    'firm_name',
-    'contact num',
     'Location',
     'Customer',
-    'Case Details',
-    'lead_category',
-    'Remarks',
-    'Agent Assigned To',
+    'firm_name',
+    'contact num',
     'Dial Status',
+    'Case Details',
+    'lead _category',
+    'Remarks',
+    'Agent Assigned',
     'Dailed Datetime'
   ];
 
@@ -260,15 +260,15 @@ export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => 
     return {
       'Slno': slNo,
       'Data Code': dataCode,
-      'firm_name': firmName,
-      'contact num': contactNum,
       'Location': location,
       'Customer': customer,
-      'Case Details': caseDetails,
-      'lead_category': leadCategory,
-      'Remarks': remarks,
-      'Agent Assigned To': agentAssigned,
+      'firm_name': firmName,
+      'contact num': contactNum,
       'Dial Status': dialStatus,
+      'Case Details': caseDetails,
+      'lead _category': leadCategory,
+      'Remarks': remarks,
+      'Agent Assigned': agentAssigned,
       'Dailed Datetime': dailedDatetime
     };
   });

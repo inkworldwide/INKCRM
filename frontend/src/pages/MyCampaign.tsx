@@ -293,10 +293,18 @@ export default function MyCampaign() {
     }
   }, [campaigns, searchParams]);
 
-  const handleViewDetails = (campaign: CampaignStats, initialFilter: 'yet_to_dial' | 'dialed' | 'all' = 'yet_to_dial') => {
+  const handleViewDetails = (campaign: CampaignStats, initialFilter?: 'yet_to_dial' | 'dialed' | 'all') => {
     setActiveCampaign(campaign);
     sessionStorage.setItem('inkcrm_active_campaign_name', campaign.campaignName);
-    setDialFilter(initialFilter);
+    
+    let targetFilter = initialFilter;
+    if (!targetFilter) {
+      targetFilter = (campaign.yetToDial > 0) ? 'yet_to_dial' : 'all';
+    } else if (targetFilter === 'yet_to_dial' && campaign.yetToDial === 0 && campaign.totalAssigned > 0) {
+      targetFilter = 'all';
+    }
+
+    setDialFilter(targetFilter);
     setVisibleCount(50);
     setCurrentPage(1);
     fetchLeadDetails(campaign.campaignName, 1, 25);
@@ -1000,15 +1008,33 @@ export default function MyCampaign() {
                     <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : displayedLeads.length === 0 ? (
-                  <div className="bg-white dark:bg-[#1a1f2c] rounded-3xl border border-slate-100 dark:border-slate-800 p-12 text-center text-slate-500 dark:text-slate-400">
-                    <p className="font-bold text-base text-slate-800 dark:text-slate-200 mb-1">No Leads Found</p>
+                  <div className="bg-white dark:bg-[#1a1f2c] rounded-3xl border border-slate-100 dark:border-slate-800 p-12 text-center text-slate-500 dark:text-slate-400 space-y-3">
+                    <p className="font-bold text-base text-slate-800 dark:text-slate-200">No Leads Found</p>
                     <p className="text-xs text-slate-500">
                       {dialFilter === 'yet_to_dial' 
-                        ? 'There are no "Yet To Dial" leads in this view.' 
+                        ? 'All leads in this view have already been dialed.' 
                         : dialFilter === 'dialed'
                         ? 'No leads have been dialed yet in this view.'
                         : 'No matching leads found for your search query.'}
                     </p>
+                    {dialFilter === 'yet_to_dial' && (displayTotalDialed > 0 || displayTotalAllocated > 0) && (
+                      <button
+                        onClick={() => setDialFilter('all')}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer mt-2"
+                      >
+                        <Icons.Layers className="w-4 h-4" />
+                        <span>Show All Leads ({displayTotalAllocated.toLocaleString()})</span>
+                      </button>
+                    )}
+                    {dialFilter === 'dialed' && displayTotalYetToDial > 0 && (
+                      <button
+                        onClick={() => setDialFilter('yet_to_dial')}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer mt-2"
+                      >
+                        <Icons.Clock className="w-4 h-4" />
+                        <span>Show Yet To Dial Leads ({displayTotalYetToDial.toLocaleString()})</span>
+                      </button>
+                    )}
                   </div>
                 ) : viewMode === 'table' ? (
                   /* 12-COLUMN CAMPAIGN DATA TABLE VIEW */
