@@ -1114,58 +1114,66 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       }
     }
 
-    // High performance single-pass $facet aggregation
-    const [facetResult] = await CustomRecord.aggregate([
-      { $match: finalQuery },
-      {
-        $facet: {
-          totalCount: [{ $count: 'count' }],
-          dialedCount: [
-            {
-              $match: {
-                $or: [
-                  { 'data.callAttempts': { $gt: 0 } },
-                  { 'data.dialedAt': { $exists: true, $ne: null } },
-                  { 'data.lastCallDate': { $exists: true, $ne: null } },
-                  {
-                    'data.dialStatus': {
-                      $exists: true,
-                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
-                    }
-                  },
-                  {
-                    'data.status': {
-                      $exists: true,
-                      $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
-                    }
-                  }
-                ]
-              }
-            },
-            { $count: 'count' }
-          ],
-          leads: [
-            { $sort: { createdAt: -1 } },
-            { $skip: skipNum },
-            { $limit: limitNum },
-            {
-              $project: {
-                _id: 1,
-                data: 1,
-                createdAt: 1,
-                updatedAt: 1,
-                createdBy: 1,
-                updatedBy: 1
-              }
-            }
-          ]
-        }
-      }
-    ]);
+    let totalAllocated = 0;
+    let totalDialed = 0;
+    let leads: any[] = [];
 
-    const totalAllocated = facetResult?.totalCount[0]?.count || 0;
-    const totalDialed = facetResult?.dialedCount[0]?.count || 0;
-    const leads = facetResult?.leads || [];
+    try {
+      const [facetResult] = await CustomRecord.aggregate([
+        { $match: finalQuery },
+        {
+          $facet: {
+            totalCount: [{ $count: 'count' }],
+            dialedCount: [
+              {
+                $match: {
+                  $or: [
+                    { 'data.callAttempts': { $gt: 0 } },
+                    { 'data.dialedAt': { $exists: true, $ne: null } },
+                    { 'data.lastCallDate': { $exists: true, $ne: null } },
+                    {
+                      'data.dialStatus': {
+                        $exists: true,
+                        $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                      }
+                    },
+                    {
+                      'data.status': {
+                        $exists: true,
+                        $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+                      }
+                    }
+                  ]
+                }
+              },
+              { $count: 'count' }
+            ],
+            leads: [
+              { $sort: { createdAt: -1 } },
+              { $skip: skipNum },
+              { $limit: limitNum }
+            ]
+          }
+        }
+      ]).allowDiskUse(true);
+
+      totalAllocated = facetResult?.totalCount[0]?.count || 0;
+      totalDialed = facetResult?.dialedCount[0]?.count || 0;
+      leads = facetResult?.leads || [];
+    } catch (aggErr) {
+      console.warn('Aggregation fallback in campaign details:', aggErr);
+      totalAllocated = await CustomRecord.countDocuments(finalQuery);
+      leads = await CustomRecord.find(finalQuery).sort({ createdAt: -1 }).skip(skipNum).limit(limitNum).lean();
+      totalDialed = leads.filter(l => {
+        const d = l.data || {};
+        const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
+        const st = (d.status || '').toString().trim().toLowerCase();
+        const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
+        const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
+        const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
+        return hasDialedStatus || (hasCalls && hasDialStatus);
+      }).length;
+    }
 
     const responseObj = { 
       leads,
