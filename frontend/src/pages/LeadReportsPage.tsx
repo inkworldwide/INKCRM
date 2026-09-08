@@ -32,7 +32,8 @@ export default function LeadReportsPage() {
   const [loading, setLoading] = useState(false);
   const [leads, setLeads] = useState<any[]>([]);
 
-  // Multi-Select Filter States with Checkboxes (Default: Empty = All Selected)
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [selectedYears, setSelectedYears] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
@@ -64,7 +65,7 @@ export default function LeadReportsPage() {
   const fetchReportData = async () => {
     setLoading(true);
     try {
-      const leadsRes = await api.get('/records/leads?limit=5000').catch(() => ({ data: [] }));
+      const leadsRes = await api.get('/records/leads?limit=10000').catch(() => ({ data: [] }));
       const allRecords = leadsRes.data?.records || leadsRes.data || [];
       setLeads(allRecords);
     } catch (err) {
@@ -80,9 +81,40 @@ export default function LeadReportsPage() {
     showToast('Applied multi-select filter conditions.', 'info');
   };
 
-  // Filter leads based on selected criteria
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedMonths([]);
+    setSelectedYears([]);
+    setSelectedStatuses([]);
+    setSelectedLoanTypes([]);
+    showToast('Cleared all report filters.', 'info');
+  };
+
+  // Filter leads based on selected criteria and search term
   const filteredLeads = leads.filter((item) => {
     const data = item.data || {};
+
+    // Search term matching across all lead attributes
+    if (searchTerm.trim()) {
+      const term = searchTerm.trim().toLowerCase();
+      const rawName = ([data.firstName, data.lastName].filter(Boolean).join(' ') || data.customerName || data.customer || data.fullName || data.name || '').toLowerCase();
+      const phone = String(data.phone || data.mobile || data.contactNum || data.contact_num || data.contact || '').toLowerCase();
+      const email = String(data.email || '').toLowerCase();
+      const dataCode = String(data.dataCode || data.data_code || data['Data Code'] || item._id || '').toLowerCase();
+      const firm = String(data.firmName || data.company || data.firm_name || '').toLowerCase();
+      const location = String(data.city || data.location || data.address || '').toLowerCase();
+      const status = String(data.status || data.dialStatus || '').toLowerCase();
+
+      const searchMatch = rawName.includes(term) ||
+        phone.includes(term) ||
+        email.includes(term) ||
+        dataCode.includes(term) ||
+        firm.includes(term) ||
+        location.includes(term) ||
+        status.includes(term);
+
+      if (!searchMatch) return false;
+    }
 
     // Month & Year match (only filter if explicit months/years are selected)
     if (selectedMonths.length > 0 || selectedYears.length > 0) {
@@ -232,6 +264,28 @@ export default function LeadReportsPage() {
           </button>
         </div>
 
+        {/* Global Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Icons.Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search leads by Client Name, Data Code, Phone, Email, Location, or Firm..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+              >
+                <Icons.X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Select Month */}
           <MultiSelectDropdown
@@ -270,8 +324,16 @@ export default function LeadReportsPage() {
           />
         </div>
 
-        {/* View Detail Report Action */}
-        <div className="flex justify-end mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <button
+            onClick={handleResetFilters}
+            className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Icons.RotateCcw className="w-3.5 h-3.5" />
+            Reset Filters
+          </button>
+
           <button
             onClick={handleFilterClick}
             className="h-11 px-6 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 active:scale-[0.98] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -311,12 +373,13 @@ export default function LeadReportsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[850px]">
+            <table className="w-full text-left text-xs min-w-[950px]">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider h-11 bg-slate-50/90 dark:bg-slate-800/80">
                   <th className="py-3.5 px-6">Lead ID</th>
                   <th className="py-3.5 px-6">Client Name</th>
                   <th className="py-3.5 px-6">Contact Info</th>
+                  <th className="py-3.5 px-6">Firm / Location</th>
                   <th className="py-3.5 px-6">Loan Type</th>
                   <th className="py-3.5 px-6">Status</th>
                   <th className="py-3.5 px-6">Amount</th>
@@ -332,12 +395,20 @@ export default function LeadReportsPage() {
                   const rawName = [data.firstName, data.lastName].filter(Boolean).join(' ') || data.customerName || data.customer || data.fullName || data.name || data.companyName || data.company;
                   const name = rawName || 'N/A';
 
+                  // Data code resolver
+                  const dataCode = data.dataCode || data.data_code || data['Data Code'] || (item._id ? `#${item._id.substring(item._id.length - 6).toUpperCase()}` : `LD-100${idx}`);
+
                   // Contact info resolver
                   const rawPhone = data.phone || data.mobile || data.contactNum || data.contact_num || data.contact || data['CONTACT NUM'] || data['contact num'] || data.phoneNumber || data.mobileNo || '';
                   const phone = rawPhone || 'N/A';
 
                   const rawEmail = data.email || '';
                   const email = rawEmail || 'N/A';
+
+                  // Firm & Location
+                  const firm = data.firmName || data.company || data.firm_name || '';
+                  const location = data.city || data.location || data.address || '';
+                  const firmLocationStr = [firm, location].filter(Boolean).join(' • ') || 'N/A';
 
                   const loanType = data.loanType || data.leadCategory || data.serviceType || data.product || 'SALARIED PERSONAL LOAN';
                   const status = data.status || data.dialStatus || 'New';
@@ -351,7 +422,7 @@ export default function LeadReportsPage() {
                   return (
                     <tr key={item._id || idx} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors h-14">
                       <td className="py-3.5 px-6 font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">
-                        #{item._id ? item._id.substring(item._id.length - 6).toUpperCase() : `LD-100${idx}`}
+                        {dataCode}
                       </td>
                       <td className="py-3.5 px-6">
                         <div className="flex items-center gap-3">
@@ -366,6 +437,9 @@ export default function LeadReportsPage() {
                       <td className="py-3.5 px-6">
                         <div className="font-semibold text-slate-800 dark:text-slate-200">{maskPhoneNumber(phone)}</div>
                         <div className="text-[10px] text-slate-400 font-mono">{email}</div>
+                      </td>
+                      <td className="py-3.5 px-6 text-slate-700 dark:text-slate-300 font-medium">
+                        {firmLocationStr}
                       </td>
                       <td className="py-3.5 px-6">
                         <span className="px-2.5 py-1 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/50 text-[11px] font-bold">

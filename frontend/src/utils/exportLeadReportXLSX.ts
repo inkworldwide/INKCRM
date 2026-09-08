@@ -3,16 +3,17 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
   const headers = [
     'Sl.No.',
     'Data Code',
+    'Customer Name',
     'firm_name',
     'contact num',
+    'Email Address',
     'Location',
-    'Customer Name',
     'Loan Product',
     'Loan Amount',
     'Case Details',
     'Status',
     'Remarks',
-    'Source',
+    'Lead Source',
     'Assigned To',
     'Createddate',
     'Modified Date'
@@ -200,7 +201,8 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     };
     const status = getStatus(data);
     const remarks = String(extractField(data, ['remarks', 'notes', 'remark', 'note', 'comment']) || '').replace(/<[^>]*>/g, '').trim();
-    const source = String(extractField(data, ['source', 'campaign', 'campaignName', 'campaign_name', 'sourceName']) || 'N/A').trim();
+    const emailAddress = String(extractField(data, ['email', 'emailAddress', 'email_address', 'mail'], ['email', 'mail']) || 'N/A').trim();
+    const leadSource = String(extractField(data, ['source', 'leadSource', 'lead_source', 'sourceName', 'createdBy', 'createdByName', 'campaign', 'campaignName']) || 'Direct Import').trim();
 
     let assignedTo = 'Unassigned';
     if (data.assignedTo) {
@@ -220,16 +222,17 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
     return {
       'Sl.No.': slNo,
       'Data Code': dataCode,
+      'Customer Name': customerName,
       'firm_name': firmCompany,
       'contact num': mobileNo,
+      'Email Address': emailAddress,
       'Location': city,
-      'Customer Name': customerName,
       'Loan Product': loanProduct,
       'Loan Amount': loanAmount,
       'Case Details': caseDetails,
       'Status': status,
       'Remarks': remarks,
-      'Source': source,
+      'Lead Source': leadSource,
       'Assigned To': assignedTo,
       'Createddate': createdDate,
       'Modified Date': modifiedDate
