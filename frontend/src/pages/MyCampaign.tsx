@@ -353,8 +353,8 @@ export default function MyCampaign() {
     }));
   };
 
-  const handleStatusSelect = async (lead: LeadRecord, newStatus: string) => {
-    // 1. Update local form state for this lead
+  const handleStatusSelect = (lead: LeadRecord, newStatus: string) => {
+    // Update local form state for this lead without auto-navigating away
     setLeadStates(prev => ({
       ...prev,
       [lead._id]: {
@@ -362,69 +362,6 @@ export default function MyCampaign() {
         status: newStatus
       }
     }));
-
-    // Check if HOT LEAD or WARM LEAD is selected directly from dropdown
-    const isHot = newStatus.toUpperCase().includes('HOT');
-    const isWarm = newStatus.toUpperCase().includes('WARM');
-
-    if (isHot || isWarm) {
-      const state = leadStates[lead._id];
-      const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
-      const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
-
-      // Save status update to database
-      try {
-        await api.put(`/records/leads/${lead._id}`, {
-          status: newStatus,
-          dialStatus: newStatus,
-          notes: currentRemarks,
-          remarks: currentRemarks,
-          caseDetails: currentCaseDetails,
-          dialedAt: new Date(),
-          callAttempts: ((lead.data?.callAttempts as number) || 0) + 1
-        });
-      } catch (e) {}
-
-      const passedStatus = isHot ? 'Hot' : 'Warm';
-      const phoneVal = getLeadPhone(lead.data);
-      const loggedInUserName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : '';
-      const creatorName = lead.data?.assignedTo || (lead as any).assignedToName || (lead as any).createdBy || loggedInUserName;
-
-      // Immediately navigate to Edit Lead page for this existing lead (/modules/leads/${lead._id}) with all exact pre-filled lead details & PSM
-      navigate(`/modules/leads/${lead._id}`, {
-        state: {
-          ...lead.data,
-          _id: lead._id,
-          id: lead._id,
-          firstName: getLeadCustomer(lead.data),
-          lastName: '',
-          customerName: getLeadCustomer(lead.data),
-          customer: getLeadCustomer(lead.data),
-          fullName: getLeadCustomer(lead.data),
-          phone: phoneVal,
-          mobile: phoneVal,
-          company: getLeadFirmName(lead.data),
-          firmName: getLeadFirmName(lead.data),
-          firm_name: getLeadFirmName(lead.data),
-          city: getLeadLocation(lead.data),
-          location: getLeadLocation(lead.data),
-          leadCategory: getLeadCategory(lead.data),
-          loanType: getLeadCategory(lead.data),
-          dataCode: getLeadDataCode(lead),
-          data_code: getLeadDataCode(lead),
-          'Data Code': getLeadDataCode(lead),
-          status: passedStatus,
-          notes: currentRemarks,
-          remarks: currentRemarks,
-          caseDetails: currentCaseDetails,
-          source: activeCampaign?.campaignName || lead.data?.source || lead.data?.campaignName || '',
-          psm: creatorName,
-          psmName: creatorName,
-          leadOwner: creatorName,
-          created_by_user: creatorName
-        }
-      });
-    }
   };
 
   const handleWhatsAppChat = (lead: LeadRecord, e?: React.MouseEvent) => {
@@ -489,12 +426,7 @@ export default function MyCampaign() {
 
       await api.put(`/records/leads/${lead._id}`, payload);
       
-      showAlertModal({
-        title: 'LEAD SAVED SUCCESSFULLY',
-        message: 'Lead updated and moved to next lead.',
-        buttonText: 'CONTINUE CALLING',
-        type: 'success'
-      });
+      showToast('Lead saved successfully! Moved to next lead.', 'success');
 
       // 1. Immediately update lead.data in local state so it is marked as dialed and hides from Yet To Dial list instantly!
       setLeads(prevLeads => prevLeads.map(l => l._id === lead._id ? {
@@ -514,20 +446,22 @@ export default function MyCampaign() {
         }
       } : l));
 
-      // 2. Smoothly scroll to the top of the next lead
+      // 2. Update active campaign counters seamlessly
+      if (activeCampaign) {
+        setActiveCampaign(prev => prev ? {
+          ...prev,
+          dialed: prev.dialed + 1,
+          yetToDial: Math.max(0, prev.yetToDial - 1)
+        } : prev);
+      }
+
+      // 3. Smoothly scroll to top so next lead is in view
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
-      // Refresh list in background to maintain sync for other statuses
-      const res = await api.get('/records/campaigns/my-campaigns');
-      const updatedCampaigns: CampaignStats[] = res.data.campaigns || [];
-      setCampaigns(updatedCampaigns);
-      
-      if (activeCampaign) {
-        const found = updatedCampaigns.find(c => c.campaignName === activeCampaign.campaignName);
-        if (found) {
-          setActiveCampaign(found);
-        }
-      }
+      // Refresh overall campaign list silently in background
+      api.get('/records/campaigns/my-campaigns').then(res => {
+        setCampaigns(res.data.campaigns || []);
+      }).catch(() => {});
     } catch (err: any) {
       console.error('[MY CAMPAIGN SAVE ERROR]', err);
       const serverMsg = err.response?.data?.error || err.response?.data?.message || err.message;

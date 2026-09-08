@@ -1609,6 +1609,7 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       createdBy: creatorId,
       updatedBy: creatorId
     });
+    SummaryService.invalidateCache(req.organizationId);
 
     // Timeline Logging (Activity)
     await Activity.create({
@@ -2004,6 +2005,7 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     };
     record.updatedBy = updaterId;
     await record.save();
+    SummaryService.invalidateCache(req.organizationId);
 
     // Log Activity logs for status updates or assignments
     for (const fieldName of changedFields) {
