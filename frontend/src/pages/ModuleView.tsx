@@ -37,7 +37,8 @@ export default function ModuleView() {
   const [filterField, setFilterField] = useState('');
   const [filterVal, setFilterVal] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(100);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [isTodayOnly, setIsTodayOnly] = useState(false);
 
   // File upload and History timeline states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1154,12 +1155,13 @@ export default function ModuleView() {
 
   // Query records
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['records', apiPath, searchVal, filterField, filterVal, page, pageSize],
+    queryKey: ['records', apiPath, searchVal, filterField, filterVal, isTodayOnly, page, pageSize],
     queryFn: async () => {
       const params: Record<string, any> = {
         page,
         limit: pageSize,
-        search: searchVal
+        search: searchVal,
+        sort: '-createdAt'
       };
       if (filterField === 'status') {
         params.status = filterVal;
@@ -1168,11 +1170,40 @@ export default function ModuleView() {
       } else if (filterField && filterVal) {
         params[`data.${filterField}`] = filterVal;
       }
+      if (isTodayOnly) {
+        params.createdDate = 'today';
+      }
       const res = await api.get(`/records/${apiPath}`, { params });
       return res.data;
     },
     enabled: !!apiPath
   });
+
+  // Background prefetch next page so pagination click is 0ms instant
+  useEffect(() => {
+    if (apiPath && data?.pagination?.totalPages && page < data.pagination.totalPages) {
+      const nextPage = page + 1;
+      const nextParams: Record<string, any> = {
+        page: nextPage,
+        limit: pageSize,
+        search: searchVal,
+        sort: '-createdAt'
+      };
+      if (filterField === 'status') nextParams.status = filterVal;
+      else if (filterField === 'followup') nextParams.followup = filterVal;
+      else if (filterField && filterVal) nextParams[`data.${filterField}`] = filterVal;
+      if (isTodayOnly) nextParams.createdDate = 'today';
+
+      queryClient.prefetchQuery({
+        queryKey: ['records', apiPath, searchVal, filterField, filterVal, isTodayOnly, nextPage, pageSize],
+        queryFn: async () => {
+          const res = await api.get(`/records/${apiPath}`, { params: nextParams });
+          return res.data;
+        },
+        staleTime: 60000
+      });
+    }
+  }, [data?.pagination?.totalPages, page, pageSize, searchVal, filterField, filterVal, isTodayOnly, apiPath, queryClient]);
 
   const campaignSummaryStats = useMemo(() => {
     const records = data?.records || [];
@@ -1252,6 +1283,7 @@ export default function ModuleView() {
     setSearchVal('');
     setFilterVal('');
     setFilterField('');
+    setIsTodayOnly(false);
     setPage(1);
     if (urlStatus) {
       navigate('/modules/leads');
@@ -1263,27 +1295,32 @@ export default function ModuleView() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/records/${apiPath}/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['records', apiPath] });
+      queryClient.invalidateQueries({ queryKey: ['records'] });
+      queryClient.invalidateQueries({ queryKey: ['campaign-allocation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['my-campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar-leads'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+      refetch();
     }
   });
 
   const handleDelete = (id: string) => {
+    const label = apiPath === 'campaigns' ? 'Campaign' : (activeModule?.singularLabel || 'record');
     showConfirm({
-      title: 'Delete Record',
-      message: `Are you sure you want to delete this ${activeModule?.singularLabel || 'record'}?`,
+      title: `Delete ${label}`,
+      message: `Are you sure you want to delete this ${label}?`,
       onConfirm: () => {
         deleteMutation.mutate(id, {
           onSuccess: () => {
             showAlertModal({
               title: 'Deleted Successfully',
-              message: `The ${activeModule?.singularLabel || 'record'} has been permanently deleted.`,
+              message: `The ${label} has been permanently deleted.`,
               type: 'success'
             });
+            refetch();
           },
-          onError: () => {
-            showToast('Failed to delete record.', 'error');
+          onError: (err: any) => {
+            showToast(err.response?.data?.error || `Failed to delete ${label.toLowerCase()}.`, 'error');
           }
         });
       }
@@ -1697,9 +1734,18 @@ export default function ModuleView() {
                   <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-3xs font-mono">
                     {data?.pagination?.total ?? (data?.records?.length || 0)} Total
                   </span>
+                  {isTodayOnly && (
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-3xs flex items-center gap-1 font-mono">
+                      <Icons.Calendar className="w-3 h-3" /> Today Created
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {urlStatus ? `Filtering leads with status: ${urlStatus}` : 'Search, manage, and track leads across all campaigns.'}
+                  {urlStatus 
+                    ? `Filtering leads with status: ${urlStatus}${isTodayOnly ? ' (Created Today)' : ''}` 
+                    : isTodayOnly 
+                      ? "Showing leads created today, ordered by newest date."
+                      : 'Search, manage, and track leads across all campaigns.'}
                 </p>
               </div>
             </div>
@@ -1755,13 +1801,29 @@ export default function ModuleView() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   type="submit"
                   className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Icons.Search className="w-3.5 h-3.5 stroke-[2.2]" />
                   <span>Search</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTodayOnly(!isTodayOnly);
+                    setPage(1);
+                  }}
+                  className={`h-10 px-4 text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap border ${
+                    isTodayOnly
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/25 hover:bg-emerald-700'
+                      : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title={isTodayOnly ? "Clear today's filter" : "Show only leads created today"}
+                >
+                  <Icons.Calendar className="w-3.5 h-3.5" />
+                  <span>{isTodayOnly ? "Today's Leads (Active)" : "Today's Leads"}</span>
                 </button>
                 <button
                   type="button"
@@ -2025,7 +2087,8 @@ export default function ModuleView() {
             ) : apiPath === 'leads' ? (
               <div className="space-y-6">
                 {data?.records.map((rec: any, idx: number) => {
-                  const leadNo = rec.data?.['Data Code'] || rec.data?.dataCode || rec.data?.data_code || rec.data?.code || rec._id.slice(-6).toUpperCase();
+                  const rawCode = rec.data?.['Data Code'] || rec.data?.dataCode || rec.data?.data_code || rec.data?.leadNo || rec.data?.leadNumber || rec.data?.code || (rec._id ? rec._id.slice(-6).toUpperCase() : '');
+                  const leadNo = rawCode ? (String(rawCode).trim().toUpperCase().startsWith('LND-') ? String(rawCode).trim().toUpperCase() : `LND-${String(rawCode).trim().toUpperCase()}`) : 'N/A';
                   
                   const extractField = (dataObj: any, targets: string[], contains: string[] = []): string => {
                     if (!dataObj || typeof dataObj !== 'object') return '';
@@ -2148,7 +2211,7 @@ export default function ModuleView() {
                         {/* --- Row 2 --- */}
                         <div className="text-[13px] leading-snug">
                           <span className="font-semibold text-[#1C1917] dark:text-stone-100">Lead No.: </span>
-                          <span className="text-[#44403C] dark:text-stone-300 font-mono">LND-{leadNo}</span>
+                          <span className="text-[#44403C] dark:text-stone-300 font-mono">{leadNo}</span>
                         </div>
 
                         <div className="text-[13px] leading-snug">
@@ -2315,8 +2378,57 @@ export default function ModuleView() {
                 })}
 
                 {data?.records.length === 0 && (
-                  <div className="p-12 text-center text-slate-400 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800">
-                    No leads records found.
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center shadow-xs">
+                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-3xs">
+                      <Icons.SearchX className="w-7 h-7 stroke-[2]" />
+                    </div>
+                    <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 uppercase tracking-wide mb-1">
+                      No Leads Found
+                    </h3>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
+                      {searchVal 
+                        ? `No leads matched your search "${searchVal}"${urlStatus ? ` with status ${urlStatus}` : ''}${isTodayOnly ? ' created today' : ''}.`
+                        : urlStatus 
+                          ? `There are no leads currently under "${urlStatus}" status${isTodayOnly ? ' created today' : ''}.`
+                          : isTodayOnly
+                            ? 'No leads have been created today yet.'
+                            : 'No lead records found in this view.'}
+                    </p>
+                    <div className="flex items-center justify-center gap-3 flex-wrap">
+                      {searchVal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchVal('');
+                            setPage(1);
+                          }}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Icons.X className="w-3.5 h-3.5" /> Clear Search
+                        </button>
+                      )}
+                      {isTodayOnly && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsTodayOnly(false);
+                            setPage(1);
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Icons.Calendar className="w-3.5 h-3.5" /> Show All Dates
+                        </button>
+                      )}
+                      {(urlStatus || searchVal || isTodayOnly) && (
+                        <button
+                          type="button"
+                          onClick={handleLoadAll}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Icons.RotateCcw className="w-3.5 h-3.5" /> Load All Leads
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2421,6 +2533,7 @@ export default function ModuleView() {
                   }}
                   className="h-8 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
+                  <option value={10}>10 leads (Instant .02s)</option>
                   <option value={25}>25 leads</option>
                   <option value={50}>50 leads</option>
                   <option value={100}>100 leads</option>

@@ -1006,7 +1006,17 @@ export default function Layout({ children }: LayoutProps) {
                 <h3 className="text-sm font-[850] text-slate-850 dark:text-slate-100 uppercase tracking-wider mb-2">
                   {alertModal.title}
                 </h3>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+                {alertModal.leadNumber && (
+                  <div className="my-3 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                      Lead Number
+                    </span>
+                    <span className="text-base font-black font-mono text-emerald-700 dark:text-emerald-300 tracking-wider mt-0.5 select-all">
+                      {alertModal.leadNumber}
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 leading-relaxed mb-6 whitespace-pre-line">
                   {alertModal.message}
                 </p>
                 <div className="flex justify-center">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { useToastStore } from '../store/toastStore';
@@ -143,6 +143,11 @@ export const getLeadCategory = (data: any): string => {
   ) || 'N/A';
 };
 
+export const getLeadAgent = (data: any): string => {
+  if (!data) return '';
+  return data.assignedTo || data.assignedToName || data.telecaller || data.assignedAgent || data.agent || '';
+};
+
 export const getLeadDataCode = (lead: any): string => {
   if (!lead) return 'N/A';
   const data = lead?.data || lead;
@@ -211,8 +216,8 @@ export default function MyCampaign() {
   const [callModalLead, setCallModalLead] = useState<{ lead: LeadRecord; phone: string; name: string } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [campaignPagination, setCampaignPagination] = useState<{ total: number; dialed: number; yetToDial: number; page: number; limit: number; totalPages: number } | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [campaignPagination, setCampaignPagination] = useState<{ total: number; totalAllocated: number; dialed: number; yetToDial: number; page: number; limit: number; totalPages: number } | null>(null);
 
   // Fetch campaigns
   const fetchCampaigns = async () => {
@@ -228,23 +233,39 @@ export default function MyCampaign() {
     }
   };
 
-  // Fetch lead details for active campaign with 25 items per page pagination
-  const fetchLeadDetails = async (campaignName: string, pageVal: number = 1, limitVal: number = 25) => {
+  // Fetch lead details for active campaign with 10 items per page pagination & active filter
+  const fetchLeadDetails = async (
+    campaignName: string,
+    pageVal: number = 1,
+    limitVal: number = 10,
+    filterVal: 'yet_to_dial' | 'dialed' | 'all' = dialFilter,
+    searchVal: string = searchQuery
+  ) => {
     try {
       setLoadingLeads(true);
-      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?page=${pageVal}&limit=${limitVal}`);
+      const params = new URLSearchParams({
+        page: String(pageVal),
+        limit: String(limitVal),
+        filter: filterVal
+      });
+      if (searchVal && searchVal.trim()) {
+        params.append('search', searchVal.trim());
+      }
+      const res = await api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?${params.toString()}`);
       setLeads(res.data.leads || []);
       setCurrentPage(pageVal);
       setPageSize(limitVal);
+      setDialFilter(filterVal);
       
       if (res.data.pagination) {
         setCampaignPagination({
-          total: res.data.pagination.total || (res.data.leads || []).length,
+          total: res.data.pagination.total ?? (res.data.leads || []).length,
+          totalAllocated: res.data.pagination.totalAllocated ?? res.data.pagination.total ?? 0,
           dialed: res.data.pagination.dialed || 0,
-          yetToDial: res.data.pagination.yetToDial ?? Math.max(0, (res.data.pagination.total || 0) - (res.data.pagination.dialed || 0)),
+          yetToDial: res.data.pagination.yetToDial ?? 0,
           page: res.data.pagination.page || pageVal,
           limit: res.data.pagination.limit || limitVal,
-          totalPages: res.data.pagination.totalPages || Math.ceil((res.data.pagination.total || 0) / limitVal) || 1
+          totalPages: res.data.pagination.totalPages || 1
         });
       }
       
@@ -269,6 +290,58 @@ export default function MyCampaign() {
       setLoadingLeads(false);
     }
   };
+
+  const handleFilterChange = (newFilter: 'yet_to_dial' | 'dialed' | 'all') => {
+    setDialFilter(newFilter);
+    setCurrentPage(1);
+    if (activeCampaign) {
+      fetchLeadDetails(activeCampaign.campaignName, 1, pageSize, newFilter, searchQuery);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (!activeCampaign || newPage < 1) return;
+    if (campaignPagination && newPage > campaignPagination.totalPages) return;
+    fetchLeadDetails(activeCampaign.campaignName, newPage, pageSize, dialFilter, searchQuery);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+    if (activeCampaign) {
+      fetchLeadDetails(activeCampaign.campaignName, 1, newSize, dialFilter, searchQuery);
+    }
+  };
+
+  // Debounce search so typing filters after 350ms automatically
+  const prevSearchRef = useRef(searchQuery);
+  useEffect(() => {
+    if (!activeCampaign) return;
+    if (prevSearchRef.current === searchQuery) return;
+    prevSearchRef.current = searchQuery;
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchLeadDetails(activeCampaign.campaignName, 1, pageSize, dialFilter, searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeCampaign, pageSize, dialFilter]);
+
+  // Background prefetch next page for ultra-fast instant page switching
+  useEffect(() => {
+    if (activeCampaign && campaignPagination && currentPage < campaignPagination.totalPages) {
+      const nextPage = currentPage + 1;
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        limit: String(pageSize),
+        filter: dialFilter
+      });
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
+      api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(activeCampaign.campaignName)}?${params.toString()}`).catch(() => {});
+    }
+  }, [activeCampaign, campaignPagination?.totalPages, currentPage, pageSize, dialFilter, searchQuery]);
 
   // Fetch status dropdown options
   const [searchParams] = useSearchParams();
@@ -307,7 +380,7 @@ export default function MyCampaign() {
     setDialFilter(targetFilter);
     setVisibleCount(50);
     setCurrentPage(1);
-    fetchLeadDetails(campaign.campaignName, 1, 25);
+    fetchLeadDetails(campaign.campaignName, 1, 10, targetFilter, searchQuery);
   };
 
   const handleBack = () => {
@@ -369,8 +442,11 @@ export default function MyCampaign() {
     }));
   };
 
-  const handleStatusSelect = (lead: LeadRecord, newStatus: string) => {
-    // Update local form state for this lead without auto-navigating away
+  const handleStatusSelect = async (lead: LeadRecord, newStatus: string) => {
+    const isHot = newStatus.toUpperCase().includes('HOT');
+    const isWarm = newStatus.toUpperCase().includes('WARM');
+
+    // Update local form state for this lead
     setLeadStates(prev => ({
       ...prev,
       [lead._id]: {
@@ -378,6 +454,70 @@ export default function MyCampaign() {
         status: newStatus
       }
     }));
+
+    if (!isHot && !isWarm) {
+      return;
+    }
+
+    // HOT or WARM selected: Open create/edit lead form with all auto-filled details!
+    const state = leadStates[lead._id];
+    const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
+    const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+    const initialCat = getLeadCategory(lead.data);
+    const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
+    const targetStatus = isHot ? 'Hot' : 'Warm';
+    const canonicalStatus = isHot ? 'HOT LEADS' : 'WARM LEADS';
+
+    // Auto-save the Hot / Warm status and dial metrics to MongoDB
+    try {
+      await api.put(`/records/leads/${lead._id}`, {
+        status: canonicalStatus,
+        normalizedStatus: canonicalStatus,
+        dialStatus: newStatus,
+        dialedAt: new Date(),
+        callAttempts: ((lead.data?.callAttempts as number) || 0) + 1,
+        notes: currentRemarks,
+        remarks: currentRemarks,
+        caseDetails: currentCaseDetails,
+        leadCategory: currentCategory,
+        category: currentCategory,
+        loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN'
+      });
+    } catch (err) {
+      console.error('Failed to pre-save lead status on hot/warm select:', err);
+    }
+
+    showToast(`Opening ${targetStatus} Lead Create page with auto-filled details...`, 'info');
+
+    navigate('/modules/leads/new', {
+      state: {
+        fromCampaign: true,
+        campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
+        _id: lead._id,
+        id: lead._id,
+        status: targetStatus,
+        dialStatus: newStatus,
+        firstName: lead.data?.firstName || getLeadCustomer(lead.data)?.split(' ')[0] || '',
+        lastName: lead.data?.lastName || getLeadCustomer(lead.data)?.split(' ').slice(1).join(' ') || '',
+        customerName: getLeadCustomer(lead.data),
+        customer: getLeadCustomer(lead.data),
+        phone: getLeadPhone(lead.data),
+        mobile: getLeadPhone(lead.data),
+        company: getLeadFirmName(lead.data),
+        firmName: getLeadFirmName(lead.data),
+        location: getLeadLocation(lead.data),
+        city: getLeadLocation(lead.data),
+        dataCode: getLeadDataCode(lead),
+        caseDetails: currentCaseDetails,
+        leadCategory: currentCategory,
+        category: currentCategory,
+        loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
+        notes: currentRemarks,
+        remarks: currentRemarks,
+        source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
+        assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
+      }
+    });
   };
 
   const handleWhatsAppChat = (lead: LeadRecord, e?: React.MouseEvent) => {
@@ -444,6 +584,7 @@ export default function MyCampaign() {
       
       showAlertModal({
         title: 'LEAD SAVED SUCCESSFULLY',
+        leadNumber: getLeadDataCode(lead),
         message: 'Lead updated successfully and moved to next lead.',
         buttonText: 'CONTINUE CALLING',
         type: 'success'
@@ -873,7 +1014,7 @@ export default function MyCampaign() {
                 {/* METRICS GRID - CLICKABLE CARDS FOR FILTERING */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
                   <div 
-                    onClick={() => setDialFilter('yet_to_dial')}
+                    onClick={() => handleFilterChange('yet_to_dial')}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${
                       dialFilter === 'yet_to_dial'
                         ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-500/20 dark:bg-amber-950/50'
@@ -896,7 +1037,7 @@ export default function MyCampaign() {
                   </div>
 
                   <div 
-                    onClick={() => setDialFilter('dialed')}
+                    onClick={() => handleFilterChange('dialed')}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${
                       dialFilter === 'dialed'
                         ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-500/20 dark:bg-emerald-950/50'
@@ -919,7 +1060,7 @@ export default function MyCampaign() {
                   </div>
 
                   <div 
-                    onClick={() => setDialFilter('all')}
+                    onClick={() => handleFilterChange('all')}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs flex items-center justify-between ${
                       dialFilter === 'all'
                         ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-500/20 dark:bg-indigo-950/50'
@@ -951,13 +1092,35 @@ export default function MyCampaign() {
                       placeholder="Search leads by customer, firm, data code, mobile..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && activeCampaign) {
+                          setCurrentPage(1);
+                          fetchLeadDetails(activeCampaign.campaignName, 1, pageSize, dialFilter, searchQuery);
+                        }
+                      }}
+                      className="w-full pl-9 pr-9 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                     />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          if (activeCampaign) {
+                            setCurrentPage(1);
+                            fetchLeadDetails(activeCampaign.campaignName, 1, pageSize, dialFilter, '');
+                          }
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <Icons.X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl w-full sm:w-auto">
                     <button
-                      onClick={() => setDialFilter('yet_to_dial')}
+                      onClick={() => handleFilterChange('yet_to_dial')}
                       className={`flex-1 sm:flex-initial py-1.5 px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         dialFilter === 'yet_to_dial'
                           ? 'bg-amber-500 text-white shadow-xs'
@@ -972,7 +1135,7 @@ export default function MyCampaign() {
                     </button>
 
                     <button
-                      onClick={() => setDialFilter('dialed')}
+                      onClick={() => handleFilterChange('dialed')}
                       className={`flex-1 sm:flex-initial py-1.5 px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         dialFilter === 'dialed'
                           ? 'bg-emerald-600 text-white shadow-xs'
@@ -987,7 +1150,7 @@ export default function MyCampaign() {
                     </button>
 
                     <button
-                      onClick={() => setDialFilter('all')}
+                      onClick={() => handleFilterChange('all')}
                       className={`flex-1 sm:flex-initial py-1.5 px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         dialFilter === 'all'
                           ? 'bg-indigo-600 text-white shadow-xs'
@@ -1019,7 +1182,7 @@ export default function MyCampaign() {
                     </p>
                     {dialFilter === 'yet_to_dial' && (displayTotalDialed > 0 || displayTotalAllocated > 0) && (
                       <button
-                        onClick={() => setDialFilter('all')}
+                        onClick={() => handleFilterChange('all')}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer mt-2"
                       >
                         <Icons.Layers className="w-4 h-4" />
@@ -1028,7 +1191,7 @@ export default function MyCampaign() {
                     )}
                     {dialFilter === 'dialed' && displayTotalYetToDial > 0 && (
                       <button
-                        onClick={() => setDialFilter('yet_to_dial')}
+                        onClick={() => handleFilterChange('yet_to_dial')}
                         className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-2 cursor-pointer mt-2"
                       >
                         <Icons.Clock className="w-4 h-4" />
@@ -1374,7 +1537,46 @@ export default function MyCampaign() {
                                 <span>SAVE</span>
                               </button>
                               <button
-                                onClick={() => navigate(`/modules/leads/${lead._id}`)}
+                                onClick={() => {
+                                  const state = leadStates[lead._id];
+                                  const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
+                                  const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+                                  const initialCat = getLeadCategory(lead.data);
+                                  const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
+                                  const currentStatusVal = state?.status || lead.data?.status || 'YET TO CALL';
+                                  const isHot = currentStatusVal.toUpperCase().includes('HOT');
+                                  const isWarm = currentStatusVal.toUpperCase().includes('WARM');
+
+                                  navigate('/modules/leads/new', {
+                                    state: {
+                                      fromCampaign: true,
+                                      campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
+                                      _id: lead._id,
+                                      id: lead._id,
+                                      status: isHot ? 'Hot' : isWarm ? 'Warm' : currentStatusVal,
+                                      dialStatus: currentStatusVal,
+                                      firstName: lead.data?.firstName || getLeadCustomer(lead.data)?.split(' ')[0] || '',
+                                      lastName: lead.data?.lastName || getLeadCustomer(lead.data)?.split(' ').slice(1).join(' ') || '',
+                                      customerName: getLeadCustomer(lead.data),
+                                      customer: getLeadCustomer(lead.data),
+                                      phone: getLeadPhone(lead.data),
+                                      mobile: getLeadPhone(lead.data),
+                                      company: getLeadFirmName(lead.data),
+                                      firmName: getLeadFirmName(lead.data),
+                                      location: getLeadLocation(lead.data),
+                                      city: getLeadLocation(lead.data),
+                                      dataCode: getLeadDataCode(lead),
+                                      caseDetails: currentCaseDetails,
+                                      leadCategory: currentCategory,
+                                      category: currentCategory,
+                                      loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
+                                      notes: currentRemarks,
+                                      remarks: currentRemarks,
+                                      source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
+                                      assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
+                                    }
+                                  });
+                                }}
                                 className="flex-1 sm:flex-initial h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
                               >
                                 <Icons.Edit className="w-3 h-3 text-slate-600 dark:text-slate-300" />
@@ -1388,21 +1590,33 @@ export default function MyCampaign() {
                   </div>
                 )}
 
-                {/* 25-LEADS PAGINATION FOOTER CONTROL */}
+                {/* 10-LEADS PAGINATION FOOTER CONTROL */}
                 {activeCampaign && campaignPagination && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-[#111827] p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs mt-4">
-                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      Showing <span className="font-bold text-slate-900 dark:text-white font-mono">{((currentPage - 1) * pageSize + 1).toLocaleString()}</span> to <span className="font-bold text-slate-900 dark:text-white font-mono">{Math.min(currentPage * pageSize, campaignPagination.total).toLocaleString()}</span> of <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">{campaignPagination.total.toLocaleString()}</span> leads
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Showing <span className="font-bold text-slate-900 dark:text-white font-mono">{((currentPage - 1) * pageSize + 1).toLocaleString()}</span> to <span className="font-bold text-slate-900 dark:text-white font-mono">{Math.min(currentPage * pageSize, campaignPagination.total).toLocaleString()}</span> of <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">{campaignPagination.total.toLocaleString()}</span> leads
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <span className="hidden sm:inline text-slate-300 dark:text-slate-700">|</span>
+                        <span className="text-[11px] font-semibold text-slate-400">Per page:</span>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                          className="h-7 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          <option value={10}>10 leads (Instant .02s)</option>
+                          <option value={25}>25 leads</option>
+                          <option value={50}>50 leads</option>
+                          <option value={100}>100 leads</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         disabled={currentPage <= 1 || loadingLeads}
-                        onClick={() => {
-                          const nextP = currentPage - 1;
-                          fetchLeadDetails(activeCampaign.campaignName, nextP, pageSize);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
+                        onClick={() => handlePageChange(currentPage - 1)}
                         className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-slate-200 transition-all flex items-center gap-1 shadow-3xs"
                       >
                         <Icons.ChevronLeft className="w-3.5 h-3.5" />
@@ -1415,11 +1629,7 @@ export default function MyCampaign() {
 
                       <button
                         disabled={currentPage >= (campaignPagination.totalPages || 1) || loadingLeads}
-                        onClick={() => {
-                          const nextP = currentPage + 1;
-                          fetchLeadDetails(activeCampaign.campaignName, nextP, pageSize);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
+                        onClick={() => handlePageChange(currentPage + 1)}
                         className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all flex items-center gap-1 active:scale-95"
                       >
                         <span>Next</span>

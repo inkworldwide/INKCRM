@@ -19,6 +19,7 @@ export interface ConfirmOptions {
 export interface AlertOptions {
   title: string;
   message: string;
+  leadNumber?: string;
   buttonText?: string;
   type?: 'success' | 'info' | 'error' | 'warning';
   onClose?: () => void;

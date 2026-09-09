@@ -148,6 +148,18 @@ const validateFields = (fields: any[], data: Record<string, any>, oldValues?: Re
   fields.forEach((field) => {
     const val = data[field.name];
 
+    // For leads, lastName and email are never strictly required
+    if ((field.name === 'lastName' || field.name === 'email') && (val === undefined || val === null || val === '')) {
+      return;
+    }
+
+    // If firstName is missing, but customerName or company is given, satisfy requirement
+    if (field.name === 'firstName' && (val === undefined || val === null || val === '')) {
+      if (data.customerName || data.customer || data.fullName || data.name || data.company || data.firmName) {
+        return;
+      }
+    }
+
     // Check required fields
     if (field.required && (val === undefined || val === null || val === '')) {
       const wasAlreadyEmpty = oldValues && (oldValues[field.name] === undefined || oldValues[field.name] === null || oldValues[field.name] === '');
@@ -157,7 +169,7 @@ const validateFields = (fields: any[], data: Record<string, any>, oldValues?: Re
       }
     }
 
-    if (val !== undefined && val !== null && val !== '') {
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
       // Check data types
       if (field.type === 'number' || field.type === 'currency') {
         if (isNaN(Number(val))) {
@@ -166,7 +178,7 @@ const validateFields = (fields: any[], data: Record<string, any>, oldValues?: Re
       }
       if (field.type === 'email') {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(String(val))) {
+        if (!emailRegex.test(String(val).trim())) {
           errors.push(`Field '${field.label}' must be a valid email address.`);
         }
       }
@@ -262,7 +274,7 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
               $project: {
                 campName: {
                   $toLower: {
-                    $ifNull: ['$data.campaignName', { $ifNull: ['$data.source', '$data.campaign'] }]
+                    $ifNull: ['$data.campaignName', { $ifNull: ['$data.campaign', '$data.campaign_name'] }]
                   }
                 }
               }
@@ -295,7 +307,7 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
               $project: {
                 campName: {
                   $toLower: {
-                    $ifNull: ['$data.campaignName', { $ifNull: ['$data.source', '$data.campaign'] }]
+                    $ifNull: ['$data.campaignName', { $ifNull: ['$data.campaign', '$data.campaign_name'] }]
                   }
                 }
               }
@@ -802,8 +814,7 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       $or: [
         { 'data.campaignName': { $exists: true, $ne: '' } },
         { 'data.campaign': { $exists: true, $ne: '' } },
-        { 'data.campaign_name': { $exists: true, $ne: '' } },
-        { 'data.source': { $exists: true, $ne: '' } }
+        { 'data.campaign_name': { $exists: true, $ne: '' } }
       ]
     };
 
@@ -847,7 +858,7 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
             campaignName: {
               $ifNull: [
                 '$data.campaignName',
-                { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }
+                { $ifNull: ['$data.campaign', '$data.campaign_name'] }
               ]
             },
             createdAt: '$createdAt',
@@ -902,7 +913,7 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
       const tempMap = new Map<string, any>();
       leadsFallback.forEach((l: any) => {
         const d = l.data || {};
-        const cName = String(d.campaignName || d.campaign || d.campaign_name || d.source || '').trim();
+        const cName = String(d.campaignName || d.campaign || d.campaign_name || '').trim();
         if (cName) {
           const lowerKey = cName.toLowerCase();
           const existing = tempMap.get(lowerKey) || {
@@ -963,9 +974,11 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     const userId = req.user?.id || (req.user as any)?._id;
     const { campaignName } = req.params;
     const pageNum = Math.max(1, parseInt(req.query.page as string || '1', 10));
-    const limitNum = Math.max(1, parseInt(req.query.limit as string || '25', 10));
+    const limitNum = Math.max(1, parseInt(req.query.limit as string || '10', 10));
     const skipNum = (pageNum - 1) * limitNum;
     const isExport = req.query.export === 'true';
+    const filter = (req.query.filter as string || req.query.dialFilter as string || 'yet_to_dial').trim().toLowerCase();
+    const search = (req.query.search as string || '').trim();
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized.' });
@@ -1009,14 +1022,6 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
             { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
             { $or: [{ 'data.campaign': { $exists: false } }, { 'data.campaign': null }, { 'data.campaign': '' }] },
             { 'data.campaign_name': campaignRegex }
-          ]
-        },
-        {
-          $and: [
-            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
-            { $or: [{ 'data.campaign': { $exists: false } }, { 'data.campaign': null }, { 'data.campaign': '' }] },
-            { $or: [{ 'data.campaign_name': { $exists: false } }, { 'data.campaign_name': null }, { 'data.campaign_name': '' }] },
-            { 'data.source': campaignRegex }
           ]
         }
       ]
@@ -1088,7 +1093,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     }
 
     const userIdStr = userObj.id || (userObj as any)._id || 'user';
-    const cacheKey = `camp_details_${orgId}_${userIdStr}_${decodedCampaignName}_${pageNum}_${limitNum}`;
+    const cacheKey = `camp_details_${orgId}_${userIdStr}_${decodedCampaignName}_${pageNum}_${limitNum}_${filter}_${search}`;
     const cached = SummaryService.getCache(cacheKey);
     if (cached) {
       res.status(200).json(cached);
@@ -1132,9 +1137,71 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       }
     }
 
+    const dialedCondition = {
+      $or: [
+        { 'data.callAttempts': { $gt: 0 } },
+        { 'data.dialedAt': { $exists: true, $ne: null } },
+        { 'data.lastCallDate': { $exists: true, $ne: null } },
+        {
+          'data.dialStatus': {
+            $exists: true,
+            $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+          }
+        },
+        {
+          'data.status': {
+            $exists: true,
+            $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
+          }
+        }
+      ]
+    };
+
+    const yetToDialCondition = {
+      $and: [
+        {
+          $or: [
+            { 'data.callAttempts': { $exists: false } },
+            { 'data.callAttempts': { $lte: 0 } },
+            { 'data.callAttempts': null },
+            { 'data.callAttempts': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'data.dialedAt': { $exists: false } },
+            { 'data.dialedAt': null },
+            { 'data.dialedAt': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'data.lastCallDate': { $exists: false } },
+            { 'data.lastCallDate': null },
+            { 'data.lastCallDate': '' }
+          ]
+        },
+        {
+          $or: [
+            { 'data.dialStatus': { $exists: false } },
+            { 'data.dialStatus': null },
+            { 'data.dialStatus': '' },
+            { 'data.dialStatus': { $in: ['yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW'] } }
+          ]
+        },
+        {
+          $or: [
+            { 'data.status': { $exists: false } },
+            { 'data.status': null },
+            { 'data.status': '' },
+            { 'data.status': { $in: ['yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW'] } }
+          ]
+        }
+      ]
+    };
+
     let totalAllocated = 0;
     let totalDialed = 0;
-    let leads: any[] = [];
 
     try {
       const [facetResult] = await CustomRecord.aggregate([
@@ -1143,33 +1210,8 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
           $facet: {
             totalCount: [{ $count: 'count' }],
             dialedCount: [
-              {
-                $match: {
-                  $or: [
-                    { 'data.callAttempts': { $gt: 0 } },
-                    { 'data.dialedAt': { $exists: true, $ne: null } },
-                    { 'data.lastCallDate': { $exists: true, $ne: null } },
-                    {
-                      'data.dialStatus': {
-                        $exists: true,
-                        $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
-                      }
-                    },
-                    {
-                      'data.status': {
-                        $exists: true,
-                        $nin: [null, '', 'yet to call', 'not called', 'new', 'Yet To Call', 'Not Called', 'New', 'YET TO CALL', 'NOT CALLED', 'NEW']
-                      }
-                    }
-                  ]
-                }
-              },
+              { $match: dialedCondition },
               { $count: 'count' }
-            ],
-            leads: [
-              { $sort: { createdAt: -1 } },
-              { $skip: skipNum },
-              { $limit: limitNum }
             ]
           }
         }
@@ -1177,31 +1219,81 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
 
       totalAllocated = facetResult?.totalCount[0]?.count || 0;
       totalDialed = facetResult?.dialedCount[0]?.count || 0;
-      leads = facetResult?.leads || [];
     } catch (aggErr) {
-      console.warn('Aggregation fallback in campaign details:', aggErr);
+      console.warn('Facet fallback in campaign details:', aggErr);
       totalAllocated = await CustomRecord.countDocuments(finalQuery);
-      leads = await CustomRecord.find(finalQuery).sort({ createdAt: -1 }).skip(skipNum).limit(limitNum).lean();
-      totalDialed = leads.filter(l => {
-        const d = l.data || {};
-        const dialSt = (d.dialStatus || '').toString().trim().toLowerCase();
-        const st = (d.status || '').toString().trim().toLowerCase();
-        const hasDialStatus = dialSt && dialSt !== 'yet to call' && dialSt !== 'not called' && dialSt !== 'new';
-        const hasDialedStatus = st && st !== 'new' && st !== 'yet to call' && st !== 'not called';
-        const hasCalls = (d.callAttempts && Number(d.callAttempts) > 0) || !!d.dialedAt;
-        return hasDialedStatus || (hasCalls && hasDialStatus);
-      }).length;
+      totalDialed = await CustomRecord.countDocuments({ ...finalQuery, ...dialedCondition });
     }
+
+    const totalYetToDial = Math.max(0, totalAllocated - totalDialed);
+
+    // Build filter-specific query for fetching page records
+    let leadsQuery: any = finalQuery;
+    let activeFilterTotal = totalAllocated;
+
+    if (filter === 'yet_to_dial') {
+      leadsQuery = {
+        $and: [
+          finalQuery,
+          yetToDialCondition
+        ]
+      };
+      activeFilterTotal = totalYetToDial;
+    } else if (filter === 'dialed') {
+      leadsQuery = {
+        $and: [
+          finalQuery,
+          dialedCondition
+        ]
+      };
+      activeFilterTotal = totalDialed;
+    }
+
+    if (search) {
+      const escSearch = search.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const searchRegex = new RegExp(escSearch, 'i');
+      const searchFilter = {
+        $or: [
+          { 'data.customerName': searchRegex },
+          { 'data.customer': searchRegex },
+          { 'data.firstName': searchRegex },
+          { 'data.lastName': searchRegex },
+          { 'data.fullName': searchRegex },
+          { 'data.firmName': searchRegex },
+          { 'data.company': searchRegex },
+          { 'data.phone': searchRegex },
+          { 'data.mobile': searchRegex },
+          { 'data.dataCode': searchRegex },
+          { 'data.data_code': searchRegex },
+          { 'data.leadNo': searchRegex },
+          { 'data.leadNumber': searchRegex }
+        ]
+      };
+      leadsQuery = {
+        $and: [
+          leadsQuery,
+          searchFilter
+        ]
+      };
+      activeFilterTotal = await CustomRecord.countDocuments(leadsQuery);
+    }
+
+    const leads = await CustomRecord.find(leadsQuery)
+      .sort({ createdAt: -1 })
+      .skip(skipNum)
+      .limit(limitNum)
+      .lean();
 
     const responseObj = { 
       leads,
       pagination: {
-        total: totalAllocated,
+        total: activeFilterTotal,
+        totalAllocated,
         dialed: totalDialed,
-        yetToDial: Math.max(0, totalAllocated - totalDialed),
+        yetToDial: totalYetToDial,
         page: pageNum,
         limit: limitNum,
-        totalPages: Math.ceil(totalAllocated / limitNum) || 1
+        totalPages: Math.ceil(activeFilterTotal / limitNum) || 1
       }
     };
 
@@ -1266,7 +1358,15 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       // 3. Aggregate lead records grouped by campaign name
       let leadCampaignStats: any[] = [];
       if (leadModule) {
-        const leadMatch: any = { organizationId: orgId, moduleId: leadModule._id };
+        const leadMatch: any = { 
+          organizationId: orgId, 
+          moduleId: leadModule._id,
+          $or: [
+            { 'data.campaignName': { $exists: true, $ne: '', $ne: null } },
+            { 'data.campaign': { $exists: true, $ne: '', $ne: null } },
+            { 'data.campaign_name': { $exists: true, $ne: '', $ne: null } }
+          ]
+        };
         await HierarchyService.modifyRecordQuery(leadMatch, req.user as any, orgId!);
 
         leadCampaignStats = await CustomRecord.aggregate([
@@ -1276,7 +1376,7 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
               campaignName: {
                 $ifNull: [
                   '$data.campaignName',
-                  { $ifNull: ['$data.campaign', { $ifNull: ['$data.campaign_name', '$data.source'] }] }
+                  { $ifNull: ['$data.campaign', '$data.campaign_name'] }
                 ]
               },
               createdAt: '$createdAt',
@@ -1329,17 +1429,15 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
 
       // 4. Fetch existing campaign documents in CustomRecord under campaignModule
       const existingCampaignDocs = campaignModule
-        ? await CustomRecord.find({ organizationId: orgId, moduleId: campaignModule._id }).lean()
+        ? await CustomRecord.find({ organizationId: orgId, moduleId: campaignModule._id }).sort({ createdAt: -1 }).lean()
         : [];
 
-      const createdNames = new Set<string>();
       const mergedRecords: any[] = [];
 
-      // First include explicit campaign records
+      // Include existing campaign records with live lead stats
       for (const doc of existingCampaignDocs) {
-        const cName = String(doc.data?.campaignName || doc.data?.name || doc.data?.source || doc.data?.campaign || '').trim();
+        const cName = String(doc.data?.campaignName || doc.data?.name || doc.data?.campaign || '').trim();
         const lowerKey = cName.toLowerCase();
-        if (lowerKey) createdNames.add(lowerKey);
 
         const matchedLeadStat = leadCampaignStats.find(s => (s._id || '').toLowerCase() === lowerKey);
         const allocated = matchedLeadStat ? Number(matchedLeadStat.totalAssigned || 0) : Number(doc.data?.allocatedLeads || doc.data?.totalAssigned || 0);
@@ -1357,62 +1455,6 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
             dialed,
             yetToDial,
             status: doc.data?.status || 'Active'
-          }
-        });
-      }
-
-      // Next, auto-create missing campaign records from lead stats
-      for (const leadStat of leadCampaignStats) {
-        const rawName = String(leadStat.rawCampaignName || leadStat._id || '').trim();
-        const lowerKey = rawName.toLowerCase();
-        if (!rawName || createdNames.has(lowerKey)) continue;
-
-        createdNames.add(lowerKey);
-        const allocated = Number(leadStat.totalAssigned || 0);
-        const dialed = Number(leadStat.dialed || 0);
-        const yetToDial = Math.max(0, allocated - dialed);
-        const createdAt = leadStat.firstCreatedAt || new Date();
-
-        let newCampDoc: any = null;
-        if (campaignModule) {
-          try {
-            newCampDoc = await CustomRecord.create({
-              organizationId: orgId,
-              moduleId: campaignModule._id,
-              createdBy: (req.user as any)?.id || (req.user as any)?._id,
-              updatedBy: (req.user as any)?.id || (req.user as any)?._id,
-              createdAt,
-              data: {
-                campaignName: rawName,
-                name: rawName,
-                status: 'Active',
-                allocatedLeads: allocated,
-                totalAssigned: allocated,
-                dialed,
-                yetToDial,
-                description: `Auto-created from lead drive ${rawName}`
-              }
-            });
-            newCampDoc = newCampDoc.toObject();
-          } catch (e) {
-            console.warn('Non-fatal error auto-creating campaign document:', e);
-          }
-        }
-
-        mergedRecords.push(newCampDoc || {
-          _id: `auto_${lowerKey}`,
-          organizationId: orgId,
-          moduleId: campaignModule?._id,
-          createdAt,
-          updatedAt: createdAt,
-          data: {
-            campaignName: rawName,
-            name: rawName,
-            status: 'Active',
-            allocatedLeads: allocated,
-            totalAssigned: allocated,
-            dialed,
-            yetToDial
           }
         });
       }
@@ -1517,6 +1559,33 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    // Support ?createdDate=today or ?date=today to filter today's created records
+    const dateParam = req.query.createdDate || req.query.date || req.query.filterDate;
+    if (dateParam && typeof dateParam === 'string' && dateParam.trim()) {
+      const cleanDate = dateParam.trim().toLowerCase();
+      if (cleanDate === 'today') {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        const todayStr = startOfToday.toISOString().split('T')[0];
+
+        const todayFilter = {
+          $or: [
+            { createdAt: { $gte: startOfToday, $lte: endOfToday } },
+            { 'data.createdAt': { $regex: '^' + todayStr } },
+            { 'data.createdDate': { $regex: '^' + todayStr } },
+            { 'data.createdOn': { $regex: '^' + todayStr } }
+          ]
+        };
+        if (query.$and) {
+          query.$and.push(todayFilter);
+        } else {
+          query.$and = [todayFilter];
+        }
+      }
+    }
+
     // Parse other fields for inline filters, e.g. ?data.city=Mumbai
     Object.keys(req.query).forEach((q) => {
       if (q.startsWith('data.')) {
@@ -1548,8 +1617,8 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
           { email: searchRegex },
           { userCode: searchRegex }
         ]
-      }).select('_id');
-      const matchedUserIds = matchedUsers.map((u) => u._id);
+      }).select('_id').lean().limit(10);
+      const matchedUserIds = matchedUsers.map((u: any) => u._id);
 
       const searchConditions: any[] = [
         // Match module dynamic fields
@@ -1569,6 +1638,8 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         { 'data.lead_no': searchRegex },
         { 'data.leadId': searchRegex },
         { 'data.leadCode': searchRegex },
+        { 'data.dataCode': searchRegex },
+        { 'data.data_code': searchRegex },
         { 'data.firmName': searchRegex },
         { 'data.company': searchRegex },
         { 'data.companyName': searchRegex },
@@ -1580,7 +1651,10 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         { 'data.source': searchRegex },
         { 'data.campaign': searchRegex },
         { 'data.campaignName': searchRegex },
-        { 'data.assignedTo': searchRegex }
+        { 'data.assignedTo': searchRegex },
+        { 'data.remarks': searchRegex },
+        { 'data.location': searchRegex },
+        { 'data.city': searchRegex }
       ];
 
       // Match createdBy / updatedBy users
@@ -1595,7 +1669,13 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       }
 
       if (searchConditions.length > 0) {
-        query.$or = searchConditions;
+        // If $and already exists (e.g. from status filter), push search $or into $and
+        // to avoid top-level $or/$and conflict in MongoDB
+        if (query.$and) {
+          query.$and.push({ $or: searchConditions });
+        } else {
+          query.$or = searchConditions;
+        }
       }
     }
 
@@ -1604,16 +1684,19 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
 
     // Pagination & Safety Cap (Up to 10,000 per page for reporting)
     const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-    const rawLimit = parseInt(limit as string, 10) || 50;
+    const rawLimit = parseInt(limit as string, 10) || 10;
     const limitNum = Math.min(Math.max(1, rawLimit), 10000);
     const skipNum = (pageNum - 1) * limitNum;
 
-    // Sorting
+    // Sorting: default strictly to newest created first ({ createdAt: -1 })
     let sortOption: Record<string, any> = { createdAt: -1 };
     if (sort && typeof sort === 'string') {
       const isDesc = sort.startsWith('-');
       const sortField = isDesc ? sort.substring(1) : sort;
-      sortOption = { [sortField.startsWith('data.') ? sortField : `data.${sortField}`]: isDesc ? -1 : 1 };
+      const cleanField = (sortField.startsWith('data.') || sortField === 'createdAt' || sortField === 'updatedAt' || sortField === '_id')
+        ? sortField
+        : `data.${sortField}`;
+      sortOption = { [cleanField]: isDesc ? -1 : 1 };
     }
 
     const records = await CustomRecord.find(query)
@@ -1623,6 +1706,16 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       .skip(skipNum)
       .limit(limitNum)
       .lean();
+
+    let total = 0;
+    if (pageNum === 1 && records.length < limitNum) {
+      // INSTANT (0.002s): If page 1 has fewer results than limit, total is exact!
+      // When 0 leads match ("No Leads Found"), this completely eliminates scanning 220,000 records!
+      total = records.length;
+    } else {
+      // Use maxTimeMS to prevent any slow query locking
+      total = await CustomRecord.countDocuments(query).maxTimeMS(2500).catch(() => skipNum + records.length + (records.length === limitNum ? 1 : 0));
+    }
 
     // Resolve any User ObjectIds/hashes in data.assignedTo, data.assignedBy, data.psm to real names
     const userIdsToFetch = new Set<string>();
@@ -1659,8 +1752,6 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         }
       });
     }
-
-    const total = await CustomRecord.countDocuments(query);
 
     res.status(200).json({
       records,
@@ -1814,7 +1905,11 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
     }
     recordData.source = recordData.createdBy || recordData.createdByName || currentUserName;
 
-    const dcVal = recordData.dataCode || recordData.data_code || recordData['Data Code'] || recordData['data code'] || recordData.datacode || recordData.DataCode || recordData.code;
+    const newRecordId = new mongoose.Types.ObjectId();
+    let dcVal = recordData.dataCode || recordData.data_code || recordData['Data Code'] || recordData['data code'] || recordData.datacode || recordData.DataCode || recordData.code || recordData.leadNo || recordData.leadNumber;
+    if (!dcVal && apiPath.toLowerCase() === 'leads') {
+      dcVal = `LND-${String(newRecordId).slice(-6).toUpperCase()}`;
+    }
     if (dcVal) {
       recordData.dataCode = dcVal;
       recordData.data_code = dcVal;
@@ -1823,6 +1918,8 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       recordData.datacode = dcVal;
       recordData.DataCode = dcVal;
       recordData.code = dcVal;
+      recordData.leadNo = dcVal;
+      recordData.leadNumber = dcVal;
     }
 
     if (recordData.assignedTo) {
@@ -1844,6 +1941,7 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
 
     const creatorId = new mongoose.Types.ObjectId(req.user?.id);
     const newRecord = await CustomRecord.create({
+      _id: newRecordId,
       organizationId: req.organizationId,
       moduleId: moduleDef._id,
       data: recordData,
@@ -2800,24 +2898,71 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const query: Record<string, any> = {
-      _id: id,
-      organizationId: req.organizationId
-    };
-    if (scope === 'own') {
-      query.createdBy = req.user?.id;
+    let record: any = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      const query: Record<string, any> = {
+        _id: id,
+        organizationId: req.organizationId
+      };
+      if (scope === 'own') {
+        query.createdBy = req.user?.id;
+      }
+
+      // Apply Dynamic Reporting Manager Hierarchy filtering
+      await HierarchyService.modifyRecordQuery(query, req.user as any, req.organizationId!);
+      record = await CustomRecord.findOne(query);
     }
 
-    // Apply Dynamic Reporting Manager Hierarchy filtering
-    await HierarchyService.modifyRecordQuery(query, req.user as any, req.organizationId!);
+    // Fallback for campaign by name or auto_ id
+    if (!record && (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign')) {
+      const cleanName = id.replace(/^auto_/, '').trim();
+      const esc = cleanName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const nameRegex = new RegExp(`^\\s*${esc}\\s*$`, 'i');
+      record = await CustomRecord.findOne({
+        organizationId: req.organizationId,
+        moduleId: moduleDef._id,
+        $or: [
+          { 'data.campaignName': nameRegex },
+          { 'data.name': nameRegex },
+          { 'data.campaign': nameRegex },
+          { 'data.source': nameRegex }
+        ]
+      });
+    }
 
-    const record = await CustomRecord.findOne(query);
     if (!record) {
       res.status(404).json({ error: 'Record not found.' });
       return;
     }
 
     await CustomRecord.findByIdAndDelete(record._id);
+
+    // If deleting a campaign, unlink leads and clear cache
+    if (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign') {
+      const campaignName = String(record.data?.campaignName || record.data?.name || record.data?.campaign || record.data?.source || '').trim();
+      if (campaignName) {
+        const escCamp = campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const campRegex = new RegExp(`^\\s*${escCamp}\\s*$`, 'i');
+        await CustomRecord.updateMany(
+          {
+            organizationId: req.organizationId,
+            $or: [
+              { 'data.campaignName': campRegex },
+              { 'data.campaign': campRegex },
+              { 'data.campaign_name': campRegex }
+            ]
+          },
+          {
+            $unset: {
+              'data.campaignName': '',
+              'data.campaign': '',
+              'data.campaign_name': ''
+            }
+          }
+        );
+      }
+      SummaryService.invalidateCache(req.organizationId);
+    }
 
     // Audit logs
     await AuditLog.create({
@@ -2834,6 +2979,7 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
 
     res.status(200).json({ message: 'Record deleted successfully.' });
   } catch (error) {
+    console.error('Delete record error:', error);
     res.status(500).json({ error: 'Failed to delete record.' });
   }
 });

@@ -37,7 +37,7 @@ export default function RecordForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { activeModule, setActiveModuleByPath } = useModuleStore();
+  const { activeModule, setActiveModuleByPath, modules, fetchModules } = useModuleStore();
   const { showConfirm, showToast, showAlertModal } = useToastStore();
   const { user } = useAuthStore();
   const { branding } = useThemeStore();
@@ -168,10 +168,16 @@ export default function RecordForm() {
 
   // Set active module
   useEffect(() => {
+    if (!modules || modules.length === 0) {
+      fetchModules();
+    }
+  }, [modules?.length]);
+
+  useEffect(() => {
     if (apiPath) {
       setActiveModuleByPath(apiPath);
     }
-  }, [apiPath]);
+  }, [apiPath, modules]);
 
   // Build schema and load existing record data
   useEffect(() => {
@@ -189,8 +195,15 @@ export default function RecordForm() {
 
       let zField: any;
 
-      if (field.name === 'lastName' && apiPath === 'leads') {
-        zField = z.string().optional().or(z.literal(''));
+      if ((field.name === 'lastName' || field.name === 'email') && apiPath === 'leads') {
+        if (field.type === 'email') {
+          zField = z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? undefined : String(val).trim()),
+            z.string().email('Invalid email address.').optional().or(z.literal(''))
+          );
+        } else {
+          zField = z.string().optional().or(z.literal(''));
+        }
       } else if (field.type === 'email') {
         zField = z.preprocess(
           (val) => (val === '' || val === undefined || val === null ? undefined : String(val).trim()),
@@ -217,10 +230,10 @@ export default function RecordForm() {
     setFormSchema(z.object(schemaFields));
 
     // 2. Load record if in edit mode
-    if (id) {
+    if (id && id !== 'new') {
       loadRecordData();
     } else {
-      // Initialize default values
+      // Initialize default values for Create Lead
       const defaults: Record<string, any> = {};
       activeModule.fields.forEach((f) => {
         if (f.defaultValue) defaults[f.name] = f.defaultValue;
@@ -231,14 +244,67 @@ export default function RecordForm() {
         defaults['source'] = loggedInName;
         defaults['createdBy'] = loggedInName;
         defaults['createdByName'] = loggedInName;
+        if (!defaults['status']) defaults['status'] = 'New';
+        if (!defaults['loanType'] && allLoanTypes.length > 0) defaults['loanType'] = allLoanTypes[0];
       }
       
-      // Merge values passed from campaign calling card
+      // Merge values passed from campaign calling card (Auto-fills all lead details)
       const passedData = location.state || {};
-      const finalDefaults = {
+      const finalDefaults: Record<string, any> = {
         ...defaults,
         ...passedData
       };
+
+      if (!finalDefaults.firstName && (finalDefaults.customerName || finalDefaults.customer || finalDefaults.fullName || finalDefaults.name)) {
+        const rawCust = finalDefaults.customerName || finalDefaults.customer || finalDefaults.fullName || finalDefaults.name;
+        const parts = String(rawCust).trim().split(' ');
+        finalDefaults.firstName = parts[0] || '';
+        finalDefaults.lastName = parts.slice(1).join(' ') || '';
+      }
+      if (!finalDefaults.phone && finalDefaults.mobile) {
+        finalDefaults.phone = finalDefaults.mobile;
+      }
+      if (!finalDefaults.mobile && finalDefaults.phone) {
+        finalDefaults.mobile = finalDefaults.phone;
+      }
+      if (!finalDefaults.company && (finalDefaults.firmName || finalDefaults.firm_name)) {
+        finalDefaults.company = finalDefaults.firmName || finalDefaults.firm_name;
+      }
+      if (!finalDefaults.firmName && finalDefaults.company) {
+        finalDefaults.firmName = finalDefaults.company;
+      }
+      if (!finalDefaults.location && finalDefaults.city) {
+        finalDefaults.location = finalDefaults.city;
+      }
+      if (!finalDefaults.city && finalDefaults.location) {
+        finalDefaults.city = finalDefaults.location;
+      }
+      if (!finalDefaults.dataCode) {
+        finalDefaults.dataCode = finalDefaults['Data Code'] || finalDefaults.data_code || finalDefaults.leadNo || finalDefaults.leadNumber || finalDefaults.code || '';
+      }
+      if (!finalDefaults.notes && finalDefaults.remarks) {
+        finalDefaults.notes = finalDefaults.remarks;
+      }
+      if (!finalDefaults.remarks && finalDefaults.notes) {
+        finalDefaults.remarks = finalDefaults.notes;
+      }
+      if (!finalDefaults.caseDetails && finalDefaults.case_details) {
+        finalDefaults.caseDetails = finalDefaults.case_details;
+      }
+      if (!finalDefaults.loanType && (finalDefaults.leadCategory || finalDefaults.category)) {
+        finalDefaults.loanType = finalDefaults.leadCategory || finalDefaults.category;
+      }
+      if (!finalDefaults.leadCategory && finalDefaults.loanType) {
+        finalDefaults.leadCategory = finalDefaults.loanType;
+      }
+      if (finalDefaults.status) {
+        const stLower = String(finalDefaults.status).toLowerCase();
+        if (stLower.includes('hot')) {
+          finalDefaults.status = 'Hot';
+        } else if (stLower.includes('warm')) {
+          finalDefaults.status = 'Warm';
+        }
+      }
       
       reset(finalDefaults);
       setLoading(false);
@@ -276,6 +342,41 @@ export default function RecordForm() {
         const parts = String(recordValues.leadName).trim().split(' ');
         recordValues.firstName = parts[0] || '';
         recordValues.lastName = parts.slice(1).join(' ') || '';
+      } else if (!recordValues.firstName && recordValues.customer) {
+        const parts = String(recordValues.customer).trim().split(' ');
+        recordValues.firstName = parts[0] || '';
+        recordValues.lastName = parts.slice(1).join(' ') || '';
+      }
+
+      // Ensure dataCode is populated from data_code / Data Code / leadNo
+      if (!recordValues.dataCode) {
+        recordValues.dataCode = recordValues['Data Code'] || recordValues.data_code || recordValues.leadNo || recordValues.leadNumber || recordValues.code || '';
+      }
+
+      // Ensure caseDetails is populated
+      if (!recordValues.caseDetails && recordValues.case_details) {
+        recordValues.caseDetails = recordValues.case_details;
+      }
+
+      // Ensure notes & remarks are populated
+      if (!recordValues.notes && recordValues.remarks) {
+        recordValues.notes = recordValues.remarks;
+      }
+      if (!recordValues.remarks && recordValues.notes) {
+        recordValues.remarks = recordValues.notes;
+      }
+
+      // Ensure loanType & leadCategory are populated
+      if (!recordValues.loanType && (recordValues.leadCategory || recordValues.category)) {
+        recordValues.loanType = recordValues.leadCategory || recordValues.category;
+      }
+      if (!recordValues.leadCategory && recordValues.loanType) {
+        recordValues.leadCategory = recordValues.loanType;
+      }
+
+      // Ensure assignedTo is populated
+      if (!recordValues.assignedTo) {
+        recordValues.assignedTo = recordValues.assignedToName || recordValues.telecaller || recordValues.assignedAgent || '';
       }
 
       // Ensure location is loaded from city / state / presentAddress if not set
@@ -300,6 +401,26 @@ export default function RecordForm() {
       }
       if (!recordValues.firmName && recordValues.company) {
         recordValues.firmName = recordValues.company;
+      }
+
+      // Merge values passed from navigation state (e.g. from MyCampaign Hot/Warm selection)
+      const passedData = location.state || {};
+      if (passedData && typeof passedData === 'object') {
+        Object.keys(passedData).forEach(k => {
+          if (passedData[k] !== undefined && passedData[k] !== '' && k !== 'fromCampaign') {
+            recordValues[k] = passedData[k];
+          }
+        });
+      }
+
+      // Normalize status to match standard options (e.g. Hot / Warm)
+      if (recordValues.status) {
+        const stLower = String(recordValues.status).toLowerCase();
+        if (stLower.includes('hot')) {
+          recordValues.status = 'Hot';
+        } else if (stLower.includes('warm')) {
+          recordValues.status = 'Warm';
+        }
       }
 
       // Ensure SOURCE is strictly set to the Lead Creator User Name (e.g. md Khasim, K. Tanaz K, Reshma R)
@@ -509,6 +630,16 @@ export default function RecordForm() {
         data.currency = 'INR';
       }
 
+      if (apiPath === 'leads') {
+        if (!data.status) {
+          data.status = 'New';
+          data.normalizedStatus = 'NEW';
+        }
+        if (!data.loanType && allLoanTypes.length > 0) {
+          data.loanType = allLoanTypes[0];
+        }
+      }
+
       const userFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
       if (!data.assignedBy) {
         data.assignedBy = userFullName;
@@ -552,9 +683,20 @@ export default function RecordForm() {
       }
 
       let createdCount = 1;
+      let createdLeadNumber = '';
+      const extractLeadNo = (rec: any): string => {
+        if (!rec) return '';
+        const d = rec.data || rec;
+        const raw = d?.['Data Code'] || d?.dataCode || d?.data_code || d?.leadNo || d?.leadNumber || d?.code || (rec._id ? String(rec._id).slice(-6).toUpperCase() : '');
+        if (!raw) return '';
+        const s = String(raw).trim().toUpperCase();
+        return s.startsWith('LND-') ? s : `LND-${s}`;
+      };
+
       const targetRecordId = (id && id !== 'new') ? id : (location.state?._id || location.state?.id);
       if (targetRecordId) {
-        await api.put(`/records/${apiPath}/${targetRecordId}`, data);
+        const updateRes = await api.put(`/records/${apiPath}/${targetRecordId}`, data);
+        createdLeadNumber = extractLeadNo(updateRes.data) || extractLeadNo({ _id: targetRecordId, data });
       } else {
         if (apiPath === 'leads' && data.businessPartner) {
           const partners = data.businessPartner.split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -586,12 +728,18 @@ export default function RecordForm() {
               
               return api.post(`/records/${apiPath}`, singleLeadData);
             });
-            await Promise.all(promises);
+            const results = await Promise.all(promises);
+            const leadNos = results.map(r => extractLeadNo(r.data)).filter(Boolean);
+            if (leadNos.length > 0) {
+              createdLeadNumber = leadNos.join(', ');
+            }
           } else {
-            await api.post(`/records/${apiPath}`, data);
+            const res = await api.post(`/records/${apiPath}`, data);
+            createdLeadNumber = extractLeadNo(res.data) || extractLeadNo(data);
           }
         } else {
-          await api.post(`/records/${apiPath}`, data);
+          const res = await api.post(`/records/${apiPath}`, data);
+          createdLeadNumber = extractLeadNo(res.data) || extractLeadNo(data);
         }
       }
       queryClient.invalidateQueries({ queryKey: ['records', apiPath] });
@@ -599,14 +747,23 @@ export default function RecordForm() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
       showAlertModal({
         title: id ? 'Saved Successfully' : 'Created Successfully',
+        leadNumber: (apiPath === 'leads' && createdLeadNumber) ? createdLeadNumber : undefined,
         message: id 
-          ? 'The record has been updated successfully.' 
+          ? (apiPath === 'leads' && createdLeadNumber 
+              ? `Lead ${createdLeadNumber} has been updated successfully.` 
+              : 'The record has been updated successfully.')
           : createdCount > 1
-            ? `${createdCount} leads have been created successfully (one for each business partner).`
-            : 'The record has been created successfully.',
+            ? `${createdCount} leads have been created successfully (one for each business partner).\nLead Numbers: ${createdLeadNumber}`
+            : (apiPath === 'leads' && createdLeadNumber
+                ? `Lead ${createdLeadNumber} has been created successfully.`
+                : 'The record has been created successfully.'),
         type: 'success',
         onClose: () => {
-          navigate(`/modules/${apiPath}`);
+          if (location.state?.fromCampaign) {
+            navigate('/my-campaign');
+          } else {
+            navigate(`/modules/${apiPath}`);
+          }
         }
       });
     } catch (err: any) {
@@ -688,8 +845,25 @@ export default function RecordForm() {
     }
 
     const inputBase = 'w-full h-11 px-4 text-xs font-semibold bg-white dark:bg-slate-900 border border-[#EAE4DA] dark:border-slate-700 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#17223B]/10 focus:border-[#17223B] transition-all text-[#111827] dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-400';
-
     const labelClass = 'text-[11px] font-bold text-[#1F2937] dark:text-slate-200 uppercase tracking-wider block mb-1.5';
+
+    const isFieldRequired = field.required && !(apiPath === 'leads' && (field.name === 'lastName' || field.name === 'email' || field.name === 'dataCode'));
+
+    if (field.name === 'dataCode' && apiPath === 'leads') {
+      return (
+        <div key={field.name} className="space-y-1.5 text-left">
+          <label className={labelClass}>
+            {field.label}
+          </label>
+          <input
+            type="text"
+            placeholder={id ? field.label : 'Auto-Generated on save (or enter code)'}
+            {...register(field.name)}
+            className={inputBase}
+          />
+        </div>
+      );
+    }
 
     if (field.name === 'source' && apiPath === 'leads') {
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
@@ -697,7 +871,7 @@ export default function RecordForm() {
       return (
         <div key={field.name} className="space-y-1.5 text-left">
           <label className={labelClass}>
-            {field.label}{field.required && <span className="text-rose-500 ml-0.5">*</span>}
+            {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
           </label>
           <input
             type="text"
@@ -905,10 +1079,38 @@ export default function RecordForm() {
       case 'dropdown': {
         let opts = field.options || [];
         
-        if (field.name === 'status' && dynamicStatuses.length > 0) {
-          opts = dynamicStatuses;
-        } else if (field.name === 'loanType' && apiPath === 'leads' && allLoanTypes.length > 0) {
-          opts = allLoanTypes;
+        if (field.name === 'status') {
+          if (dynamicStatuses.length > 0) {
+            opts = dynamicStatuses;
+          }
+          const currentStatusVal = watchedValues?.status || '';
+          if (currentStatusVal && !opts.includes(currentStatusVal)) {
+            const match = opts.find((o: string) => o.toLowerCase() === currentStatusVal.toLowerCase() ||
+              (currentStatusVal.toLowerCase().includes('hot') && o.toLowerCase().includes('hot')) ||
+              (currentStatusVal.toLowerCase().includes('warm') && o.toLowerCase().includes('warm')));
+            if (match) {
+              if (watchedValues?.status !== match) {
+                setValue('status', match);
+              }
+            } else {
+              opts = [currentStatusVal, ...opts];
+            }
+          }
+        } else if (field.name === 'loanType' && apiPath === 'leads') {
+          if (allLoanTypes.length > 0) {
+            opts = allLoanTypes;
+          }
+          const currentLoanVal = watchedValues?.loanType || '';
+          if (currentLoanVal && !opts.includes(currentLoanVal)) {
+            const match = opts.find((o: string) => o.toLowerCase() === currentLoanVal.toLowerCase());
+            if (match) {
+              if (watchedValues?.loanType !== match) {
+                setValue('loanType', match);
+              }
+            } else {
+              opts = [currentLoanVal, ...opts];
+            }
+          }
         } else if (field.name === 'assignToTeam' && apiPath === 'leads' && allTeams.length > 0) {
           opts = allTeams;
         }
@@ -926,7 +1128,7 @@ export default function RecordForm() {
         return (
           <div key={field.name} className="space-y-1.5 text-left">
             <label className={labelClass}>
-              {field.label}{field.required && <span className="text-rose-500 ml-0.5">*</span>}
+              {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
             <select {...register(field.name)} className={inputBase}>
               {field.name !== 'country' && (
@@ -1038,7 +1240,7 @@ export default function RecordForm() {
         return (
           <div key={field.name} className="space-y-1.5 text-left">
             <label className={labelClass}>
-              {field.label}{field.required && <span className="text-rose-500 ml-0.5">*</span>}
+              {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
             <div className="relative">
               <input
@@ -1085,7 +1287,7 @@ export default function RecordForm() {
         return (
           <div key={field.name} className="space-y-1.5 text-left">
             <label className={labelClass}>
-              {field.label}{field.required && <span className="text-rose-500 ml-0.5">*</span>}
+              {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
             <div className="relative flex items-center">
               <input
@@ -1139,7 +1341,7 @@ export default function RecordForm() {
         return (
           <div key={field.name} className="space-y-1.5 text-left">
             <label className={labelClass}>
-              {field.label}{field.required && <span className="text-rose-500 ml-0.5">*</span>}
+              {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
             <input
               type={field.type === 'number' ? 'number' : 'text'}
@@ -1281,8 +1483,8 @@ export default function RecordForm() {
       
       {/* breadcrumbs */}
       <div className="flex items-center gap-2 text-[11px] font-bold text-[#374151] dark:text-slate-400 uppercase tracking-wider">
-        <Link to={`/modules/${activeModule.apiPath}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-          {activeModule.pluralLabel}
+        <Link to={location.state?.fromCampaign ? '/my-campaign' : `/modules/${activeModule.apiPath}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+          {location.state?.fromCampaign ? 'My Campaign' : activeModule.pluralLabel}
         </Link>
         <Icons.ChevronRight className="w-3.5 h-3.5 text-slate-500" />
         <span className="text-[#111827] dark:text-white font-bold">
@@ -1321,7 +1523,7 @@ export default function RecordForm() {
           {/* Centered actions footer */}
           <div className="p-4 sm:p-6 bg-[#F8F5F1]/60 dark:bg-slate-850 border-t border-[#EAE4DA] dark:border-slate-800 flex items-center justify-center gap-3 sm:gap-4">
             <Link
-              to={`/modules/${activeModule.apiPath}`}
+              to={location.state?.fromCampaign ? '/my-campaign' : `/modules/${activeModule.apiPath}`}
               className="btn-secondary-premium h-10 px-5 text-xs font-bold"
             >
               Cancel

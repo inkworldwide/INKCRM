@@ -73,7 +73,13 @@ CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.dataCode': 1 })
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.data_code': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.phone': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.mobile': 1 });
-CustomRecordSchema.index({ organizationId: 1, 'data.email': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.customerName': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.customer': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.firstName': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.lastName': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.firmName': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.leadNo': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.leadNumber': 1 });
 CustomRecordSchema.index({ organizationId: 1, createdAt: -1 });
 
 export default mongoose.model<ICustomRecord>('CustomRecord', CustomRecordSchema);
