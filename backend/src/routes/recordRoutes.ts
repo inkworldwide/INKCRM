@@ -1334,6 +1334,13 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         ? new mongoose.Types.ObjectId(String(rawOrgId))
         : rawOrgId;
 
+      const cacheKey = `records_campaigns_${orgId}_${req.user?.id || 'admin'}_${page}_${limit}_${search || ''}`;
+      const cachedResponse = SummaryService.getCache(cacheKey);
+      if (cachedResponse) {
+        res.status(200).json(cachedResponse);
+        return;
+      }
+
       // 1. Get campaign module definition
       let campaignModule: any = moduleDef;
       if (!campaignModule) {
@@ -1356,8 +1363,9 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       });
 
       // 3. Aggregate lead records grouped by campaign name
-      let leadCampaignStats: any[] = [];
-      if (leadModule) {
+      const aggCacheKey = `lead_camp_stats_agg_${orgId}_${req.user?.id || 'admin'}`;
+      let leadCampaignStats: any[] = SummaryService.getCache(aggCacheKey) || [];
+      if (leadCampaignStats.length === 0 && leadModule) {
         const leadMatch: any = { 
           organizationId: orgId, 
           moduleId: leadModule._id,
@@ -1425,6 +1433,7 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
             }
           }
         ]);
+        SummaryService.setCache(aggCacheKey, leadCampaignStats);
       }
 
       // 4. Fetch existing campaign documents in CustomRecord under campaignModule
@@ -1473,7 +1482,7 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       const rawLimit = parseInt(limit as string, 10) || 50;
       const limitNum = Math.min(Math.max(1, rawLimit), 10000);
 
-      res.status(200).json({
+      const responsePayload = {
         records: finalRecords,
         pagination: {
           total: finalRecords.length,
@@ -1481,7 +1490,9 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
           limit: limitNum,
           totalPages: Math.ceil(finalRecords.length / limitNum) || 1
         }
-      });
+      };
+      SummaryService.setCache(cacheKey, responsePayload);
+      res.status(200).json(responsePayload);
       return;
     }
 

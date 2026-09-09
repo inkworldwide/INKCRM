@@ -29,24 +29,91 @@ export default function Dashboard() {
   const [historyDocuments, setHistoryDocuments] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Fetch dynamic configured statuses from database (Settings -> Status Settings)
+  // Fast LocalStorage Cache Helpers for 0ms Instant Loading
+  const getLocalCache = <T,>(key: string, fallback: T): T => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const setLocalCache = (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors in private/quota modes
+    }
+  };
+
+  const DEFAULT_METRICS = {
+    statusCounts: {
+      'HOT LEADS': 0,
+      'WARM LEADS': 0,
+      'CEBIL PENDING': 0,
+      'DOCUMENT PENDING': 0,
+      'APPROVAL PENDING': 0,
+      'APPROVED BUT NOT DISBUSE': 0,
+      'DISBUSED': 0,
+      'REJECTED': 0,
+      'FOLLOWUP': 0,
+      'DROPPED': 0,
+      'PENDING': 0
+    },
+    pipelineData: {
+      'Prospecting': 0,
+      'Qualification': 0,
+      'Proposal': 0,
+      'Negotiation': 0,
+      'Closed Won': 0,
+      'Closed Lost': 0
+    },
+    dealStatus: { open: 0, won: 0, lost: 0, pending: 0 },
+    todayFollowupsCount: 0,
+    todayFollowupsList: [],
+    upcomingFollowupsList: [],
+    upcomingFollowupsCount: 0,
+    totalLeads: 0,
+    recentActivities: [],
+    campaignMetrics: {
+      totalCampaigns: 0,
+      completedCampaigns: 0,
+      inProgressCampaigns: 0,
+      yetToStartCampaigns: 0,
+      totalLeadsAllocated: 0,
+      totalLeadsDialed: 0,
+      totalLeadsRemaining: 0,
+      dialedPercentage: 0,
+      activeCampaignNames: 'Direct Campaigns'
+    }
+  };
+
+  // Fetch dynamic configured statuses from database (Settings -> Status Settings) with 0ms cache
   const { data: configuredStatuses = [] } = useQuery({
     queryKey: ['dashboard-configured-statuses'],
     queryFn: async () => {
       const res = await api.get('/statuses').catch(() => ({ data: [] }));
-      return Array.isArray(res.data) ? res.data : [];
+      const arr = Array.isArray(res.data) ? res.data : [];
+      if (arr.length > 0) setLocalCache('inkcrm_dashboard_statuses_cache', arr);
+      return arr;
     },
-    staleTime: 30000
+    initialData: () => getLocalCache('inkcrm_dashboard_statuses_cache', []),
+    staleTime: 60000
   });
 
-  // Fetch campaigns for Campaign Status section
-  const { data: campaignRecords } = useQuery({
+  // Fetch campaigns for Campaign Status section with 0ms cache
+  const { data: campaignRecords = [] } = useQuery({
     queryKey: ['dashboard-campaigns-list'],
     queryFn: async () => {
       const res = await api.get('/records/campaigns?limit=50').catch(() => ({ data: { records: [] } }));
-      return res.data?.records || res.data || [];
+      const list = res.data?.records || res.data || [];
+      if (Array.isArray(list) && list.length > 0) setLocalCache('inkcrm_dashboard_campaigns_cache', list);
+      return list;
     },
-    staleTime: 30000
+    initialData: () => getLocalCache('inkcrm_dashboard_campaigns_cache', []),
+    staleTime: 60000
   });
 
   // Cmd+K / Ctrl+K Keyboard Shortcut Listener
@@ -108,24 +175,29 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch live dashboard metrics from database with 5s polling intervals
-  const { data: metricsData, isLoading } = useQuery({
+  // Fetch live dashboard metrics from database with instant local hydration & 15s background polling
+  const { data: metricsData = DEFAULT_METRICS } = useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
+      if (res.data) setLocalCache('inkcrm_dashboard_metrics_cache', res.data);
       return res.data;
     },
+    initialData: () => getLocalCache('inkcrm_dashboard_metrics_cache', DEFAULT_METRICS),
     staleTime: 30000,
     refetchInterval: (query) => (query.state.error ? false : 15000)
   });
 
-  const { data: usersDropdown } = useQuery({
+  const { data: usersDropdown = [] } = useQuery({
     queryKey: ['dashboard-users-dropdown'],
     queryFn: async () => {
       const res = await api.get('/auth/users?purpose=dropdown');
-      return res.data || [];
+      const list = res.data || [];
+      if (Array.isArray(list) && list.length > 0) setLocalCache('inkcrm_dashboard_users_cache', list);
+      return list;
     },
-    staleTime: 60000
+    initialData: () => getLocalCache('inkcrm_dashboard_users_cache', []),
+    staleTime: 120000
   });
 
   const resolveUserDisplayName = (val: any) => {
@@ -385,15 +457,6 @@ export default function Dashboard() {
     'Negotiation & Approval': { icon: Icons.TrendingUp, color: '#EA580C', bgTint: 'rgba(234, 88, 12, 0.1)' },
     'Disbursed / Closed Won': { icon: Icons.CheckCircle2, color: '#7C3AED', bgTint: 'rgba(124, 58, 237, 0.1)' }
   };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 w-64 rounded animate-shimmer"></div>
-        <div className="h-64 rounded-lg animate-shimmer"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-6">

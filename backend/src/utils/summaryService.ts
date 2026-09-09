@@ -8,10 +8,11 @@ import { normalizeStatusName } from '../routes/dashboardRoutes';
 interface CacheEntry {
   data: any;
   timestamp: number;
+  customTtl?: number;
 }
 
 const memoryCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 30000; // 30 seconds TTL
+const CACHE_TTL_MS = 300000; // 5 minutes TTL (with auto-invalidation on any record change)
 
 export class SummaryService {
   /**
@@ -128,18 +129,21 @@ export class SummaryService {
   }
 
   /**
-   * Generic In-Memory Cache Helper (30s TTL)
+   * Generic In-Memory Cache Helper (Fast sub-millisecond retrieval)
    */
   public static getCache(key: string): any | null {
     const cached = memoryCache.get(key);
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    if (!cached) return null;
+    const ttl = cached.customTtl || CACHE_TTL_MS;
+    if (Date.now() - cached.timestamp < ttl) {
       this.logCache(key, true, 0);
       return cached.data;
     }
+    memoryCache.delete(key);
     return null;
   }
 
-  public static setCache(key: string, data: any) {
-    memoryCache.set(key, { data, timestamp: Date.now() });
+  public static setCache(key: string, data: any, customTtl?: number) {
+    memoryCache.set(key, { data, timestamp: Date.now(), customTtl });
   }
 }

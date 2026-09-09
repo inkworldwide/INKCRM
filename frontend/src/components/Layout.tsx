@@ -104,14 +104,48 @@ export default function Layout({ children }: LayoutProps) {
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
+      try { localStorage.setItem('inkcrm_dashboard_metrics_cache', JSON.stringify(res.data)); } catch {}
       return res.data;
     },
-    staleTime: 10000,
+    initialData: () => {
+      try {
+        const raw = localStorage.getItem('inkcrm_dashboard_metrics_cache');
+        return raw ? JSON.parse(raw) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    staleTime: 30000,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => (query.state.error ? false : 15000)
   });
 
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (user) {
+      queryClient.prefetchQuery({
+        queryKey: ['dashboard-configured-statuses'],
+        queryFn: async () => {
+          const res = await api.get('/statuses').catch(() => ({ data: [] }));
+          const arr = Array.isArray(res.data) ? res.data : [];
+          try { localStorage.setItem('inkcrm_dashboard_statuses_cache', JSON.stringify(arr)); } catch {}
+          return arr;
+        },
+        staleTime: 60000
+      });
+      queryClient.prefetchQuery({
+        queryKey: ['dashboard-campaigns-list'],
+        queryFn: async () => {
+          const res = await api.get('/records/campaigns?limit=50').catch(() => ({ data: { records: [] } }));
+          const list = res.data?.records || res.data || [];
+          try { localStorage.setItem('inkcrm_dashboard_campaigns_cache', JSON.stringify(list)); } catch {}
+          return list;
+        },
+        staleTime: 60000
+      });
+    }
+  }, [user, queryClient]);
 
   const { data: notificationsData, refetch: refetchNotifications } = useQuery({
     queryKey: ['user-notifications'],
