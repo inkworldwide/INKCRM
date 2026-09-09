@@ -1370,9 +1370,9 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
           organizationId: orgId, 
           moduleId: leadModule._id,
           $or: [
-            { 'data.campaignName': { $exists: true, $ne: '', $ne: null } },
-            { 'data.campaign': { $exists: true, $ne: '', $ne: null } },
-            { 'data.campaign_name': { $exists: true, $ne: '', $ne: null } }
+            { 'data.campaignName': { $exists: true, $nin: ['', null] } },
+            { 'data.campaign': { $exists: true, $nin: ['', null] } },
+            { 'data.campaign_name': { $exists: true, $nin: ['', null] } }
           ]
         };
         await HierarchyService.modifyRecordQuery(leadMatch, req.user as any, orgId!);
