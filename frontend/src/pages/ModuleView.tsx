@@ -52,6 +52,8 @@ export default function ModuleView() {
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [campaignLeadsMap, setCampaignLeadsMap] = useState<Record<string, any[]>>({});
   const [loadingCampaignLeads, setLoadingCampaignLeads] = useState<Record<string, boolean>>({});
+  // Campaign status filter ('all' | 'in_progress' | 'completed')
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
 
   const toggleExpandCampaign = async (campaignName: string) => {
     if (expandedCampaign === campaignName) {
@@ -1209,10 +1211,21 @@ export default function ModuleView() {
     const records = data?.records || [];
     let totalAllocated = 0;
     let totalDialed = 0;
+    let inProgressCount = 0;
+    let completedCount = 0;
     records.forEach((rec: any) => {
       const name = rec.data?.campaignName || rec.data?.source || rec.data?.campaign || rec.data?.name || rec.name || '';
-      totalAllocated += getAllocatedNumbers(name);
-      totalDialed += getDialedNumbers(name);
+      const allocated = getAllocatedNumbers(name);
+      const dialed = getDialedNumbers(name);
+      totalAllocated += allocated;
+      totalDialed += dialed;
+      const st = (rec.data?.status || '').toString().toLowerCase();
+      const isCompleted = (allocated > 0 && dialed >= allocated) || st.includes('completed');
+      if (isCompleted) {
+        completedCount++;
+      } else if (dialed > 0 || st.includes('progress') || st.includes('active')) {
+        inProgressCount++;
+      }
     });
     const overallRate = totalAllocated > 0 ? Math.round((totalDialed / totalAllocated) * 100) : 0;
     return {
@@ -1220,9 +1233,35 @@ export default function ModuleView() {
       totalAllocated,
       totalDialed,
       yetToDial: Math.max(0, totalAllocated - totalDialed),
-      overallRate
+      overallRate,
+      inProgressCount,
+      completedCount
     };
   }, [data?.records, data?.pagination?.total, campaignStatsData]);
+
+  const displayedCampaignRecords = useMemo(() => {
+    const records = data?.records || [];
+    if (campaignStatusFilter === 'in_progress') {
+      return records.filter((rec: any) => {
+        const name = rec.data?.campaignName || rec.data?.source || rec.data?.campaign || rec.data?.name || rec.name || '';
+        const allocated = getAllocatedNumbers(name);
+        const dialed = getDialedNumbers(name);
+        const st = (rec.data?.status || '').toString().toLowerCase();
+        const isCompleted = (allocated > 0 && dialed >= allocated) || st.includes('completed');
+        return !isCompleted && (dialed > 0 || st.includes('progress') || st.includes('active'));
+      });
+    }
+    if (campaignStatusFilter === 'completed') {
+      return records.filter((rec: any) => {
+        const name = rec.data?.campaignName || rec.data?.source || rec.data?.campaign || rec.data?.name || rec.name || '';
+        const allocated = getAllocatedNumbers(name);
+        const dialed = getDialedNumbers(name);
+        const st = (rec.data?.status || '').toString().toLowerCase();
+        return (allocated > 0 && dialed >= allocated) || st.includes('completed');
+      });
+    }
+    return records;
+  }, [data?.records, campaignStatusFilter, campaignStatsData]);
 
   const { data: usersDropdown } = useQuery({
     queryKey: ['moduleview-users-dropdown'],
@@ -1564,10 +1603,18 @@ export default function ModuleView() {
             </div>
           </div>
 
-          {/* 4 Vibrant Gradient Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 6 Vibrant Gradient Metric Cards (including In Progress & Completed) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {/* Card 1: Total Campaigns */}
-            <div className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group">
+            <div 
+              onClick={() => setCampaignStatusFilter('all')}
+              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group cursor-pointer ${
+                campaignStatusFilter === 'all' 
+                  ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-indigo-500/10' 
+                  : 'border-indigo-100 dark:border-slate-800 hover:border-indigo-300'
+              }`}
+              title="Click to view all campaigns"
+            >
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -1588,7 +1635,66 @@ export default function ModuleView() {
               </div>
             </div>
 
-            {/* Card 2: Allocated Leads */}
+            {/* Card 2: In Progress */}
+            <div 
+              onClick={() => setCampaignStatusFilter(campaignStatusFilter === 'in_progress' ? 'all' : 'in_progress')}
+              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group cursor-pointer ${
+                campaignStatusFilter === 'in_progress' 
+                  ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-blue-500/10' 
+                  : 'border-blue-100 dark:border-slate-800 hover:border-blue-300'
+              }`}
+              title="Click to filter In Progress campaigns"
+            >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  In Progress
+                </span>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
+                  <Icons.PhoneCall className="w-4.5 h-4.5" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                  {campaignSummaryStats.inProgressCount}
+                </span>
+                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                  Active Calling
+                </span>
+              </div>
+            </div>
+
+            {/* Card 3: Completed */}
+            <div 
+              onClick={() => setCampaignStatusFilter(campaignStatusFilter === 'completed' ? 'all' : 'completed')}
+              className={`bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group cursor-pointer ${
+                campaignStatusFilter === 'completed' 
+                  ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-emerald-500/10' 
+                  : 'border-emerald-100 dark:border-slate-800 hover:border-emerald-300'
+              }`}
+              title="Click to filter Completed campaigns"
+            >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Completed
+                </span>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-xs">
+                  <Icons.CheckCircle2 className="w-4.5 h-4.5" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                  {campaignSummaryStats.completedCount}
+                </span>
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
+                  100% Dialed
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: Allocated Leads */}
             <div className="bg-white dark:bg-slate-900 border border-sky-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 to-blue-500" />
               <div className="flex items-center justify-between">
@@ -1609,14 +1715,14 @@ export default function ModuleView() {
               </div>
             </div>
 
-            {/* Card 3: Total Dialed */}
-            <div className="bg-white dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+            {/* Card 5: Total Dialed */}
+            <div className="bg-white dark:bg-slate-900 border border-teal-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-500" />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Total Dialed
                 </span>
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-600 flex items-center justify-center text-white shadow-xs">
                   <Icons.PhoneCall className="w-4.5 h-4.5" />
                 </div>
               </div>
@@ -1624,13 +1730,13 @@ export default function ModuleView() {
                 <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
                   {campaignSummaryStats.totalDialed.toLocaleString()}
                 </span>
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
+                <span className="text-[11px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 rounded-md">
                   Contacted
                 </span>
               </div>
             </div>
 
-            {/* Card 4: Overall Progress */}
+            {/* Card 6: Dialing Rate */}
             <div className="bg-white dark:bg-slate-900 border border-amber-100 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:shadow-md transition-all group">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
               <div className="flex items-center justify-between">
@@ -1645,7 +1751,7 @@ export default function ModuleView() {
                 <span className="text-2xl font-black text-slate-900 dark:text-white font-mono">
                   {campaignSummaryStats.overallRate}%
                 </span>
-                <div className="w-20 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/60 dark:border-slate-700/60">
+                <div className="w-16 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/60 dark:border-slate-700/60">
                   <div 
                     className="h-full rounded-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all" 
                     style={{ width: `${Math.max(campaignSummaryStats.overallRate, 4)}%` }} 
@@ -1936,6 +2042,69 @@ export default function ModuleView() {
           {viewMode === 'table' && (
             apiPath === 'campaigns' ? (
               <div className="space-y-6">
+                {/* Campaign Status Filter Menu Tabs */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setCampaignStatusFilter('all')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        campaignStatusFilter === 'all'
+                          ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs ring-1 ring-black/5'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Icons.Layers className="w-3.5 h-3.5" />
+                      <span>All Campaigns</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        campaignStatusFilter === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {campaignSummaryStats.totalCampaigns}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCampaignStatusFilter('in_progress')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        campaignStatusFilter === 'in_progress'
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-black/5'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Icons.PhoneCall className="w-3.5 h-3.5" />
+                      <span>In Progress</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        campaignStatusFilter === 'in_progress' ? 'bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {campaignSummaryStats.inProgressCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCampaignStatusFilter('completed')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        campaignStatusFilter === 'completed'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-black/5'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Icons.CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Completed</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        campaignStatusFilter === 'completed' ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {campaignSummaryStats.completedCount}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    Showing <span className="font-extrabold text-slate-900 dark:text-white">{displayedCampaignRecords.length}</span> of {data?.records?.length || 0} campaigns
+                  </div>
+                </div>
+
                 <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative">
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
                   <div className="overflow-x-auto">
@@ -1951,7 +2120,28 @@ export default function ModuleView() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                        {data?.records.map((rec: any) => {
+                        {displayedCampaignRecords.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                <Icons.Megaphone className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                  No {campaignStatusFilter === 'in_progress' ? 'In Progress' : campaignStatusFilter === 'completed' ? 'Completed' : ''} campaigns found
+                                </p>
+                                {campaignStatusFilter !== 'all' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCampaignStatusFilter('all')}
+                                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                                  >
+                                    Show all campaigns
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          displayedCampaignRecords.map((rec: any) => {
                           const name = rec.data?.campaignName || rec.data?.source || rec.data?.campaign || rec.data?.name || rec.name || 'Unnamed Campaign';
                           const allocated = getAllocatedNumbers(name);
                           const dialed = getDialedNumbers(name);
@@ -2064,21 +2254,7 @@ export default function ModuleView() {
                               </td>
                             </tr>
                           );
-                        })}
-
-                        {data?.records.length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="py-16 text-center">
-                              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/20">
-                                <Icons.Megaphone className="w-7 h-7" />
-                              </div>
-                              <p className="font-extrabold text-base text-slate-800 dark:text-slate-100">No campaigns found</p>
-                              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                                Enter a campaign name above to launch your first targeted marketing drive.
-                              </p>
-                            </td>
-                          </tr>
-                        )}
+                        }))}
                       </tbody>
                     </table>
                   </div>
