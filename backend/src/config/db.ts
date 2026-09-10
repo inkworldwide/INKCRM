@@ -9,24 +9,19 @@ export const connectDB = async (): Promise<void> => {
   const dbName = process.env.MONGODB_DB_NAME || 'inkcrm_bank';
   let connUri = process.env.MONGODB_URI || `mongodb://127.0.0.1:27017/${dbName}`;
 
-  // Safety check: block any cloud Atlas connection strings
-  if (connUri.includes('mongodb.net') || connUri.includes('mongodb+srv://') || connUri.includes('atlas')) {
-    console.log('Warning: Cloud database connection string detected. Forcing fallback to local isolated database.');
-    connUri = `mongodb://127.0.0.1:27017/${dbName}`;
-  }
-
   mongoose.set('strictQuery', true);
 
   try {
-    // Attempt standard connection to local server with optimized connection pool
+    // Connect with optimized connection pool
     await mongoose.connect(connUri, {
       maxPoolSize: 100,
       minPoolSize: 10,
       socketTimeoutMS: 45000,
-      serverSelectionTimeoutMS: 5000
+      serverSelectionTimeoutMS: 10000
     });
     console.log(`MongoDB Connected: ${mongoose.connection.host}`);
   } catch (err) {
+    console.error('Failed to connect to MongoDB URI:', err);
     console.log('Local MongoDB service not running. Attempting to launch local mongod inside project...');
     
     // Path to the project database folder
