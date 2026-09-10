@@ -96,10 +96,10 @@ export default function Dashboard() {
     queryFn: async () => {
       const res = await api.get('/statuses').catch(() => ({ data: [] }));
       const arr = Array.isArray(res.data) ? res.data : [];
-      if (arr.length > 0) setLocalCache('inkcrm_dashboard_statuses_cache', arr);
+      if (arr.length > 0) setLocalCache('inkcrm_dashboard_statuses_cache_v2', arr);
       return arr;
     },
-    initialData: () => getLocalCache('inkcrm_dashboard_statuses_cache', []),
+    initialData: () => getLocalCache('inkcrm_dashboard_statuses_cache_v2', []),
     staleTime: 60000
   });
 
@@ -109,11 +109,11 @@ export default function Dashboard() {
     queryFn: async () => {
       const res = await api.get('/records/campaigns?limit=50').catch(() => ({ data: { records: [] } }));
       const list = res.data?.records || res.data || [];
-      if (Array.isArray(list) && list.length > 0) setLocalCache('inkcrm_dashboard_campaigns_cache', list);
+      setLocalCache('inkcrm_dashboard_campaigns_cache_v2', list);
       return list;
     },
-    initialData: () => getLocalCache('inkcrm_dashboard_campaigns_cache', []),
-    staleTime: 60000
+    initialData: () => getLocalCache('inkcrm_dashboard_campaigns_cache_v2', []),
+    staleTime: 0
   });
 
   // Cmd+K / Ctrl+K Keyboard Shortcut Listener
@@ -180,11 +180,11 @@ export default function Dashboard() {
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
-      if (res.data) setLocalCache('inkcrm_dashboard_metrics_cache', res.data);
+      if (res.data) setLocalCache('inkcrm_dashboard_metrics_cache_v2', res.data);
       return res.data;
     },
-    initialData: () => getLocalCache('inkcrm_dashboard_metrics_cache', DEFAULT_METRICS),
-    staleTime: 30000,
+    initialData: () => getLocalCache('inkcrm_dashboard_metrics_cache_v2', DEFAULT_METRICS),
+    staleTime: 5000,
     refetchInterval: (query) => (query.state.error ? false : 15000)
   });
 
@@ -393,40 +393,40 @@ export default function Dashboard() {
   const rawPipeline = [
     { 
       name: 'Lead Ingestion / New', 
-      val: metricsData?.pipelineData?.['Prospecting'] || getStatusCount('NEW') * 50000 || 50000, 
-      count: getStatusCount('NEW') || 10,
+      val: metricsData?.pipelineData?.['Prospecting'] || getStatusCount('NEW') * 50000 || 0, 
+      count: getStatusCount('NEW') || 0,
       icon: Icons.UserPlus,
       color: '#4F46E5',
       bgTint: 'rgba(79, 70, 229, 0.1)'
     },
     { 
       name: 'Qualification & Hot Leads', 
-      val: metricsData?.pipelineData?.['Qualification'] || 90000, 
-      count: getStatusCount('HOT') + getStatusCount('WARM') || 14,
+      val: metricsData?.pipelineData?.['Qualification'] || 0, 
+      count: getStatusCount('HOT') + getStatusCount('WARM') || 0,
       icon: Icons.Flame,
       color: '#059669',
       bgTint: 'rgba(5, 150, 105, 0.1)'
     },
     { 
       name: 'Proposal & Documentation', 
-      val: metricsData?.pipelineData?.['Proposal'] || 150000, 
-      count: getStatusCount('DOCUMENT PENDING') + getStatusCount('CEDIL PENDING') || 8,
+      val: metricsData?.pipelineData?.['Proposal'] || 0, 
+      count: getStatusCount('DOCUMENT PENDING') + getStatusCount('CEDIL PENDING') || 0,
       icon: Icons.FileText,
       color: '#D97706',
       bgTint: 'rgba(217, 119, 6, 0.1)'
     },
     { 
       name: 'Negotiation & Approval', 
-      val: metricsData?.pipelineData?.['Negotiation'] || 300000, 
-      count: getStatusCount('APPROVAL PENDING') || 6,
+      val: metricsData?.pipelineData?.['Negotiation'] || 0, 
+      count: getStatusCount('APPROVAL PENDING') || 0,
       icon: Icons.TrendingUp,
       color: '#EA580C',
       bgTint: 'rgba(234, 88, 12, 0.1)'
     },
     { 
       name: 'Disbursed / Closed Won', 
-      val: metricsData?.pipelineData?.['Closed Won'] || 120000, 
-      count: getStatusCount('APPROVED') + getStatusCount('DISBURSED') || 12,
+      val: metricsData?.pipelineData?.['Closed Won'] || 0, 
+      count: getStatusCount('APPROVED') + getStatusCount('DISBURSED') || 0,
       icon: Icons.CheckCircle2,
       color: '#7C3AED',
       bgTint: 'rgba(124, 58, 237, 0.1)'
@@ -436,13 +436,13 @@ export default function Dashboard() {
   const maxPipelineVal = Math.max(...rawPipeline.map(s => s.val), 1);
 
   const totalPipeline = rawPipeline.reduce((a, b) => a + Number(b.val), 0);
-  const activeDeals = metricsData?.dealStatus?.open || 12;
-  const avgDealSize = activeDeals > 0 ? Math.round(totalPipeline / activeDeals) : 25000;
+  const activeDeals = metricsData?.dealStatus?.open || 0;
+  const avgDealSize = activeDeals > 0 ? Math.round(totalPipeline / activeDeals) : 0;
 
-  const wonCount = metricsData?.dealStatus?.won || 4;
-  const lostCount = metricsData?.dealStatus?.lost || 1;
+  const wonCount = metricsData?.dealStatus?.won || 0;
+  const lostCount = metricsData?.dealStatus?.lost || 0;
   const totalClosed = wonCount + lostCount;
-  const winRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 80;
+  const winRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-6">

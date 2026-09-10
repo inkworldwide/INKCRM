@@ -104,18 +104,23 @@ export default function Layout({ children }: LayoutProps) {
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
-      try { localStorage.setItem('inkcrm_dashboard_metrics_cache', JSON.stringify(res.data)); } catch {}
+      try { 
+        localStorage.setItem('inkcrm_dashboard_metrics_cache_v2', JSON.stringify(res.data)); 
+        // Clean out legacy cache keys if they exist
+        localStorage.removeItem('inkcrm_dashboard_metrics_cache');
+        localStorage.removeItem('inkcrm_dashboard_campaigns_cache');
+      } catch {}
       return res.data;
     },
     initialData: () => {
       try {
-        const raw = localStorage.getItem('inkcrm_dashboard_metrics_cache');
+        const raw = localStorage.getItem('inkcrm_dashboard_metrics_cache_v2');
         return raw ? JSON.parse(raw) : undefined;
       } catch {
         return undefined;
       }
     },
-    staleTime: 30000,
+    staleTime: 5000,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => (query.state.error ? false : 15000)
   });
@@ -129,7 +134,7 @@ export default function Layout({ children }: LayoutProps) {
         queryFn: async () => {
           const res = await api.get('/statuses').catch(() => ({ data: [] }));
           const arr = Array.isArray(res.data) ? res.data : [];
-          try { localStorage.setItem('inkcrm_dashboard_statuses_cache', JSON.stringify(arr)); } catch {}
+          try { localStorage.setItem('inkcrm_dashboard_statuses_cache_v2', JSON.stringify(arr)); } catch {}
           return arr;
         },
         staleTime: 60000
@@ -139,10 +144,10 @@ export default function Layout({ children }: LayoutProps) {
         queryFn: async () => {
           const res = await api.get('/records/campaigns?limit=50').catch(() => ({ data: { records: [] } }));
           const list = res.data?.records || res.data || [];
-          try { localStorage.setItem('inkcrm_dashboard_campaigns_cache', JSON.stringify(list)); } catch {}
+          try { localStorage.setItem('inkcrm_dashboard_campaigns_cache_v2', JSON.stringify(list)); } catch {}
           return list;
         },
-        staleTime: 60000
+        staleTime: 0
       });
     }
   }, [user, queryClient]);

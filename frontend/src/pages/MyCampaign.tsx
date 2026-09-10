@@ -520,6 +520,47 @@ export default function MyCampaign() {
     });
   };
 
+  const handleOpenLeadForm = (lead: LeadRecord) => {
+    const state = leadStates[lead._id];
+    const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
+    const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
+    const initialCat = getLeadCategory(lead.data);
+    const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
+    const currentStatusVal = state?.status || lead.data?.status || 'YET TO CALL';
+    const isHot = currentStatusVal.toUpperCase().includes('HOT');
+    const isWarm = currentStatusVal.toUpperCase().includes('WARM');
+
+    navigate('/modules/leads/new', {
+      state: {
+        fromCampaign: true,
+        campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
+        _id: lead._id,
+        id: lead._id,
+        status: isHot ? 'Hot' : isWarm ? 'Warm' : currentStatusVal,
+        dialStatus: currentStatusVal,
+        firstName: lead.data?.firstName || getLeadCustomer(lead.data)?.split(' ')[0] || '',
+        lastName: lead.data?.lastName || getLeadCustomer(lead.data)?.split(' ').slice(1).join(' ') || '',
+        customerName: getLeadCustomer(lead.data),
+        customer: getLeadCustomer(lead.data),
+        phone: getLeadPhone(lead.data),
+        mobile: getLeadPhone(lead.data),
+        company: getLeadFirmName(lead.data),
+        firmName: getLeadFirmName(lead.data),
+        location: getLeadLocation(lead.data),
+        city: getLeadLocation(lead.data),
+        dataCode: getLeadDataCode(lead),
+        caseDetails: currentCaseDetails,
+        leadCategory: currentCategory,
+        category: currentCategory,
+        loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
+        notes: currentRemarks,
+        remarks: currentRemarks,
+        source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
+        assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
+      }
+    });
+  };
+
   const handleWhatsAppChat = (lead: LeadRecord, e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -1401,11 +1442,16 @@ export default function MyCampaign() {
                             </div>
 
                             {/* 2. Customer Name */}
-                            <div className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center">
-                              <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-0.5">
-                                CUSTOMER NAME:
+                            <div 
+                              onClick={() => handleOpenLeadForm(lead)}
+                              title="Click to open Create/Edit Lead with pre-filled details"
+                              className="bg-slate-50/60 dark:bg-slate-900/60 p-2 px-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex flex-col justify-center cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors group"
+                            >
+                              <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 uppercase tracking-wider block mb-0.5 flex items-center justify-between">
+                                <span>CUSTOMER NAME:</span>
+                                <Icons.ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </span>
-                              <span className="font-extrabold text-slate-900 dark:text-white text-xs block truncate leading-tight">
+                              <span className="font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 text-xs block truncate leading-tight">
                                 {customer}
                               </span>
                             </div>
