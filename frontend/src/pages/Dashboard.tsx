@@ -435,12 +435,6 @@ export default function Dashboard() {
 
   const maxPipelineVal = Math.max(...rawPipeline.map(s => s.val), 1);
 
-  const pipelineStages = rawPipeline.map(s => ({
-    ...s,
-    pctNum: Math.max(6, Math.round((s.val / maxPipelineVal) * 100)),
-    pct: `${Math.max(6, Math.round((s.val / maxPipelineVal) * 100))}%`
-  }));
-
   const totalPipeline = rawPipeline.reduce((a, b) => a + Number(b.val), 0);
   const activeDeals = metricsData?.dealStatus?.open || 12;
   const avgDealSize = activeDeals > 0 ? Math.round(totalPipeline / activeDeals) : 25000;
@@ -449,14 +443,6 @@ export default function Dashboard() {
   const lostCount = metricsData?.dealStatus?.lost || 1;
   const totalClosed = wonCount + lostCount;
   const winRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 80;
-
-  const stageMeta: Record<string, { icon: React.ComponentType<any>; color: string; bgTint: string }> = {
-    'Lead Ingestion / New': { icon: Icons.UserPlus, color: '#4F46E5', bgTint: 'rgba(79, 70, 229, 0.1)' },
-    'Qualification & Hot Leads': { icon: Icons.Flame, color: '#059669', bgTint: 'rgba(5, 150, 105, 0.1)' },
-    'Proposal & Documentation': { icon: Icons.FileText, color: '#D97706', bgTint: 'rgba(217, 119, 6, 0.1)' },
-    'Negotiation & Approval': { icon: Icons.TrendingUp, color: '#EA580C', bgTint: 'rgba(234, 88, 12, 0.1)' },
-    'Disbursed / Closed Won': { icon: Icons.CheckCircle2, color: '#7C3AED', bgTint: 'rgba(124, 58, 237, 0.1)' }
-  };
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto text-left px-4 md:px-8 py-6">
@@ -618,123 +604,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 3. MIDDLE ROW: Pipeline by Stage + Campaign Status */}
-      <div id="pipeline-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-24 items-stretch">
+      {/* 3. MIDDLE ROW: Campaign Status */}
+      <div id="campaign-status-section" className="scroll-mt-24">
         
-        {/* Pipeline by Stage */}
-        <div className="bg-white dark:bg-slate-900 border border-black/[0.08] dark:border-slate-800 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 flex flex-col justify-between h-full">
-          <div>
-            <div className="flex justify-between items-center mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 to-indigo-600/20 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-[0_2px_10px_rgba(79,70,229,0.1)]">
-                  <Icons.GitMerge className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-black text-[#111111] dark:text-white tracking-tight">Pipeline by Stage</h3>
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40">
-                      5 Active Stages
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#6B7280] dark:text-slate-400 font-medium mt-0.5">Live lead distribution & volume progress</p>
-                </div>
-              </div>
-              <Link 
-                to="/reports/lead-reports"
-                className="text-[10px] font-bold text-[#111111] dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 bg-stone-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-black/[0.08] dark:border-slate-700 hover:border-indigo-300 uppercase tracking-wider flex items-center gap-1 shadow-2xs transition-all"
-              >
-                Lead Reports <Icons.ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-
-            <div className="space-y-3.5 flex-1 flex flex-col justify-between my-0.5">
-              {pipelineStages.map((stage, idx) => {
-                const StageIcon = stage.icon;
-                const isComplete = stage.pct === '100%';
-                
-                // Tailored rich gradient bar per stage
-                let stageGradient = 'linear-gradient(90deg, #6366F1 0%, #4F46E5 100%)';
-                if (idx === 1) stageGradient = 'linear-gradient(90deg, #34D399 0%, #10B981 100%)';
-                if (idx === 2) stageGradient = 'linear-gradient(90deg, #FBBF24 0%, #F59E0B 100%)';
-                if (idx === 3) stageGradient = 'linear-gradient(90deg, #FB923C 0%, #F97316 100%)';
-                if (idx === 4) stageGradient = 'linear-gradient(90deg, #A78BFA 0%, #8B5CF6 100%)';
-
-                return (
-                  <div 
-                    key={idx} 
-                    className="group p-3.5 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-xs transition-all duration-120 cursor-pointer"
-                    style={{
-                      borderStyle: 'solid',
-                      borderWidth: '1px',
-                      borderColor: `${stage.color}35`,
-                      borderLeftWidth: '3px',
-                      borderLeftColor: stage.color,
-                      backgroundColor: `${stage.color}08`,
-                    }}
-                  >
-                    <div className="flex items-center justify-between text-xs font-semibold text-[#1A1A1A] dark:text-slate-100 mb-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div 
-                          className="w-7 h-7 rounded-lg flex items-center justify-center shadow-2xs transition-transform group-hover:scale-105 flex-shrink-0"
-                          style={{ 
-                            backgroundColor: `${stage.color}18`, 
-                            color: stage.color 
-                          }}
-                        >
-                          <StageIcon className="w-3.5 h-3.5 stroke-[2.2]" />
-                        </div>
-                        <span className="font-bold text-xs text-[#1A1A1A] dark:text-slate-200 truncate">{stage.name}</span>
-                        <span 
-                          className="text-[9px] font-bold px-2 py-0.5 rounded-full border shadow-3xs flex-shrink-0"
-                          style={{
-                            backgroundColor: `${stage.color}12`,
-                            borderColor: `${stage.color}25`,
-                            color: stage.color
-                          }}
-                        >
-                          {stage.count} Leads
-                        </span>
-                      </div>
-                      
-                      {/* Fixed alignment for Percentage & Dollar Figure */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {isComplete && (
-                          <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 flex items-center gap-1 shadow-3xs animate-pulse">
-                            <Icons.Check className="w-2.5 h-2.5 stroke-[2.5]" /> Complete
-                          </span>
-                        )}
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-[11px] font-semibold text-[#78716C] dark:text-slate-400 w-9 text-right tracking-tight">{stage.pct}</span>
-                          <span className="font-black text-[#111111] dark:text-white text-[13px] w-20 text-right tracking-tight">₹{Number(stage.val).toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div 
-                      className="w-full h-2.5 bg-[#E5E5E0]/90 dark:bg-slate-800 rounded-full overflow-hidden relative p-0.5 border border-stone-200/60 dark:border-slate-700"
-                      style={{ boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)' }}
-                    >
-                      <div 
-                        style={{ 
-                          width: animate ? stage.pct : '0%', 
-                          background: stageGradient, 
-                          boxShadow: isComplete ? `0 0 10px ${stage.color}` : `0 0 8px ${stage.color}80`,
-                          transition: `width 1.2s cubic-bezier(0.4, 0, 0.2, 1) ${idx * 0.1}s` 
-                        }}
-                        className="h-full rounded-full relative"
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-2xs float-right mr-0.5 mt-[1px]" />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Campaign Status Grid (Equal Height to Left Card) */}
-        <div className="bg-white dark:bg-slate-900 border border-black/[0.08] dark:border-slate-800 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 flex flex-col justify-between h-full">
+        {/* Campaign Status Grid */}
+        <div className="bg-white dark:bg-slate-900 border border-black/[0.08] dark:border-slate-800 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300">
           <div className="flex flex-col h-full justify-between">
             <div>
               <div className="flex justify-between items-center mb-5">
@@ -760,8 +634,8 @@ export default function Dashboard() {
                 </Link>
               </div>
 
-              {/* 2x2 Compact Metric Grid with Top Accent Bar System */}
-              <div className="grid grid-cols-2 gap-3.5 mb-5">
+              {/* 4-Column Metric Grid with Top Accent Bar System */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-5">
                 {[
                   { 
                     label: 'TOTAL CAMPAIGNS', 
