@@ -50,7 +50,6 @@ backup/
 backups/
 dump/
 dumps/
-database-dump/
 *.dump
 *.sql
 *.sqlite

@@ -9,5 +9,5 @@ This directory contains full JSON / compressed JSONL.GZ dumps of all MongoDB col
 ## How to Restore
 To restore this database dump on any machine running MongoDB:
 ```bash
-node database_dump/restore.js
+node database-dump/restore.js
 ```
