@@ -345,15 +345,19 @@ export default function Dashboard() {
       return metricsData.todayFollowupsCount || 0;
     }
 
-    const canonical = normalizeStatusName(raw);
-    if (metricsData.statusCounts[canonical] !== undefined) {
-      return Number(metricsData.statusCounts[canonical]);
+    if (metricsData.statusCounts[raw] !== undefined) {
+      return Number(metricsData.statusCounts[raw]);
     }
     if (metricsData.statusCounts[upper] !== undefined) {
       return Number(metricsData.statusCounts[upper]);
     }
-    if (metricsData.statusCounts[raw] !== undefined) {
-      return Number(metricsData.statusCounts[raw]);
+    if (metricsData.statusCounts[raw.toLowerCase()] !== undefined) {
+      return Number(metricsData.statusCounts[raw.toLowerCase()]);
+    }
+
+    const canonical = normalizeStatusName(raw);
+    if (metricsData.statusCounts[canonical] !== undefined) {
+      return Number(metricsData.statusCounts[canonical]);
     }
 
     const noLeadsKey = upper.replace(/ LEADS$/, '');

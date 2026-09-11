@@ -1,7 +1,36 @@
 import { Router, Request, Response } from 'express';
 import Status from '../models/Status';
+import ModuleDefinition from '../models/ModuleDefinition';
+import { SummaryService } from '../utils/summaryService';
 import { authenticate } from '../middleware/authMiddleware';
 import { requireTenant } from '../middleware/tenantMiddleware';
+
+export async function syncLeadModuleStatuses(organizationId: any) {
+  try {
+    const statuses = await Status.find({ organizationId }).sort({ order: 1 });
+    const statusNames = statuses.map(s => s.name);
+    if (statusNames.length === 0) return;
+
+    const leadMod = await ModuleDefinition.findOne({ organizationId, apiPath: 'leads' });
+    if (leadMod) {
+      let modified = false;
+      leadMod.fields = leadMod.fields.map((f: any) => {
+        if (f.name === 'status' || f.name === 'leadStatus') {
+          f.options = statusNames;
+          f.defaultValue = statusNames[0] || 'Hot';
+          modified = true;
+        }
+        return f;
+      });
+      if (modified) {
+        leadMod.markModified('fields');
+        await leadMod.save();
+      }
+    }
+  } catch (err) {
+    console.error('Failed to sync lead module statuses:', err);
+  }
+}
 
 const router = Router();
 
@@ -90,6 +119,9 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       statuses = await Status.find({ organizationId: req.organizationId }).sort({ order: 1 });
     }
 
+    // Keep lead module field options in sync
+    syncLeadModuleStatuses(req.organizationId).catch(console.error);
+
     res.status(200).json(statuses);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve statuses.' });
@@ -130,6 +162,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     await adjustStatusOrders(req.organizationId, null, calculatedOrder, newStatusFields);
 
     const status = await Status.create(newStatusFields);
+    await syncLeadModuleStatuses(req.organizationId);
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(201).json(status);
   } catch (error: any) {
     if (error.code === 11000) {
@@ -167,6 +201,8 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
     }
 
     await status.save();
+    await syncLeadModuleStatuses(req.organizationId);
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(200).json(status);
   } catch (error: any) {
     if (error.code === 11000) {
@@ -186,6 +222,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     await reorderAfterDelete(req.organizationId);
+    await syncLeadModuleStatuses(req.organizationId);
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(200).json({ message: 'Status deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete status.' });

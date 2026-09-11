@@ -10,6 +10,8 @@ import { requireTenant } from '../middleware/tenantMiddleware';
 import { HierarchyService } from '../utils/hierarchy';
 import { SummaryService } from '../utils/summaryService';
 
+import Status from '../models/Status';
+
 export const isCampaignTelephonyStatus = (raw: string): boolean => {
   if (!raw) return false;
   const s = raw.trim().toUpperCase();
@@ -32,9 +34,6 @@ export const isCampaignTelephonyStatus = (raw: string): boolean => {
     s.includes('REPEATED NUMBER') ||
     s.includes('NO BUSINESS') ||
     s.includes('COOL LEAD') ||
-    s.includes('CAL BACK') ||
-    s.includes('CALL BACK') ||
-    s.includes('GIVEN LOGIN') ||
     s.includes('YET TO CALL') ||
     s.includes('YET TO DIAL')
   );
@@ -54,31 +53,84 @@ export const normalizeStatusName = (rawSt: string): string => {
   if (s.includes('REPEATED NUM') || s.includes('REPEATED NUMBER')) return 'REPEATED NUM';
   if (s.includes('NO BUSINESS')) return 'NO BUSINESS';
   if (s.includes('COOL LEAD') || s === 'COOL LEAD') return 'COOL LEAD';
-  if (s.includes('CAL BACK') || s.includes('CALL BACK')) return 'CAL BACK';
-  if (s.includes('GIVEN LOGIN')) return 'GIVEN LOGIN';
 
-  // Lead Lifecycle Stages
-  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS' || s.includes('HOT LEAD')) return 'HOT LEADS';
-  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS' || s.includes('WARM LEAD')) return 'WARM LEADS';
+  // Configured Lead Stages
+  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS' || s.includes('HOT LEAD')) return 'Hot';
+  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS' || s.includes('WARM LEAD')) return 'Warm';
   if (s === 'COLD' || s === 'COLD LEAD' || s === 'COLD LEADS' || s.includes('COLD LEAD')) return 'COLD LEADS';
-  if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
-  if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
-  if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
-  if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
-  if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
-  if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
+  if (s.includes('CALL BACK') || s.includes('CAL BACK')) return 'CALL BACK';
+  if (s.includes('GIVEN LOGIN')) return 'GIVEN LOGIN';
+  if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CIBIL PENDING';
+  if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'Document Pending';
+  if (s.includes('STATUS PENDING') || s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'Status Pending';
+  if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'Approved';
+  if (s === 'APPROVED') return 'Approved';
+  if (s.includes('DISBURS') || s.includes('DISBUS')) return 'Disbursed';
 
   // Strict loan rejection check: Only genuine credit/lead rejections, never telephony calls
   if (s === 'REJECT' || s === 'REJECTED' || s === 'LEAD REJECTED' || s === 'APPLICATION REJECTED' || s === 'CREDIT REJECTED') {
-    return 'REJECTED';
+    return 'reject';
   }
 
-  if (s.includes('FOLLOW')) return 'FOLLOWUP';
-  if (s.includes('DROP')) return 'DROPPED';
-  if (s === 'PENDING') return 'PENDING';
+  if (s.includes('FOLLOW')) return 'Followup';
+  if (s.includes('DROP')) return 'Dropped';
+  if (s === 'PENDING') return 'Pending';
   if (s.includes('YET TO CALL') || s.includes('YET TO DIAL')) return 'YET TO CALL';
 
   return s;
+};
+
+export const matchStatusToConfigured = (rawName: string, configuredStatuses: any[]): string | null => {
+  if (!rawName) return null;
+  const clean = rawName.trim();
+  const upper = clean.toUpperCase();
+
+  // 1. Exact name match (case-insensitive)
+  const exact = configuredStatuses.find(c => (c.name || '').trim().toUpperCase() === upper);
+  if (exact) return exact.name;
+
+  // 2. Canonical synonyms matching configured statuses
+  for (const c of configuredStatuses) {
+    const cUpper = (c.name || '').trim().toUpperCase();
+
+    // Hot Leads
+    if (cUpper.includes('HOT') && (upper.includes('HOT') || upper === 'HOT LEAD' || upper === 'HOT LEADS')) return c.name;
+    // Warm Leads
+    if (cUpper.includes('WARM') && (upper.includes('WARM') || upper === 'WARM LEAD' || upper === 'WARM LEADS')) return c.name;
+    // Call Back
+    if ((cUpper.includes('CALL BACK') || cUpper.includes('CAL BACK')) && (upper.includes('CALL BACK') || upper.includes('CAL BACK'))) return c.name;
+    // Given Login
+    if (cUpper.includes('GIVEN LOGIN') && upper.includes('GIVEN LOGIN')) return c.name;
+    // CIBIL / CEBIL Pending
+    if ((cUpper.includes('CIBIL') || cUpper.includes('CEBIL') || cUpper.includes('CEDIL') || cUpper.includes('CIVIL')) &&
+        (upper.includes('CIBIL') || upper.includes('CEBIL') || upper.includes('CEDIL') || upper.includes('CIVIL'))) {
+      return c.name;
+    }
+    // Document Pending
+    if ((cUpper.includes('DOCUMENT') || cUpper.includes('DOC')) && (upper.includes('DOCUMENT') || upper.includes('DOC'))) return c.name;
+    // Status Pending / Approval Pending
+    if ((cUpper.includes('STATUS PENDING') || cUpper.includes('APPROVAL PENDING') || cUpper.includes('STATUS') || cUpper.includes('APPROVAL')) &&
+        (upper.includes('STATUS PENDING') || upper.includes('APPROVAL PENDING') || upper === 'APPROVAL PENDING' || upper === 'STATUS PENDING')) {
+      return c.name;
+    }
+    // Approved
+    if (cUpper.startsWith('APPROV') && (upper.startsWith('APPROV') || upper.includes('APPROVED'))) return c.name;
+    // Disbursed
+    if ((cUpper.includes('DISBURS') || cUpper.includes('DISBUS')) && (upper.includes('DISBURS') || upper.includes('DISBUS'))) return c.name;
+    // Reject
+    if ((cUpper === 'REJECT' || cUpper === 'REJECTED' || cUpper === 'LEAD REJECTED') &&
+        (upper === 'REJECT' || upper === 'REJECTED' || upper === 'LEAD REJECTED' || upper === 'APPLICATION REJECTED')) {
+      return c.name;
+    }
+    // Followup
+    if (cUpper.includes('FOLLOW') && upper.includes('FOLLOW')) return c.name;
+    // Dropped
+    if (cUpper.includes('DROP') && upper.includes('DROP')) return c.name;
+    // Pending
+    if (cUpper === 'PENDING' && upper === 'PENDING') return c.name;
+  }
+
+  return null;
 };
 
 const router = Router();
@@ -216,45 +268,88 @@ export async function calculateDashboardMetrics(orgId: any, user: any, cacheKey?
       { $group: { _id: '$st', count: { $sum: 1 } } }
     ]);
     
-    const canonicalCountsMap: Record<string, number> = {};
+    const configuredStatuses = await Status.find({ organizationId: orgId }).sort({ order: 1 }).lean();
+
+    // Sum lead counts into their matched configured status or canonical status (each lead counted exactly once)
+    const canonicalCounts: Record<string, number> = {};
+
     leadAgg.forEach(item => {
       if (item._id) {
         const rawName = item._id.toString().trim();
-        const canonical = normalizeStatusName(rawName);
-        if (isCampaignTelephonyStatus(canonical) || canonical === 'CAMPAIGN_DIAL') {
-          return; // Strictly exclude campaign telephony dial statuses from Dashboard KPI cards
+        if (isCampaignTelephonyStatus(rawName)) {
+          return; // Strictly exclude pure campaign telephony dial statuses from Dashboard KPI cards
         }
+
         const count = Number(item.count || 0);
-        canonicalCountsMap[canonical] = (canonicalCountsMap[canonical] || 0) + count;
+        const matchedName = matchStatusToConfigured(rawName, configuredStatuses) || normalizeStatusName(rawName) || rawName;
+        canonicalCounts[matchedName] = (canonicalCounts[matchedName] || 0) + count;
       }
     });
 
-    Object.entries(canonicalCountsMap).forEach(([canonical, totalCount]) => {
-      statusCounts[canonical] = totalCount;
-      statusCounts[canonical.toUpperCase()] = totalCount;
-      if (canonical === 'HOT LEADS') {
-        statusCounts['HOT'] = totalCount;
-        statusCounts['HOT LEAD'] = totalCount;
-        statusCounts['Hot'] = totalCount;
-        statusCounts['Hot Lead'] = totalCount;
-      } else if (canonical === 'WARM LEADS') {
-        statusCounts['WARM'] = totalCount;
-        statusCounts['WARM LEAD'] = totalCount;
-        statusCounts['Warm'] = totalCount;
-        statusCounts['Warm Lead'] = totalCount;
-      } else if (canonical === 'APPROVED BUT NOT DISBUSE') {
-        statusCounts['APPROVED'] = totalCount;
-        statusCounts['APPROVED BUT NOT DISBURSED'] = totalCount;
+    // Populate statusCounts with exact names, upper, lower, and standard aliases
+    Object.entries(canonicalCounts).forEach(([name, count]) => {
+      const upper = name.trim().toUpperCase();
+      statusCounts[name] = count;
+      statusCounts[upper] = count;
+      statusCounts[name.toLowerCase()] = count;
+
+      if (upper.includes('HOT')) {
+        statusCounts['HOT'] = count;
+        statusCounts['HOT LEAD'] = count;
+        statusCounts['HOT LEADS'] = count;
+        statusCounts['Hot'] = count;
+      } else if (upper.includes('WARM')) {
+        statusCounts['WARM'] = count;
+        statusCounts['WARM LEAD'] = count;
+        statusCounts['WARM LEADS'] = count;
+        statusCounts['Warm'] = count;
+      } else if (upper.includes('CALL BACK') || upper.includes('CAL BACK')) {
+        statusCounts['CALL BACK'] = count;
+        statusCounts['CAL BACK'] = count;
+      } else if (upper.includes('GIVEN LOGIN')) {
+        statusCounts['GIVEN LOGIN'] = count;
+      } else if (upper.includes('CIBIL') || upper.includes('CEBIL') || upper.includes('CEDIL')) {
+        statusCounts['CIBIL PENDING'] = count;
+        statusCounts['CEBIL PENDING'] = count;
+        statusCounts['CEDIL PENDING'] = count;
+      } else if (upper.includes('DOCUMENT') || upper.includes('DOC')) {
+        statusCounts['DOCUMENT PENDING'] = count;
+        statusCounts['Document Pending'] = count;
+      } else if (upper.includes('STATUS PENDING') || upper.includes('APPROVAL PENDING')) {
+        statusCounts['STATUS PENDING'] = count;
+        statusCounts['Status Pending'] = count;
+        statusCounts['APPROVAL PENDING'] = count;
+      } else if (upper.startsWith('APPROV')) {
+        statusCounts['APPROVED'] = count;
+        statusCounts['Approved'] = count;
+        statusCounts['APPROVED BUT NOT DISBUSE'] = count;
+      } else if (upper.includes('DISBURS') || upper.includes('DISBUS')) {
+        statusCounts['DISBURSED'] = count;
+        statusCounts['Disbursed'] = count;
+        statusCounts['DISBUSED'] = count;
+      } else if (upper.includes('REJECT')) {
+        statusCounts['REJECT'] = count;
+        statusCounts['reject'] = count;
+        statusCounts['REJECTED'] = count;
+      } else if (upper.includes('FOLLOW')) {
+        statusCounts['FOLLOWUP'] = count;
+        statusCounts['Followup'] = count;
+      } else if (upper.includes('DROP')) {
+        statusCounts['DROPPED'] = count;
+        statusCounts['Dropped'] = count;
+      } else if (upper === 'PENDING') {
+        statusCounts['PENDING'] = count;
+        statusCounts['Pending'] = count;
       }
     });
 
-    leadAgg.forEach(item => {
-      if (item._id) {
-        const rawName = item._id.toString().trim();
-        const canonical = normalizeStatusName(rawName);
-        const totalCount = canonicalCountsMap[canonical] || 0;
-        statusCounts[rawName] = totalCount;
-        statusCounts[rawName.toUpperCase()] = totalCount;
+    // Ensure all configured statuses in Settings have a defined count (defaulting to 0)
+    configuredStatuses.forEach(c => {
+      const name = c.name;
+      if (statusCounts[name] === undefined) {
+        statusCounts[name] = 0;
+        statusCounts[name.toUpperCase()] = 0;
+        statusCounts[name.toLowerCase()] = 0;
       }
     });
 

@@ -244,7 +244,9 @@ export default function RecordForm() {
         defaults['source'] = loggedInName;
         defaults['createdBy'] = loggedInName;
         defaults['createdByName'] = loggedInName;
-        if (!defaults['status']) defaults['status'] = 'New';
+        if (!defaults['status'] || defaults['status'] === 'New') {
+          defaults['status'] = location.state?.status || (dynamicStatuses.length > 0 ? dynamicStatuses[0] : 'Hot');
+        }
         if (!defaults['loanType'] && allLoanTypes.length > 0) defaults['loanType'] = allLoanTypes[0];
       }
       
@@ -509,6 +511,16 @@ export default function RecordForm() {
     ? `${watchedValues?.firstName || ''} ${watchedValues?.lastName || ''}`.trim()
     : watchedValues?.fullName || watchedValues?.companyName || watchedValues?.dealName || watchedValues?.title || '';
 
+  // Ensure status matches dynamic statuses from Settings for new leads
+  useEffect(() => {
+    if (apiPath === 'leads' && (!id || id === 'new') && dynamicStatuses.length > 0) {
+      const currentVal = watchedValues?.status;
+      if (!currentVal || currentVal === 'New' || (!dynamicStatuses.includes(currentVal) && !location.state?.status)) {
+        setValue('status', location.state?.status || dynamicStatuses[0]);
+      }
+    }
+  }, [dynamicStatuses, id, apiPath, location.state?.status]);
+
   // Auto-fill PSM when loanType + businessPartner are both selected
   useEffect(() => {
     if (loading || apiPath !== 'leads' || bankPartnerMappings.length === 0) return;
@@ -631,10 +643,10 @@ export default function RecordForm() {
       }
 
       if (apiPath === 'leads') {
-        if (!data.status) {
-          data.status = 'New';
-          data.normalizedStatus = 'NEW';
+        if (!data.status || data.status === 'New') {
+          data.status = dynamicStatuses[0] || 'Hot';
         }
+        data.normalizedStatus = String(data.status).trim().toUpperCase();
         if (!data.loanType && allLoanTypes.length > 0) {
           data.loanType = allLoanTypes[0];
         }
@@ -1082,6 +1094,8 @@ export default function RecordForm() {
         if (field.name === 'status') {
           if (dynamicStatuses.length > 0) {
             opts = dynamicStatuses;
+          } else {
+            opts = (field.options || []).filter((o: string) => o.toLowerCase() !== 'new');
           }
           const currentStatusVal = watchedValues?.status || '';
           if (currentStatusVal && !opts.includes(currentStatusVal)) {
@@ -1092,7 +1106,11 @@ export default function RecordForm() {
               if (watchedValues?.status !== match) {
                 setValue('status', match);
               }
-            } else {
+            } else if (currentStatusVal.toLowerCase() === 'new') {
+              if (opts.length > 0 && watchedValues?.status !== opts[0]) {
+                setValue('status', opts[0]);
+              }
+            } else if (id && id !== 'new') {
               opts = [currentStatusVal, ...opts];
             }
           }
