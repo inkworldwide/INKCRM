@@ -1517,15 +1517,22 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       if (normVal === 'FOLLOWUP') synonyms.push('FOLLOWUP', 'FOLLOW UP', 'Followup', 'Follow Up');
       if (normVal === 'DROPPED') synonyms.push('DROPPED', 'DROPP', 'Dropped');
 
-      const synonymRegexes = Array.from(new Set(synonyms)).map(s => new RegExp(`^\\s*${s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*$`, 'i'));
+      const exactVariations = new Set<string>();
+      synonyms.forEach(s => {
+        exactVariations.add(s);
+        exactVariations.add(s.toUpperCase());
+        exactVariations.add(s.toLowerCase());
+        exactVariations.add(s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
+        exactVariations.add(s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '));
+      });
+      const exactList = Array.from(exactVariations);
 
       const statusFilter = {
         $or: [
-          { 'data.normalizedStatus': normVal },
-          { 'data.normalizedStatus': cleanVal },
-          { 'data.status': { $in: synonymRegexes } },
-          { 'data.dialStatus': { $in: synonymRegexes } },
-          { 'data.leadStatus': { $in: synonymRegexes } }
+          { 'data.normalizedStatus': { $in: exactList } },
+          { 'data.status': { $in: exactList } },
+          { 'data.dialStatus': { $in: exactList } },
+          { 'data.leadStatus': { $in: exactList } }
         ]
       };
 
@@ -1721,11 +1728,37 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
     let total = 0;
     if (pageNum === 1 && records.length < limitNum) {
       // INSTANT (0.002s): If page 1 has fewer results than limit, total is exact!
-      // When 0 leads match ("No Leads Found"), this completely eliminates scanning 220,000 records!
       total = records.length;
     } else {
-      // Use maxTimeMS to prevent any slow query locking
-      total = await CustomRecord.countDocuments(query).maxTimeMS(2500).catch(() => skipNum + records.length + (records.length === limitNum ? 1 : 0));
+      const statusParamVal = typeof rawStatusParam === 'string' ? rawStatusParam.trim() : '';
+      const countCacheKey = `cnt_${req.organizationId}_${moduleDef._id}_${statusParamVal || 'all'}_${req.query.followup || ''}_${req.query.createdDate || ''}_${search || ''}`;
+      const cachedCount = SummaryService.getCache(countCacheKey);
+
+      if (typeof cachedCount === 'number') {
+        total = cachedCount;
+      } else {
+        let knownCount: number | undefined;
+        if (statusParamVal && !search && !req.query.createdDate && !req.query.followup) {
+          const dashKey = `dashboard_full_${req.organizationId}_${req.user?.id || (req.user as any)?._id || 'user'}`;
+          const cachedDash = SummaryService.getCache(dashKey, true);
+          const dashData = cachedDash?.data || cachedDash;
+          if (dashData?.statusCounts) {
+            const norm = normalizeStatusName(statusParamVal);
+            const c = dashData.statusCounts[statusParamVal] ?? dashData.statusCounts[norm] ?? dashData.statusCounts[statusParamVal.toUpperCase()];
+            if (typeof c === 'number') {
+              knownCount = c;
+            }
+          }
+        }
+
+        if (typeof knownCount === 'number') {
+          total = knownCount;
+          SummaryService.setCache(countCacheKey, total, 180000);
+        } else {
+          total = await CustomRecord.countDocuments(query).maxTimeMS(600).catch(() => skipNum + records.length + (records.length === limitNum ? 1 : 0));
+          SummaryService.setCache(countCacheKey, total, 180000);
+        }
+      }
     }
 
     // Resolve any User ObjectIds/hashes in data.assignedTo, data.assignedBy, data.psm to real names

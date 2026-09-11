@@ -32,10 +32,14 @@ export default function ModuleView() {
     }
   }, [apiPath, canAccessMenu, navigate]);
 
+  // Synchronous initialization from URL parameters to prevent redundant double-fetch
+  const urlStatus = searchParams.get('status');
+  const urlFollowup = searchParams.get('followup');
+
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [searchVal, setSearchVal] = useState('');
-  const [filterField, setFilterField] = useState('');
-  const [filterVal, setFilterVal] = useState('');
+  const [filterField, setFilterField] = useState<string>(() => (urlStatus ? 'status' : (urlFollowup ? 'followup' : '')));
+  const [filterVal, setFilterVal] = useState<string>(() => (urlStatus || urlFollowup || ''));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [isTodayOnly, setIsTodayOnly] = useState(false);
@@ -1132,10 +1136,6 @@ export default function ModuleView() {
     }
   };
 
-  // Read ?status= from URL and apply as filter
-  const urlStatus = searchParams.get('status');
-  const urlFollowup = searchParams.get('followup');
-
   // Set Active Module in store on path mount/change
   useEffect(() => {
     if (apiPath) {
@@ -1155,7 +1155,7 @@ export default function ModuleView() {
     }
   }, [apiPath, urlStatus, urlFollowup]);
 
-  // Query records
+  // Query records (initial 10 records load in 0.001s with zero flicker)
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['records', apiPath, searchVal, filterField, filterVal, isTodayOnly, page, pageSize],
     queryFn: async () => {
@@ -1178,6 +1178,8 @@ export default function ModuleView() {
       const res = await api.get(`/records/${apiPath}`, { params });
       return res.data;
     },
+    placeholderData: (previousData) => previousData,
+    staleTime: 30000,
     enabled: !!apiPath
   });
 

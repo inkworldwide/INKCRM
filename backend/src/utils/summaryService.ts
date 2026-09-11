@@ -9,10 +9,11 @@ interface CacheEntry {
   data: any;
   timestamp: number;
   customTtl?: number;
+  isStale?: boolean;
 }
 
 const memoryCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 300000; // 5 minutes TTL (with auto-invalidation on any record change)
+const CACHE_TTL_MS = 600000; // 10 minutes default TTL (with background refresh on stale)
 
 export class SummaryService {
   /**
@@ -28,19 +29,32 @@ export class SummaryService {
 
   /**
    * Invalidate cache for an organization on data change
+   * Marks cache entries as stale so clients still get 0ms response while fresh data is generated in background
    */
-  public static invalidateCache(organizationId?: string | mongoose.Types.ObjectId) {
+  public static invalidateCache(organizationId?: string | mongoose.Types.ObjectId, hard = false) {
     if (organizationId) {
       const orgStr = organizationId.toString();
-      for (const key of memoryCache.keys()) {
+      for (const [key, entry] of memoryCache.entries()) {
         if (key.includes(orgStr)) {
-          memoryCache.delete(key);
+          if (hard) {
+            memoryCache.delete(key);
+          } else {
+            entry.isStale = true;
+            entry.timestamp = 0; // Mark stale for background refresh
+          }
         }
       }
     } else {
-      memoryCache.clear();
+      if (hard) {
+        memoryCache.clear();
+      } else {
+        for (const entry of memoryCache.values()) {
+          entry.isStale = true;
+          entry.timestamp = 0;
+        }
+      }
     }
-    console.log(`🧹 [CACHE INVALIDATED] Cleared summary cache for org: ${organizationId || 'all'}`);
+    console.log(`🧹 [CACHE ${hard ? 'CLEARED' : 'MARKED STALE'}] Summary cache for org: ${organizationId || 'all'}`);
   }
 
   /**
@@ -130,20 +144,26 @@ export class SummaryService {
 
   /**
    * Generic In-Memory Cache Helper (Fast sub-millisecond retrieval)
+   * If allowStale is true, returns cached data even if expired or stale so the response is 0ms instant
    */
-  public static getCache(key: string): any | null {
+  public static getCache(key: string, allowStale = false): any | null {
     const cached = memoryCache.get(key);
     if (!cached) return null;
     const ttl = cached.customTtl || CACHE_TTL_MS;
-    if (Date.now() - cached.timestamp < ttl) {
+    const isFresh = !cached.isStale && (Date.now() - cached.timestamp < ttl);
+    if (isFresh) {
       this.logCache(key, true, 0);
       return cached.data;
+    }
+    if (allowStale && cached.data) {
+      this.logCache(`${key} (STALE-SERVED)`, true, 0);
+      return { data: cached.data, isStale: true };
     }
     memoryCache.delete(key);
     return null;
   }
 
   public static setCache(key: string, data: any, customTtl?: number) {
-    memoryCache.set(key, { data, timestamp: Date.now(), customTtl });
+    memoryCache.set(key, { data, timestamp: Date.now(), customTtl, isStale: false });
   }
 }

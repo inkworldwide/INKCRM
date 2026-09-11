@@ -4,7 +4,7 @@ import api, { FILE_BASE_URL } from '../services/api';
 import { useThemeStore } from '../store/themeStore';
 import { Link, useNavigate } from 'react-router-dom';
 import { DynamicIcon } from '../components/Layout';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '../utils/dateFormatter';
 import { useToastStore } from '../store/toastStore';
 import { maskPhoneNumber, triggerPhoneCall, openWhatsAppChat } from '../utils/phoneUtils';
@@ -12,6 +12,7 @@ import SalesFunnel3D from '../components/SalesFunnel3D';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { showToast } = useToastStore();
   const { branding } = useThemeStore();
   const [animate, setAnimate] = useState(false);
@@ -113,7 +114,7 @@ export default function Dashboard() {
       return list;
     },
     initialData: () => getLocalCache('inkcrm_dashboard_campaigns_cache_v2', []),
-    staleTime: 0
+    staleTime: 60000
   });
 
   // Cmd+K / Ctrl+K Keyboard Shortcut Listener
@@ -175,7 +176,7 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch live dashboard metrics from database with instant local hydration & 15s background polling
+  // Fetch live dashboard metrics from database with instant local hydration & 30s background polling
   const { data: metricsData = DEFAULT_METRICS } = useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
@@ -184,9 +185,49 @@ export default function Dashboard() {
       return res.data;
     },
     initialData: () => getLocalCache('inkcrm_dashboard_metrics_cache_v2', DEFAULT_METRICS),
-    staleTime: 5000,
-    refetchInterval: (query) => (query.state.error ? false : 15000)
+    staleTime: 60000,
+    refetchInterval: (query) => (query.state.error ? false : 30000)
   });
+
+  // Prefetch leads for a given status or followup to enable 0.001s instant transitions
+  const prefetchStatusLeads = (statusName: string, isFollowup = false) => {
+    const params: Record<string, any> = {
+      page: 1,
+      limit: 10,
+      search: '',
+      sort: '-createdAt'
+    };
+    let filterField = 'status';
+    let filterVal = statusName;
+
+    if (isFollowup) {
+      filterField = 'followup';
+      filterVal = 'today';
+      params.followup = 'today';
+    } else {
+      params.status = statusName;
+    }
+
+    queryClient.prefetchQuery({
+      queryKey: ['records', 'leads', '', filterField, filterVal, false, 1, 10],
+      queryFn: async () => {
+        const res = await api.get('/records/leads', { params });
+        return res.data;
+      },
+      staleTime: 60000
+    });
+  };
+
+  // Pre-warm top statuses in background after dashboard mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      ['HOT LEADS', 'WARM LEADS', 'CEBIL PENDING', 'FOLLOWUP', 'ALL LEADS'].forEach((st) => {
+        prefetchStatusLeads(st);
+      });
+      prefetchStatusLeads("TODAY'S FOLLOWUPS", true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { data: usersDropdown = [] } = useQuery({
     queryKey: ['dashboard-users-dropdown'],
@@ -557,6 +598,8 @@ export default function Dashboard() {
                     : `/modules/leads?status=${encodeURIComponent(metric.rawName || metric.label)}`
                 }
                 key={idx} 
+                onMouseEnter={() => prefetchStatusLeads(metric.rawName || metric.label, metric.rawName === "TODAY'S FOLLOWUPS")}
+                onFocus={() => prefetchStatusLeads(metric.rawName || metric.label, metric.rawName === "TODAY'S FOLLOWUPS")}
                 className="group flex flex-col justify-between p-3.5 sm:p-4 bg-white dark:bg-slate-900 rounded-xl transition-all duration-200 cursor-pointer relative overflow-hidden text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_14px_rgba(0,0,0,0.05)] hover:-translate-y-0.5"
                 style={{
                   borderStyle: 'solid',
