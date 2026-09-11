@@ -356,10 +356,10 @@ export default function Layout({ children }: LayoutProps) {
 
                 {/* Dynamic Modules */}
                 {modules.filter(m => {
-                  const hiddenSettingsModules = ['departments', 'products', 'bankmasters', 'bankingpartners', 'companies', 'deals'];
+                  const hiddenSettingsModules = ['departments', 'products', 'bankmasters', 'bankingpartners', 'companies', 'deals', 'campaigns'];
                   if (hiddenSettingsModules.includes(m.apiPath.toLowerCase())) return false;
                   if (!canAccessMenu(m.apiPath.toLowerCase())) return false;
-                  if (['leads', 'campaigns'].includes(m.apiPath.toLowerCase())) return true;
+                  if (['leads'].includes(m.apiPath.toLowerCase())) return true;
                   if (!branding || !branding.enabledModules || branding.enabledModules.length === 0) return true;
                   return branding.enabledModules.includes(m.apiPath.toLowerCase());
                 }).map(m => {
