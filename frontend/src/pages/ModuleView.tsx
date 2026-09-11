@@ -346,7 +346,7 @@ export default function ModuleView() {
     const companyCol = mapCol(['company', 'firmName', 'firm_name', 'firm', 'businessName', 'business', 'agencyName', 'agency', 'shopName', 'shop', 'tradeName', 'treaderName', 'traderName', 'organization']);
     const locationCol = mapCol(['city', 'location', 'district', 'state', 'address', 'place', 'area', 'branch']);
     const categoryCol = mapCol(['leadCategory', 'lead_category', 'loanType', 'loan_type', 'category', 'product', 'service', 'leadType']);
-    const codeCol = mapCol(['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code']);
+    const codeCol = mapCol(['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code']);
     const caseCol = mapCol(['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description']);
     const remarksCol = mapCol(['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback']);
 

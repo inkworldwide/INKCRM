@@ -521,64 +521,53 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
         ['category', 'loantype']
       );
 
-      // Extract data code
-      let codeVal = extractFuzzyField(
-        lead,
-        ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code'],
-        ['datacode', 'leadcode', 'code']
-      );
+      // Extract data code (prioritize authentic 'Data Code' / 'leadCode' over numeric indices)
+      const slnoVal = String(lead.Slno || lead['Sl no'] || lead['Sl.No'] || lead.slno || lead['S.No'] || '').trim();
+      const directCodeKeys = ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code'];
+      const codeCandidates: string[] = [];
 
-      if (!codeVal) {
-        // Direct property check on raw lead object
-        const leadKeys = Object.keys(lead || {});
-        for (const k of leadKeys) {
-          const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
-            const v = String(lead[k] || '').trim();
-            if (v && v !== 'N/A' && v !== 'Unnamed') {
-              codeVal = v;
-              break;
-            }
-          }
-        }
-        // Fallback to Column B (2nd property in row) if data code column header was customized
-        if (!codeVal && leadKeys.length >= 2) {
-          const colBVal = String(lead[leadKeys[1]] || '').trim();
-          if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http')) {
-            codeVal = colBVal;
+      for (const k of directCodeKeys) {
+        if (lead[k] !== undefined && lead[k] !== null) {
+          const v = String(lead[k]).trim();
+          if (v && v !== 'N/A' && v !== 'Unnamed' && !codeCandidates.includes(v)) {
+            codeCandidates.push(v);
           }
         }
       }
 
-      // Extract case details
-      const caseVal = extractFuzzyField(
+      let codeVal = extractFuzzyField(
         lead,
-        ['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description', 'statusDetail'],
-        ['case', 'details']
+        ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code'],
+        ['datacode', 'leadcode', 'code']
       );
+      if (codeVal && !codeCandidates.includes(codeVal)) {
+        codeCandidates.push(codeVal);
+      }
 
-      // Extract remarks / notes
-      const remarksVal = extractFuzzyField(
-        lead,
-        ['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback'],
-        ['remark', 'note', 'comment']
-      );
+      // Direct property check on raw lead object keys
+      const leadKeys = Object.keys(lead || {});
+      for (const k of leadKeys) {
+        const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
+          const v = String(lead[k] || '').trim();
+          if (v && v !== 'N/A' && v !== 'Unnamed' && !codeCandidates.includes(v)) {
+            codeCandidates.push(v);
+          }
+        }
+      }
 
-      // Extract email
-      const emailVal = extractFuzzyField(
-        lead,
-        ['email', 'emailAddress', 'email_address', 'mail'],
-        ['email', 'mail']
-      );
+      // Fallback to Column B (2nd property in row) if data code column header was customized
+      if (leadKeys.length >= 2) {
+        const colBVal = String(lead[leadKeys[1]] || '').trim();
+        if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3 && !codeCandidates.includes(colBVal)) {
+          codeCandidates.push(colBVal);
+        }
+      }
 
-      // Extract budget
-      const budgetVal = extractFuzzyField(
-        lead,
-        ['budget', 'amount', 'loanAmount', 'loan_amount'],
-        ['budget', 'amount']
-      );
-
-      const finalDataCode = codeVal || lead.dataCode || lead.data_code || lead['Data Code'] || lead['data code'] || lead.datacode || '';
+      // Prioritize authentic alphanumeric code over numeric row index
+      const authenticAlphaCode = codeCandidates.find(c => c !== slnoVal && !/^\d+$/.test(c));
+      const nonSlnoCode = codeCandidates.find(c => c !== slnoVal);
+      const finalDataCode = authenticAlphaCode || nonSlnoCode || codeCandidates[0] || '';
 
       recordsToCreate.push({
         organizationId: orgId,
@@ -1117,10 +1106,26 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
           resolvedStatus = resolvedDialStatus || 'YET TO CALL';
         }
 
+        // Extract authentic Data Code
+        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || lead.Slno || '').trim();
+        const authenticCode = d['Data Code'] || d['data code'] || d['DataCode'] || d['leadCode'] || d['lead_code'] || d.dataCode || d.data_code || '';
+        let resolvedCode = authenticCode;
+        if (d['Data Code'] && String(d['Data Code']).trim() && String(d['Data Code']).trim() !== 'N/A') {
+          resolvedCode = String(d['Data Code']).trim();
+        } else if (d['data code'] && String(d['data code']).trim() && String(d['data code']).trim() !== 'N/A') {
+          resolvedCode = String(d['data code']).trim();
+        } else if (d.dataCode && !/^\d+$/.test(String(d.dataCode).trim()) && String(d.dataCode).trim() !== slnoVal) {
+          resolvedCode = String(d.dataCode).trim();
+        }
+
         return {
           ...lead,
           data: {
             ...d,
+            dataCode: resolvedCode || d.dataCode || '',
+            data_code: resolvedCode || d.data_code || '',
+            'Data Code': resolvedCode || d['Data Code'] || '',
+            'data code': resolvedCode || d['data code'] || '',
             dialStatus: resolvedDialStatus,
             status: resolvedStatus
           }
@@ -1365,15 +1370,31 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
         resolvedStatus = resolvedDialStatus || 'YET TO CALL';
       }
 
-      return {
-        ...lead,
-        data: {
-          ...d,
-          dialStatus: resolvedDialStatus,
-          status: resolvedStatus
+        // Extract authentic Data Code
+        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || lead.Slno || '').trim();
+        const authenticCode = d['Data Code'] || d['data code'] || d['DataCode'] || d['leadCode'] || d['lead_code'] || d.dataCode || d.data_code || '';
+        let resolvedCode = authenticCode;
+        if (d['Data Code'] && String(d['Data Code']).trim() && String(d['Data Code']).trim() !== 'N/A') {
+          resolvedCode = String(d['Data Code']).trim();
+        } else if (d['data code'] && String(d['data code']).trim() && String(d['data code']).trim() !== 'N/A') {
+          resolvedCode = String(d['data code']).trim();
+        } else if (d.dataCode && !/^\d+$/.test(String(d.dataCode).trim()) && String(d.dataCode).trim() !== slnoVal) {
+          resolvedCode = String(d.dataCode).trim();
         }
-      };
-    });
+
+        return {
+          ...lead,
+          data: {
+            ...d,
+            dataCode: resolvedCode || d.dataCode || '',
+            data_code: resolvedCode || d.data_code || '',
+            'Data Code': resolvedCode || d['Data Code'] || '',
+            'data code': resolvedCode || d['data code'] || '',
+            dialStatus: resolvedDialStatus,
+            status: resolvedStatus
+          }
+        };
+      });
 
     const responseObj = { 
       leads: sanitizedLeads,

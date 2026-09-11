@@ -165,45 +165,69 @@ export const getLeadAgent = (data: any): string => {
 export const getLeadDataCode = (lead: any): string => {
   if (!lead) return 'N/A';
   const data = lead?.data || lead;
-  
-  let code = getLeadFieldValue(
-    data,
-    ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
-    ['datacode', 'leadcode', 'code']
-  ) || data?.dataCode || data?.data_code || data?.['Data Code'] || data?.['data code'] || data?.datacode || data?.DataCode || data?.code;
+  const slnoVal = String(data.Slno || data['Sl no'] || data['Sl.No'] || data.slno || data['S.No'] || lead.Slno || '').trim();
 
-  if (!code && lead?.data) {
-    code = getLeadFieldValue(
-      lead,
-      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
-      ['datacode', 'leadcode', 'code']
-    );
+  // 1. Direct check on authentic original 'Data Code' keys
+  const directKeys = ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code', 'leadScore'];
+  const candidates: string[] = [];
+
+  for (const key of directKeys) {
+    if (data[key] !== undefined && data[key] !== null) {
+      const v = String(data[key]).trim();
+      if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+        candidates.push(v);
+      }
+    }
+    if (lead[key] !== undefined && lead[key] !== null) {
+      const v = String(lead[key]).trim();
+      if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+        candidates.push(v);
+      }
+    }
   }
 
-  // Scan all property keys on data object
-  if (!code && data && typeof data === 'object') {
+  // 2. Fuzzy getLeadFieldValue check
+  const fuzzyRaw = getLeadFieldValue(
+    data,
+    ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code', 'leadScore'],
+    ['datacode', 'leadcode', 'code']
+  );
+  if (fuzzyRaw && !candidates.includes(fuzzyRaw)) {
+    candidates.push(fuzzyRaw);
+  }
+
+  // 3. Scan all keys of data (case/space/symbol agnostic)
+  if (data && typeof data === 'object') {
     const keys = Object.keys(data);
     for (const k of keys) {
       const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
         const v = String(data[k] || '').trim();
-        if (v && v !== 'N/A' && v !== 'Unnamed') {
-          code = v;
-          break;
+        if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+          candidates.push(v);
         }
       }
     }
     // Check 2nd key (Column B) if Data Code column header was custom named
-    if (!code && keys.length >= 2) {
+    if (keys.length >= 2) {
       const colBVal = String(data[keys[1]] || '').trim();
-      if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3) {
-        code = colBVal;
+      if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3 && !candidates.includes(colBVal)) {
+        candidates.push(colBVal);
       }
     }
   }
 
-  if (code && String(code).trim() !== '' && String(code).trim() !== 'N/A' && String(code).trim() !== 'Unnamed') {
-    return String(code).trim();
+  // Filter and prioritize candidate:
+  // If there is an alphanumeric candidate (or one not equal to purely numeric row index/Slno), prefer it!
+  const authenticAlpha = candidates.find(c => c !== slnoVal && !/^\d+$/.test(c));
+  if (authenticAlpha) return authenticAlpha;
+
+  // Next prefer candidate that doesn't equal slnoVal
+  const nonSlno = candidates.find(c => c !== slnoVal);
+  if (nonSlno) return nonSlno;
+
+  if (candidates[0] && candidates[0] !== 'N/A' && candidates[0] !== 'Unnamed') {
+    return candidates[0];
   }
   return lead?._id ? `LND-${lead._id.slice(-6).toUpperCase()}` : 'N/A';
 };

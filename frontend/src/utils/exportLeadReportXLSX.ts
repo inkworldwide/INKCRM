@@ -77,47 +77,69 @@ export const exportLeadReportXLSX = async (leads: any[], fileNamePrefix: string 
   const getDataCodeStr = (lead: any) => {
     if (!lead) return '';
     const d = lead.data || lead;
-    
-    // 1. Direct targets & fuzzy extractField on lead.data
-    let raw = extractField(
+    const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || lead.Slno || '').trim();
+
+    // 1. Direct check on authentic original 'Data Code' keys
+    const directKeys = ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code', 'leadScore'];
+    const candidates: string[] = [];
+
+    for (const key of directKeys) {
+      if (d[key] !== undefined && d[key] !== null) {
+        const v = String(d[key]).trim();
+        if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+          candidates.push(v);
+        }
+      }
+      if (lead[key] !== undefined && lead[key] !== null) {
+        const v = String(lead[key]).trim();
+        if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+          candidates.push(v);
+        }
+      }
+    }
+
+    // 2. Fuzzy extractField check
+    const fuzzyRaw = extractField(
       d,
-      ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
+      ['Data Code', 'data code', 'DataCode', 'leadCode', 'lead_code', 'lead code', 'dataCode', 'data_code', 'datacode', 'code', 'leadScore'],
       ['datacode', 'leadcode', 'code']
     );
-
-    // 2. Direct targets & fuzzy extractField on top-level lead
-    if (!raw && lead.data) {
-      raw = extractField(
-        lead,
-        ['dataCode', 'data_code', 'Data Code', 'data code', 'DataCode', 'datacode', 'code', 'leadCode', 'lead_code', 'lead code', 'leadScore'],
-        ['datacode', 'leadcode', 'code']
-      );
+    if (fuzzyRaw && !candidates.includes(fuzzyRaw)) {
+      candidates.push(fuzzyRaw);
     }
 
     // 3. Scan all keys of d (case/space/symbol agnostic)
-    if (!raw && d && typeof d === 'object') {
+    if (d && typeof d === 'object') {
       const keys = Object.keys(d);
       for (const k of keys) {
         const lowerK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (lowerK.includes('datacode') || lowerK.includes('data_code') || lowerK === 'code' || lowerK.includes('leadcode')) {
           const v = String(d[k] || '').trim();
-          if (v && v !== 'N/A' && v !== 'Unnamed') {
-            raw = v;
-            break;
+          if (v && v !== 'N/A' && v !== 'Unnamed' && !candidates.includes(v)) {
+            candidates.push(v);
           }
         }
       }
 
       // 4. Fallback: Check 2nd key (Column B) if Data Code column header was custom named
-      if (!raw && keys.length >= 2) {
+      if (keys.length >= 2) {
         const colBVal = String(d[keys[1]] || '').trim();
-        if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3) {
-          raw = colBVal;
+        if (colBVal && colBVal !== 'N/A' && colBVal !== 'Unnamed' && !colBVal.startsWith('http') && colBVal.length >= 3 && !candidates.includes(colBVal)) {
+          candidates.push(colBVal);
         }
       }
     }
 
-    return String(raw || '').trim();
+    // Filter and prioritize candidate:
+    // If there is an alphanumeric candidate (or one not equal to purely numeric row index/Slno), prefer it!
+    const authenticAlpha = candidates.find(c => c !== slnoVal && !/^\d+$/.test(c));
+    if (authenticAlpha) return authenticAlpha;
+
+    // Next prefer candidate that doesn't equal slnoVal
+    const nonSlno = candidates.find(c => c !== slnoVal);
+    if (nonSlno) return nonSlno;
+
+    return candidates[0] || '';
   };
 
   // Sort leads naturally by Data Code serial number (e.g. A1 CATE B 3695, A1 CATE B 3696...)
