@@ -48,6 +48,20 @@ export const CAMPAIGN_STATUSES = [
   'NO BUSINESS'
 ];
 
+// Helper to strictly resolve valid campaign dial status (defaults to YET TO CALL, never NEW)
+export const resolveCampaignLeadStatus = (rawDialStatus?: string, rawStatus?: string): string => {
+  const undialedList = ['NEW', 'YET TO CALL', 'NOT CALLED', 'CAMPAIGN_DIAL', 'UNASSIGNED', '', 'N/A'];
+  const d = String(rawDialStatus || '').trim().toUpperCase();
+  if (d && !undialedList.includes(d)) {
+    return d;
+  }
+  const s = String(rawStatus || '').trim().toUpperCase();
+  if (s && !undialedList.includes(s)) {
+    return s;
+  }
+  return 'YET TO CALL';
+};
+
 // Universal fuzzy case-insensitive field extractor for Excel imports and custom records
 export const getLeadFieldValue = (data: Record<string, any> | undefined, targetKeys: string[], containsKeys: string[] = []): string => {
   if (!data || typeof data !== 'object') return '';
@@ -300,7 +314,7 @@ export default function MyCampaign() {
             const cleanRemarks = String(rawRemarks).replace(/<[^>]*>/g, '').trim();
             const initialCategory = getLeadCategory(lead.data);
             initialStates[lead._id] = {
-              status: lead.data?.status || lead.data?.dialStatus || 'YET TO CALL',
+              status: resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status),
               remarks: cleanRemarks,
               caseDetails: lead.data?.caseDetails || '',
               category: initialCategory !== 'N/A' ? initialCategory : (lead.data?.leadCategory || lead.data?.category || '')
@@ -352,7 +366,7 @@ export default function MyCampaign() {
         const cleanRemarks = String(rawRemarks).replace(/<[^>]*>/g, '').trim();
         const initialCategory = getLeadCategory(lead.data);
         initialStates[lead._id] = {
-          status: lead.data?.status || lead.data?.dialStatus || 'YET TO CALL',
+          status: resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status),
           remarks: cleanRemarks,
           caseDetails: lead.data?.caseDetails || '',
           category: initialCategory !== 'N/A' ? initialCategory : (lead.data?.leadCategory || lead.data?.category || '')
@@ -492,20 +506,21 @@ export default function MyCampaign() {
       // Merge current live UI edits into data if available
       const enrichedLeads = targetLeads.map(lead => {
         const liveState = leadStates[lead._id];
-        if (liveState) {
-          return {
-            ...lead,
-            data: {
-              ...lead.data,
-              status: liveState.status || lead.data?.status,
-              dialStatus: liveState.status || lead.data?.dialStatus,
-              notes: liveState.remarks !== undefined ? liveState.remarks : lead.data?.notes,
-              remarks: liveState.remarks !== undefined ? liveState.remarks : lead.data?.remarks,
-              caseDetails: liveState.caseDetails !== undefined ? liveState.caseDetails : lead.data?.caseDetails
-            }
-          };
-        }
-        return lead;
+        const currentDialStatus = liveState?.status
+          ? resolveCampaignLeadStatus(liveState.status)
+          : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status);
+
+        return {
+          ...lead,
+          data: {
+            ...lead.data,
+            status: currentDialStatus,
+            dialStatus: currentDialStatus,
+            notes: liveState?.remarks !== undefined ? liveState.remarks : lead.data?.notes,
+            remarks: liveState?.remarks !== undefined ? liveState.remarks : lead.data?.remarks,
+            caseDetails: liveState?.caseDetails !== undefined ? liveState.caseDetails : lead.data?.caseDetails
+          }
+        };
       });
 
       exportCampaignXLSX(campaignName, enrichedLeads);
@@ -610,7 +625,7 @@ export default function MyCampaign() {
     const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
     const initialCat = getLeadCategory(lead.data);
     const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
-    const currentStatusVal = state?.status || lead.data?.status || 'YET TO CALL';
+    const currentStatusVal = state?.status ? resolveCampaignLeadStatus(state.status) : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status);
     const isHot = currentStatusVal.toUpperCase().includes('HOT');
     const isWarm = currentStatusVal.toUpperCase().includes('WARM');
 
@@ -679,7 +694,7 @@ export default function MyCampaign() {
   const handleSaveLead = async (lead: LeadRecord) => {
     try {
       const state = leadStates[lead._id];
-      const newStatus = state?.status || lead.data?.status || 'YET TO CALL';
+      const newStatus = state?.status ? resolveCampaignLeadStatus(state.status) : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status);
       const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
       const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
       const initialCat = getLeadCategory(lead.data);
@@ -1368,7 +1383,7 @@ export default function MyCampaign() {
                             const leadCategory = getLeadCategory(lead.data);
                             const agentAssigned = lead.data?.assignedTo || (lead as any).assignedToName || 'Unassigned';
                             
-                            const dialStatus = leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL';
+                            const dialStatus = leadStates[lead._id]?.status ? resolveCampaignLeadStatus(leadStates[lead._id]?.status) : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status);
                             const isDialed = dialStatus && dialStatus !== 'Yet To Call' && dialStatus !== 'YET TO CALL' && dialStatus !== 'Not Called';
 
                             let dialedDatetime = 'Not Called';
@@ -1470,7 +1485,7 @@ export default function MyCampaign() {
                                 {/* 11. Dial Status */}
                                 <td className="py-2 px-2 border-r border-slate-100 dark:border-slate-800">
                                   <select
-                                    value={leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL'}
+                                    value={leadStates[lead._id]?.status ? resolveCampaignLeadStatus(leadStates[lead._id]?.status) : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status)}
                                     onChange={(e) => handleStatusSelect(lead, e.target.value)}
                                     className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-white cursor-pointer"
                                   >
@@ -1503,7 +1518,9 @@ export default function MyCampaign() {
                       const createdOnStr = lead.createdAt 
                         ? new Date(lead.createdAt).toLocaleDateString('en-GB') 
                         : 'N/A';
-                      const currentStatus = leadStates[lead._id]?.status || lead.data?.status || 'YET TO CALL';
+                      const currentStatus = leadStates[lead._id]?.status 
+                        ? resolveCampaignLeadStatus(leadStates[lead._id]?.status) 
+                        : resolveCampaignLeadStatus(lead.data?.dialStatus, lead.data?.status);
 
                       return (
                         <div 

@@ -218,33 +218,33 @@ export const exportCampaignXLSX = async (campaignName: string, leads: any[]) => 
       agentAssigned = String(lead.assignedToName);
     }
 
-    // 10. Dial Status
+    // 10. Dial Status (Must strictly match My Campaign statuses - never export "NEW")
     const getDialStatus = (d: any) => {
       if (!d) return 'YET TO CALL';
-      const ignoreValues = ['YET TO CALL', 'NOT CALLED', 'NEW', 'CAMPAIGN_DIAL', 'UNASSIGNED', ''];
+      const undialedValues = ['YET TO CALL', 'NOT CALLED', 'NEW', 'CAMPAIGN_DIAL', 'UNASSIGNED', '', 'N/A'];
       
       const ds = String(d.dialStatus || '').trim();
-      if (ds && !ignoreValues.includes(ds.toUpperCase())) {
+      if (ds && !undialedValues.includes(ds.toUpperCase())) {
         return ds.toUpperCase();
       }
 
       const st = String(d.status || '').trim();
-      if (st && !ignoreValues.includes(st.toUpperCase())) {
+      if (st && !undialedValues.includes(st.toUpperCase())) {
         return st.toUpperCase();
       }
 
       const norm = String(d.normalizedStatus || '').trim();
-      if (norm && !ignoreValues.includes(norm.toUpperCase())) {
+      if (norm && !undialedValues.includes(norm.toUpperCase())) {
         return norm.toUpperCase();
       }
 
       const ls = String(d.leadStatus || '').trim();
-      if (ls && !ignoreValues.includes(ls.toUpperCase())) {
+      if (ls && !undialedValues.includes(ls.toUpperCase())) {
         return ls.toUpperCase();
       }
 
-      const fallback = String(d.dialStatus || d.status || d.normalizedStatus || d.leadStatus || 'YET TO CALL').trim().toUpperCase();
-      return fallback === 'CAMPAIGN_DIAL' ? 'YET TO CALL' : (fallback || 'YET TO CALL');
+      // Default for any un-dialed campaign lead is strictly YET TO CALL (never NEW)
+      return 'YET TO CALL';
     };
     const dialStatus = getDialStatus(data);
 

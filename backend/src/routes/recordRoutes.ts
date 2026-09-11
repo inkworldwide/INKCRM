@@ -1096,8 +1096,39 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
 
       const exportLeads = await CustomRecord.find(exportQuery).sort({ createdAt: -1 }).lean();
 
+      // Ensure campaign lead statuses never expose "NEW" or raw uncalled strings
+      const sanitizedExportLeads = exportLeads.map(lead => {
+        if (!lead || !lead.data) return lead;
+        const d = lead.data;
+        const dialSt = (d.dialStatus || '').toString().trim().toUpperCase();
+        const st = (d.status || '').toString().trim().toUpperCase();
+
+        const undialedList = ['NEW', 'NOT CALLED', 'CAMPAIGN_DIAL', 'UNASSIGNED', '', 'N/A', 'YET TO CALL'];
+        const isDialUndialed = undialedList.includes(dialSt);
+        const isStatusUndialed = undialedList.includes(st);
+
+        let resolvedDialStatus = d.dialStatus;
+        let resolvedStatus = d.status;
+
+        if (isDialUndialed || !d.dialStatus) {
+          resolvedDialStatus = 'YET TO CALL';
+        }
+        if (isStatusUndialed || !d.status) {
+          resolvedStatus = resolvedDialStatus || 'YET TO CALL';
+        }
+
+        return {
+          ...lead,
+          data: {
+            ...d,
+            dialStatus: resolvedDialStatus,
+            status: resolvedStatus
+          }
+        };
+      });
+
       res.status(200).json({
-        leads: exportLeads,
+        leads: sanitizedExportLeads,
         pagination: {
           total: exportLeads.length,
           dialed: exportLeads.filter(l => {
@@ -1314,8 +1345,38 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       .limit(limitNum)
       .lean();
 
+    const sanitizedLeads = leads.map(lead => {
+      if (!lead || !lead.data) return lead;
+      const d = lead.data;
+      const dialSt = (d.dialStatus || '').toString().trim().toUpperCase();
+      const st = (d.status || '').toString().trim().toUpperCase();
+
+      const undialedList = ['NEW', 'NOT CALLED', 'CAMPAIGN_DIAL', 'UNASSIGNED', '', 'N/A', 'YET TO CALL'];
+      const isDialUndialed = undialedList.includes(dialSt);
+      const isStatusUndialed = undialedList.includes(st);
+
+      let resolvedDialStatus = d.dialStatus;
+      let resolvedStatus = d.status;
+
+      if (isDialUndialed || !d.dialStatus) {
+        resolvedDialStatus = 'YET TO CALL';
+      }
+      if (isStatusUndialed || !d.status) {
+        resolvedStatus = resolvedDialStatus || 'YET TO CALL';
+      }
+
+      return {
+        ...lead,
+        data: {
+          ...d,
+          dialStatus: resolvedDialStatus,
+          status: resolvedStatus
+        }
+      };
+    });
+
     const responseObj = { 
-      leads,
+      leads: sanitizedLeads,
       pagination: {
         total: activeFilterTotal,
         totalAllocated,
