@@ -53,11 +53,9 @@ cd ..
 echo "Running Pre-deployment Validation Checks..."
 node predeploy.js
 
-# 6. Auto-seed MongoDB with full record data
-echo "Populating complete database record set..."
-cd backend
-npx ts-node src/utils/seeder.ts || true
-cd ..
+# 6. Restore MongoDB from repository database-dump (if database is empty or needs restore)
+echo "Restoring database from database-dump..."
+node database-dump/restore.js || true
 
 # 7. PM2 worker configurations & startup
 echo "Configuring and reloading PM2 cluster processes..."

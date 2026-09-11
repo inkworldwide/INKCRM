@@ -1582,11 +1582,13 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         : [];
 
       const mergedRecords: any[] = [];
+      const processedCampaignKeys = new Set<string>();
 
       // Include existing campaign records with live lead stats
       for (const doc of existingCampaignDocs) {
         const cName = String(doc.data?.campaignName || doc.data?.name || doc.data?.campaign || '').trim();
         const lowerKey = cName.toLowerCase();
+        processedCampaignKeys.add(lowerKey);
 
         const matchedLeadStat = leadCampaignStats.find(s => (s._id || '').toLowerCase() === lowerKey);
         const allocated = matchedLeadStat ? Number(matchedLeadStat.totalAssigned || 0) : Number(doc.data?.allocatedLeads || doc.data?.totalAssigned || 0);
@@ -1604,6 +1606,35 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
             dialed,
             yetToDial,
             status: doc.data?.status || 'Active'
+          }
+        });
+      }
+
+      // Automatically include any campaigns from Leads that aren't registered yet in campaignModule
+      for (const stat of leadCampaignStats) {
+        const key = (stat._id || '').toLowerCase();
+        if (!key || processedCampaignKeys.has(key)) continue;
+        processedCampaignKeys.add(key);
+
+        const cName = stat.rawCampaignName || stat._id;
+        const allocated = Number(stat.totalAssigned || 0);
+        const dialed = Number(stat.dialed || 0);
+        const yetToDial = Math.max(0, allocated - dialed);
+
+        mergedRecords.push({
+          _id: new mongoose.Types.ObjectId(),
+          organizationId: orgId,
+          moduleId: campaignModule?._id || new mongoose.Types.ObjectId(),
+          createdAt: stat.firstCreatedAt || new Date(),
+          updatedAt: stat.firstCreatedAt || new Date(),
+          data: {
+            campaignName: cName,
+            name: cName,
+            allocatedLeads: allocated,
+            totalAssigned: allocated,
+            dialed,
+            yetToDial,
+            status: 'Active'
           }
         });
       }
