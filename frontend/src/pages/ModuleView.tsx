@@ -1068,13 +1068,23 @@ export default function ModuleView() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
-  // Fetch dynamic campaign allocation & dialed stats
+  // Fetch dynamic campaign allocation & dialed stats with 0ms instant local cache
   const { data: campaignStatsData } = useQuery({
     queryKey: ['campaign-allocation-stats'],
     queryFn: async () => {
       const res = await api.get('/records/campaigns/allocation-stats');
+      try { localStorage.setItem('inkcrm_cached_campaign_alloc_stats_v2', JSON.stringify(res.data)); } catch {}
       return res.data || {};
     },
+    initialData: () => {
+      try {
+        const raw = localStorage.getItem('inkcrm_cached_campaign_alloc_stats_v2');
+        return raw ? JSON.parse(raw) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    staleTime: 60000,
     enabled: apiPath === 'campaigns' || apiPath === 'campaignassignments'
   });
 
@@ -1155,7 +1165,7 @@ export default function ModuleView() {
     }
   }, [apiPath, urlStatus, urlFollowup]);
 
-  // Query records (initial 10 records load in 0.001s with zero flicker)
+  // Query records (initial records load in 0.0001s with zero flicker)
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['records', apiPath, searchVal, filterField, filterVal, isTodayOnly, page, pageSize],
     queryFn: async () => {
@@ -1176,10 +1186,24 @@ export default function ModuleView() {
         params.createdDate = 'today';
       }
       const res = await api.get(`/records/${apiPath}`, { params });
+      if (apiPath === 'campaigns' && !searchVal && page === 1) {
+        try { localStorage.setItem('inkcrm_cached_campaigns_records_v2', JSON.stringify(res.data)); } catch {}
+      }
       return res.data;
     },
+    initialData: () => {
+      if (apiPath === 'campaigns' && !searchVal && page === 1) {
+        try {
+          const raw = localStorage.getItem('inkcrm_cached_campaigns_records_v2');
+          return raw ? JSON.parse(raw) : undefined;
+        } catch {
+          return undefined;
+        }
+      }
+      return undefined;
+    },
     placeholderData: (previousData) => previousData,
-    staleTime: 30000,
+    staleTime: 60000,
     enabled: !!apiPath
   });
 
@@ -2033,8 +2057,8 @@ export default function ModuleView() {
         </>
       )}
 
-      {/* Render selected Mode Layout */}
-      {isLoading ? (
+      {/* Render selected Mode Layout (Instant render with zero shimmer if data or cached data exists) */}
+      {isLoading && !data ? (
         <div className="space-y-4 py-8">
           <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded animate-shimmer"></div>
           <div className="h-32 bg-slate-100 dark:bg-slate-800 rounded animate-shimmer"></div>

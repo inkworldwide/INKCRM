@@ -61,21 +61,37 @@ interface ModuleState {
   addModule: (module: ModuleDefinition) => void;
 }
 
+const getInitialModules = (): ModuleDefinition[] => {
+  try {
+    const raw = localStorage.getItem('inkcrm_cached_modules_v2');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
 export const useModuleStore = create<ModuleState>((set, get) => ({
-  modules: [],
+  modules: getInitialModules(),
   loadingModules: false,
   activeModule: null,
 
   fetchModules: async () => {
-    set({ loadingModules: true });
+    // Only show loading spinner if we don't already have cached modules
+    if (get().modules.length === 0) {
+      set({ loadingModules: true });
+    }
     try {
       const res = await api.get('/modules');
-      set({ modules: res.data, loadingModules: false });
-      return res.data;
+      const data = Array.isArray(res.data) ? res.data : [];
+      try {
+        localStorage.setItem('inkcrm_cached_modules_v2', JSON.stringify(data));
+      } catch {}
+      set({ modules: data, loadingModules: false });
+      return data;
     } catch (err) {
       console.error('Failed to load modules:', err);
       set({ loadingModules: false });
-      return [];
+      return get().modules;
     }
   },
 
@@ -83,6 +99,40 @@ export const useModuleStore = create<ModuleState>((set, get) => ({
     const active = get().modules.find(
       (m) => m.apiPath.toLowerCase() === path.toLowerCase()
     );
+    // If not found in dynamic modules, provide built-in system fallbacks for core routes
+    if (!active && path.toLowerCase() === 'campaigns') {
+      const fallbackCampaigns: ModuleDefinition = {
+        _id: 'campaigns_fallback',
+        name: 'Campaigns',
+        singularLabel: 'Campaign',
+        pluralLabel: 'Campaigns',
+        apiPath: 'campaigns',
+        icon: 'Target',
+        isSystem: true,
+        fields: [
+          { name: 'campaignName', label: 'Campaign Name', type: 'text', required: true, unique: false },
+          { name: 'status', label: 'Status', type: 'dropdown', required: false, unique: false, options: ['Planned', 'In Progress', 'Completed'] }
+        ],
+        relationships: []
+      };
+      set({ activeModule: fallbackCampaigns });
+      return;
+    }
+    if (!active && path.toLowerCase() === 'campaignassignments') {
+      const fallbackAssign: ModuleDefinition = {
+        _id: 'campaignassignments_fallback',
+        name: 'Campaign Assignments',
+        singularLabel: 'Campaign Assignment',
+        pluralLabel: 'Campaign Assignments',
+        apiPath: 'campaignassignments',
+        icon: 'UserCheck',
+        isSystem: true,
+        fields: [],
+        relationships: []
+      };
+      set({ activeModule: fallbackAssign });
+      return;
+    }
     set({ activeModule: active || null });
   },
 

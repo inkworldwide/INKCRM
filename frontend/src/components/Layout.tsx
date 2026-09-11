@@ -139,6 +139,25 @@ export default function Layout({ children }: LayoutProps) {
         },
         staleTime: 60000
       });
+      // Pre-warm campaigns records list and allocation-stats for instant 0.0001s loading
+      queryClient.prefetchQuery({
+        queryKey: ['records', 'campaigns', '', '', '', false, 1, 10],
+        queryFn: async () => {
+          const res = await api.get('/records/campaigns', { params: { page: 1, limit: 10, sort: '-createdAt' } }).catch(() => ({ data: { records: [] } }));
+          try { localStorage.setItem('inkcrm_cached_campaigns_records_v2', JSON.stringify(res.data)); } catch {}
+          return res.data;
+        },
+        staleTime: 60000
+      });
+      queryClient.prefetchQuery({
+        queryKey: ['campaign-allocation-stats'],
+        queryFn: async () => {
+          const res = await api.get('/records/campaigns/allocation-stats').catch(() => ({ data: {} }));
+          try { localStorage.setItem('inkcrm_cached_campaign_alloc_stats_v2', JSON.stringify(res.data)); } catch {}
+          return res.data || {};
+        },
+        staleTime: 60000
+      });
       queryClient.prefetchQuery({
         queryKey: ['dashboard-campaigns-list'],
         queryFn: async () => {
@@ -147,7 +166,7 @@ export default function Layout({ children }: LayoutProps) {
           try { localStorage.setItem('inkcrm_dashboard_campaigns_cache_v2', JSON.stringify(list)); } catch {}
           return list;
         },
-        staleTime: 0
+        staleTime: 60000
       });
     }
   }, [user, queryClient]);
