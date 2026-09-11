@@ -614,6 +614,11 @@ export default function MyCampaign() {
     const isHot = currentStatusVal.toUpperCase().includes('HOT');
     const isWarm = currentStatusVal.toUpperCase().includes('WARM');
 
+    if (!isHot && !isWarm) {
+      showToast('Select "HOT LEAD" or "WARM LEAD" to open Create Lead.', 'info');
+      return;
+    }
+
     navigate('/modules/leads/new', {
       state: {
         fromCampaign: true,
@@ -701,6 +706,8 @@ export default function MyCampaign() {
         payload.normalizedStatus = canonical;
       } else {
         // Campaign dialing status ONLY: mark as campaign dial so it does NOT update Dashboard or Leads Process metrics!
+        payload.status = newStatus;
+        payload.dialStatus = newStatus;
         payload.isCampaignDialOnly = true;
         payload.normalizedStatus = 'CAMPAIGN_DIAL';
       }
@@ -1671,46 +1678,7 @@ export default function MyCampaign() {
                                 <span>SAVE</span>
                               </button>
                               <button
-                                onClick={() => {
-                                  const state = leadStates[lead._id];
-                                  const currentRemarks = state?.remarks !== undefined ? state.remarks : (lead.data?.notes || lead.data?.remarks || '');
-                                  const currentCaseDetails = state?.caseDetails !== undefined ? state.caseDetails : (lead.data?.caseDetails || lead.data?.case_details || '');
-                                  const initialCat = getLeadCategory(lead.data);
-                                  const currentCategory = state?.category !== undefined ? state.category : (initialCat !== 'N/A' ? initialCat : (lead.data?.leadCategory || lead.data?.category || ''));
-                                  const currentStatusVal = state?.status || lead.data?.status || 'YET TO CALL';
-                                  const isHot = currentStatusVal.toUpperCase().includes('HOT');
-                                  const isWarm = currentStatusVal.toUpperCase().includes('WARM');
-
-                                  navigate('/modules/leads/new', {
-                                    state: {
-                                      fromCampaign: true,
-                                      campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
-                                      _id: lead._id,
-                                      id: lead._id,
-                                      status: isHot ? 'Hot' : isWarm ? 'Warm' : currentStatusVal,
-                                      dialStatus: currentStatusVal,
-                                      firstName: lead.data?.firstName || getLeadCustomer(lead.data)?.split(' ')[0] || '',
-                                      lastName: lead.data?.lastName || getLeadCustomer(lead.data)?.split(' ').slice(1).join(' ') || '',
-                                      customerName: getLeadCustomer(lead.data),
-                                      customer: getLeadCustomer(lead.data),
-                                      phone: getLeadPhone(lead.data),
-                                      mobile: getLeadPhone(lead.data),
-                                      company: getLeadFirmName(lead.data),
-                                      firmName: getLeadFirmName(lead.data),
-                                      location: getLeadLocation(lead.data),
-                                      city: getLeadLocation(lead.data),
-                                      dataCode: getLeadDataCode(lead),
-                                      caseDetails: currentCaseDetails,
-                                      leadCategory: currentCategory,
-                                      category: currentCategory,
-                                      loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
-                                      notes: currentRemarks,
-                                      remarks: currentRemarks,
-                                      source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
-                                      assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
-                                    }
-                                  });
-                                }}
+                                onClick={() => handleOpenLeadForm(lead)}
                                 className="flex-1 sm:flex-initial h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 text-[11px] font-bold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 uppercase tracking-wider"
                               >
                                 <Icons.Edit className="w-3 h-3 text-slate-600 dark:text-slate-300" />

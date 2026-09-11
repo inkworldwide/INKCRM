@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import SummaryStats from '../models/SummaryStats';
 import CustomRecord from '../models/CustomRecord';
 import ModuleDefinition from '../models/ModuleDefinition';
-import { normalizeStatusName } from '../routes/dashboardRoutes';
+import { normalizeStatusName, isCampaignTelephonyStatus } from '../routes/dashboardRoutes';
 
 // In-Memory Fast Cache with TTL & Invalidation Tracker
 interface CacheEntry {
@@ -65,7 +65,14 @@ export class SummaryService {
     
     // 1. Compute Status Counts via Pipeline
     const statusAgg = await CustomRecord.aggregate([
-      { $match: { organizationId, moduleId } },
+      {
+        $match: {
+          organizationId,
+          moduleId,
+          'data.isCampaignDialOnly': { $ne: true },
+          'data.normalizedStatus': { $ne: 'CAMPAIGN_DIAL' }
+        }
+      },
       {
         $project: {
           st: {
@@ -84,6 +91,9 @@ export class SummaryService {
       if (item._id) {
         const rawName = item._id.toString().trim();
         const canonical = normalizeStatusName(rawName);
+        if (isCampaignTelephonyStatus(canonical) || canonical === 'CAMPAIGN_DIAL') {
+          return; // Do not record pure telephony dialing statuses in dashboard summary table
+        }
         statusCountsMap.set(canonical, (statusCountsMap.get(canonical) || 0) + Number(item.count || 0));
       }
     });

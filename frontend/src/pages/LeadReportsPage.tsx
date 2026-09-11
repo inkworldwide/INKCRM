@@ -11,18 +11,39 @@ export const normalizeStatusName = (rawSt: string): string => {
   if (!rawSt) return 'PENDING';
   const s = rawSt.trim().toUpperCase();
 
-  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS') return 'HOT LEADS';
-  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS') return 'WARM LEADS';
+  // Campaign telephony dial outcomes - strictly separate from loan pipeline stages
+  if (s.includes('CALL REJECT') || s.includes('CALL REJECTED')) return 'CALL REJECT';
+  if (s.includes('NO ANSWER') || s === 'NO ANSWER') return 'NO ANSWER';
+  if (s.includes('NOT INTRESTED') || s.includes('NOT INTERESTED') || s.includes('NOT INTESTED')) return 'NOT INTERESTED';
+  if (s.includes('NOT CONNECT') || s.includes('CALL NOT CONNECT')) return 'CALL NOT CONNECT';
+  if (s.includes('WRONG NUM') || s.includes('WRONG NUMBER')) return 'WRONG NUM';
+  if (s.includes('NUM NOT EXIT') || s.includes('NOT EXIST') || s.includes('NOT EXISTS')) return 'NUM NOT EXIT';
+  if (s.includes('REPEATED NUM') || s.includes('REPEATED NUMBER')) return 'REPEATED NUM';
+  if (s.includes('NO BUSINESS')) return 'NO BUSINESS';
+  if (s.includes('COOL LEAD') || s === 'COOL LEAD') return 'COOL LEAD';
+  if (s.includes('CAL BACK') || s.includes('CALL BACK')) return 'CAL BACK';
+  if (s.includes('GIVEN LOGIN')) return 'GIVEN LOGIN';
+
+  // Lead Lifecycle Stages
+  if (s === 'HOT' || s === 'HOT LEAD' || s === 'HOT LEADS' || s.includes('HOT LEAD')) return 'HOT LEADS';
+  if (s === 'WARM' || s === 'WARM LEAD' || s === 'WARM LEADS' || s.includes('WARM LEAD')) return 'WARM LEADS';
+  if (s === 'COLD' || s === 'COLD LEAD' || s === 'COLD LEADS' || s.includes('COLD LEAD')) return 'COLD LEADS';
   if (s.includes('CEBIL') || s.includes('CEDIL') || s.includes('CIVIL') || s.includes('CIBIL')) return 'CEBIL PENDING';
   if (s.includes('DOCUMENT') || s.includes('DOC PENDING')) return 'DOCUMENT PENDING';
   if (s.includes('APPROVAL PENDING') || s === 'APPROVAL PENDING') return 'APPROVAL PENDING';
   if (s.includes('APPROVED BUT NOT') || s === 'APPROVED BUT NOT DISBUSE' || s === 'APPROVED BUT NOT DISBURSED') return 'APPROVED BUT NOT DISBUSE';
   if (s === 'APPROVED') return 'APPROVED BUT NOT DISBUSE';
   if (s.includes('DISBURS') || s.includes('DISBUS')) return 'DISBUSED';
-  if (s.includes('REJECT')) return 'REJECTED';
+
+  // Strict loan rejection check: Only genuine credit/lead rejections, never telephony calls
+  if (s === 'REJECT' || s === 'REJECTED' || s === 'LEAD REJECTED' || s === 'APPLICATION REJECTED' || s === 'CREDIT REJECTED') {
+    return 'REJECTED';
+  }
+
   if (s.includes('FOLLOW')) return 'FOLLOWUP';
   if (s.includes('DROP')) return 'DROPPED';
   if (s === 'PENDING') return 'PENDING';
+  if (s.includes('YET TO CALL') || s.includes('YET TO DIAL')) return 'YET TO CALL';
 
   return s;
 };
