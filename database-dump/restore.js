@@ -15,6 +15,14 @@ try {
   }
 }
 
+// Try to load backend/.env if available
+const envPath = path.join(__dirname, '..', 'backend', '.env');
+if (fs.existsSync(envPath)) {
+  try {
+    require('dotenv').config({ path: envPath });
+  } catch (e) {}
+}
+
 const { ObjectId } = mongoose.Types;
 
 function convertTypes(obj) {
@@ -90,7 +98,7 @@ async function restore() {
     }
   }
 
-  console.log('\nDatabase restore complete! All collections and ObjectIds restored.');
+  console.log('\nDatabase restore complete! All collections, ObjectIds, and Dates restored.');
   await mongoose.disconnect();
 }
 
