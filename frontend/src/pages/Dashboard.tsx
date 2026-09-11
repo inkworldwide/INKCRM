@@ -221,13 +221,17 @@ export default function Dashboard() {
   // Pre-warm top statuses in background after dashboard mounts
   useEffect(() => {
     const timer = setTimeout(() => {
-      ['HOT LEADS', 'WARM LEADS', 'CEBIL PENDING', 'FOLLOWUP', 'ALL LEADS'].forEach((st) => {
+      const topStatuses = configuredStatuses && configuredStatuses.length > 0 
+        ? configuredStatuses.slice(0, 10).map((s: any) => s.name)
+        : ['Hot', 'Warm', 'CALL BACK', 'GIVEN LOGIN', 'CIBIL PENDING', 'Document Pending', 'Status Pending', 'Approved', 'reject', 'Followup'];
+
+      topStatuses.forEach((st: string) => {
         prefetchStatusLeads(st);
       });
       prefetchStatusLeads("TODAY'S FOLLOWUPS", true);
     }, 400);
     return () => clearTimeout(timer);
-  }, []);
+  }, [configuredStatuses]);
 
   const { data: usersDropdown = [] } = useQuery({
     queryKey: ['dashboard-users-dropdown'],

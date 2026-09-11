@@ -220,6 +220,8 @@ const validateFields = (fields: any[], data: Record<string, any>, oldValues?: Re
 };
 
 // ── Special Campaign Assignment Aggregations ─────────────────────────────────
+const allocStatsCache = new Map<string, { data: any; exp: number }>();
+
 router.get('/campaigns/allocation-stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const orgId = req.organizationId;
@@ -237,18 +239,25 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
       return;
     }
 
+    const cacheKey = `${orgId}_${(req.user as any)?._id || 'all'}_${campaignName}`;
+    const cached = allocStatsCache.get(cacheKey);
+    if (cached && cached.exp > Date.now()) {
+      res.status(200).json(cached.data);
+      return;
+    }
+
     let matchCriteria: any = { organizationId: orgId, moduleId: leadModule._id };
     await HierarchyService.modifyRecordQuery(matchCriteria, req.user as any, orgId!);
     
     if (campaignName && campaignName !== 'ALL') {
-      const escName = campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const campRegex = new RegExp(`^\\s*${escName}\\s*$`, 'i');
+      const clean = campaignName.trim();
+      const synonyms = Array.from(new Set([clean, clean.toLowerCase(), clean.toUpperCase()]));
       const campFilter = {
         $or: [
-          { 'data.campaignName': campRegex },
-          { 'data.source': campRegex },
-          { 'data.campaign': campRegex },
-          { 'data.campaign_name': campRegex }
+          { 'data.campaignName': { $in: synonyms } },
+          { 'data.source': { $in: synonyms } },
+          { 'data.campaign': { $in: synonyms } },
+          { 'data.campaign_name': { $in: synonyms } }
         ]
       };
       if (matchCriteria.$and) {
@@ -359,12 +368,15 @@ router.get('/campaigns/allocation-stats', async (req: Request, res: Response): P
       if (item._id) campaignDialedStats[item._id.toString().trim()] = item.count;
     });
 
-    res.status(200).json({
+    const responseData = {
       stats: statsMap,
       dialedStats: dialedMap,
       campaignAllocatedStats,
       campaignDialedStats
-    });
+    };
+    allocStatsCache.set(cacheKey, { data: responseData, exp: Date.now() + 60000 });
+
+    res.status(200).json(responseData);
     return;
   } catch (error) {
     console.error('Failed to get allocation stats:', error);
@@ -640,6 +652,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
     if (isLastBatch !== false) {
       try {
         SummaryService.invalidateCache(orgId);
+        allocStatsCache.clear();
         const campaignModule = await ModuleDefinition.findOne({
           $or: [
             { organizationId: orgId, apiPath: 'campaigns' },
