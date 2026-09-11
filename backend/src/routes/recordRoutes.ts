@@ -783,9 +783,9 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
 
     const userIdStr = userObj.id || (userObj as any)._id || 'user';
     const cacheKey = `my_campaigns_${orgId}_${userIdStr}`;
-    const cachedCampaigns = SummaryService.getCache(cacheKey);
+    const cachedCampaigns = SummaryService.getCache(cacheKey, true);
     if (cachedCampaigns) {
-      res.status(200).json(cachedCampaigns);
+      res.status(200).json(cachedCampaigns.data || cachedCampaigns);
       return;
     }
 
@@ -1005,25 +1005,18 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
     }
 
     const decodedCampaignName = decodeURIComponent(campaignName).trim();
-    const escName = decodedCampaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const campaignRegex = new RegExp('^\\s*' + escName + '\\s*$', 'i');
+    const campSynonyms = Array.from(new Set([
+      decodedCampaignName,
+      decodedCampaignName.toLowerCase(),
+      decodedCampaignName.toUpperCase(),
+      decodedCampaignName.charAt(0).toUpperCase() + decodedCampaignName.slice(1).toLowerCase()
+    ]));
 
     const campaignFilter = {
       $or: [
-        { 'data.campaignName': campaignRegex },
-        {
-          $and: [
-            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
-            { 'data.campaign': campaignRegex }
-          ]
-        },
-        {
-          $and: [
-            { $or: [{ 'data.campaignName': { $exists: false } }, { 'data.campaignName': null }, { 'data.campaignName': '' }] },
-            { $or: [{ 'data.campaign': { $exists: false } }, { 'data.campaign': null }, { 'data.campaign': '' }] },
-            { 'data.campaign_name': campaignRegex }
-          ]
-        }
+        { 'data.campaignName': { $in: campSynonyms } },
+        { 'data.campaign': { $in: campSynonyms } },
+        { 'data.campaign_name': { $in: campSynonyms } }
       ]
     };
 
@@ -1094,9 +1087,9 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
 
     const userIdStr = userObj.id || (userObj as any)._id || 'user';
     const cacheKey = `camp_details_${orgId}_${userIdStr}_${decodedCampaignName}_${pageNum}_${limitNum}_${filter}_${search}`;
-    const cached = SummaryService.getCache(cacheKey);
+    const cached = SummaryService.getCache(cacheKey, true);
     if (cached) {
-      res.status(200).json(cached);
+      res.status(200).json(cached.data || cached);
       return;
     }
 

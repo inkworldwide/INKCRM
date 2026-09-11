@@ -199,8 +199,30 @@ export default function MyCampaign() {
   const { showToast, showAlertModal } = useToastStore();
   const { canExportCampaigns, user } = useAuthStore();
   const allowExport = canExportCampaigns();
-  const [campaigns, setCampaigns] = useState<CampaignStats[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Fast LocalStorage Cache Helpers for 0ms Instant Loading
+  const getLocalCache = <T,>(key: string, fallback: T): T => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const setLocalCache = (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch {}
+  };
+
+  const [campaigns, setCampaigns] = useState<CampaignStats[]>(() => 
+    getLocalCache<CampaignStats[]>('inkcrm_my_campaigns_cache_v2', [])
+  );
+  const [loading, setLoading] = useState<boolean>(() => 
+    getLocalCache<CampaignStats[]>('inkcrm_my_campaigns_cache_v2', []).length === 0
+  );
   const [activeCampaign, setActiveCampaign] = useState<CampaignStats | null>(null);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
@@ -219,18 +241,34 @@ export default function MyCampaign() {
   const [pageSize, setPageSize] = useState(10);
   const [campaignPagination, setCampaignPagination] = useState<{ total: number; totalAllocated: number; dialed: number; yetToDial: number; page: number; limit: number; totalPages: number } | null>(null);
 
-  // Fetch campaigns
-  const fetchCampaigns = async () => {
+  // Fetch campaigns with 0ms silent background revalidation
+  const fetchCampaigns = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent && campaigns.length === 0) setLoading(true);
       const res = await api.get('/records/campaigns/my-campaigns');
-      setCampaigns(res.data.campaigns || []);
+      const list = res.data.campaigns || [];
+      setCampaigns(list);
+      setLocalCache('inkcrm_my_campaigns_cache_v2', list);
     } catch (err: any) {
       console.error(err);
-      showToast('Failed to load campaigns.', 'error');
+      if (campaigns.length === 0) showToast('Failed to load campaigns.', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Prefetch campaign details on hover for 0.001s instant feel
+  const prefetchCampaignDetails = (campaignName: string, filterVal = 'yet_to_dial') => {
+    const params = new URLSearchParams({
+      page: '1',
+      limit: '10',
+      filter: filterVal
+    });
+    api.get(`/records/campaigns/my-campaigns/details/${encodeURIComponent(campaignName)}?${params.toString()}`).then(res => {
+      if (res.data?.leads) {
+        setLocalCache(`inkcrm_camp_leads_${campaignName}_${filterVal}`, res.data);
+      }
+    }).catch(() => {});
   };
 
   // Fetch lead details for active campaign with 10 items per page pagination & active filter
@@ -242,7 +280,41 @@ export default function MyCampaign() {
     searchVal: string = searchQuery
   ) => {
     try {
-      setLoadingLeads(true);
+      const cacheKey = `inkcrm_camp_leads_${campaignName}_${filterVal}`;
+      const isFirstPageDefault = pageVal === 1 && (!searchVal || !searchVal.trim());
+      
+      // Instant 0.000s Cache Hydration for page 1
+      if (isFirstPageDefault) {
+        const cachedData = getLocalCache<any>(cacheKey, null);
+        if (cachedData && Array.isArray(cachedData.leads) && cachedData.leads.length > 0) {
+          setLeads(cachedData.leads);
+          setCurrentPage(pageVal);
+          setPageSize(limitVal);
+          setDialFilter(filterVal);
+          if (cachedData.pagination) {
+            setCampaignPagination(cachedData.pagination);
+          }
+          const initialStates: Record<string, LeadState> = {};
+          cachedData.leads.forEach((lead: LeadRecord) => {
+            const rawRemarks = lead.data?.notes || lead.data?.remarks || '';
+            const cleanRemarks = String(rawRemarks).replace(/<[^>]*>/g, '').trim();
+            const initialCategory = getLeadCategory(lead.data);
+            initialStates[lead._id] = {
+              status: lead.data?.status || lead.data?.dialStatus || 'YET TO CALL',
+              remarks: cleanRemarks,
+              caseDetails: lead.data?.caseDetails || '',
+              category: initialCategory !== 'N/A' ? initialCategory : (lead.data?.leadCategory || lead.data?.category || '')
+            };
+          });
+          setLeadStates(initialStates);
+          setLoadingLeads(false);
+        } else {
+          setLoadingLeads(true);
+        }
+      } else {
+        setLoadingLeads(true);
+      }
+
       const params = new URLSearchParams({
         page: String(pageVal),
         limit: String(limitVal),
@@ -256,6 +328,10 @@ export default function MyCampaign() {
       setCurrentPage(pageVal);
       setPageSize(limitVal);
       setDialFilter(filterVal);
+
+      if (isFirstPageDefault && res.data?.leads) {
+        setLocalCache(cacheKey, res.data);
+      }
       
       if (res.data.pagination) {
         setCampaignPagination({
@@ -354,13 +430,21 @@ export default function MyCampaign() {
   }, []);
 
   // Auto-open campaign details if campaign param is present in URL or saved in sessionStorage
+  // Also pre-warm the top 2 campaigns for 0.001s instant click
   useEffect(() => {
-    if (campaigns.length > 0 && !activeCampaign) {
-      const targetCampName = searchParams.get('campaign') || sessionStorage.getItem('inkcrm_active_campaign_name');
-      if (targetCampName) {
-        const match = campaigns.find(c => c.campaignName.toLowerCase() === targetCampName.toLowerCase());
-        if (match) {
-          handleViewDetails(match);
+    if (campaigns.length > 0) {
+      // Pre-warm top 2 campaigns
+      campaigns.slice(0, 2).forEach(c => {
+        prefetchCampaignDetails(c.campaignName, 'yet_to_dial');
+      });
+
+      if (!activeCampaign) {
+        const targetCampName = searchParams.get('campaign') || sessionStorage.getItem('inkcrm_active_campaign_name');
+        if (targetCampName) {
+          const match = campaigns.find(c => c.campaignName.toLowerCase() === targetCampName.toLowerCase());
+          if (match) {
+            handleViewDetails(match);
+          }
         }
       }
     }
@@ -814,6 +898,7 @@ export default function MyCampaign() {
                     return (
                       <div 
                         key={campaign.campaignName}
+                        onMouseEnter={() => prefetchCampaignDetails(campaign.campaignName, 'yet_to_dial')}
                         className="group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-800/80 transition-all duration-200 flex flex-col justify-between overflow-hidden"
                       >
                         {/* Top Accent bar */}
@@ -849,6 +934,7 @@ export default function MyCampaign() {
                           <div className="grid grid-cols-2 gap-2.5">
                             <div 
                               onClick={() => handleViewDetails(campaign, 'dialed')}
+                              onMouseEnter={() => prefetchCampaignDetails(campaign.campaignName, 'dialed')}
                               className="bg-slate-50/80 hover:bg-emerald-50/80 dark:bg-slate-800/50 dark:hover:bg-emerald-950/40 border border-slate-200/70 hover:border-emerald-300 dark:border-slate-700/60 rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all shadow-3xs group"
                               title="Click to view Dialed leads"
                             >
@@ -865,6 +951,7 @@ export default function MyCampaign() {
 
                             <div 
                               onClick={() => handleViewDetails(campaign, 'yet_to_dial')}
+                              onMouseEnter={() => prefetchCampaignDetails(campaign.campaignName, 'yet_to_dial')}
                               className="bg-slate-50/80 hover:bg-amber-50/80 dark:bg-slate-800/50 dark:hover:bg-amber-950/40 border border-slate-200/70 hover:border-amber-300 dark:border-slate-700/60 rounded-xl p-3 flex items-center justify-between cursor-pointer transition-all shadow-3xs group"
                               title="Click to view Yet To Dial leads"
                             >
@@ -899,6 +986,7 @@ export default function MyCampaign() {
                         <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
                           <button 
                             onClick={() => handleViewDetails(campaign, 'yet_to_dial')}
+                            onMouseEnter={() => prefetchCampaignDetails(campaign.campaignName, 'yet_to_dial')}
                             className="flex-1 h-9 px-3.5 bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                           >
                             <Icons.Eye className="w-4 h-4" />
