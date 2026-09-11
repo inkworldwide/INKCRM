@@ -1,0 +1,45 @@
+[
+  {
+    "_id": "6a859b22a4219522f646f0d3",
+    "organizationId": "6a859b22a4219522f646ef6a",
+    "moduleId": "6a859b22a4219522f646efb3",
+    "name": "Qualified Lead Automation",
+    "trigger": {
+      "event": "update",
+      "fieldTrigger": "status"
+    },
+    "conditions": [
+      {
+        "field": "status",
+        "operator": "equals",
+        "value": "Qualified",
+        "_id": "6a859b22a4219522f646f0d4"
+      }
+    ],
+    "actions": [
+      {
+        "type": "create_task",
+        "params": {
+          "title": "Immediate Call: Qualified Lead Follow-up",
+          "description": "A lead was marked Qualified. Ring them up and progress them into Deal Stage.",
+          "priority": "High"
+        },
+        "delayMinutes": 0,
+        "_id": "6a859b22a4219522f646f0d5"
+      },
+      {
+        "type": "notification",
+        "params": {
+          "title": "Lead Qualified!",
+          "message": "Lead status changed to Qualified. Lead Score updated."
+        },
+        "delayMinutes": 0,
+        "_id": "6a859b22a4219522f646f0d6"
+      }
+    ],
+    "isEnabled": true,
+    "createdAt": "2026-08-19T12:01:38.767Z",
+    "updatedAt": "2026-08-19T12:01:38.767Z",
+    "__v": 0
+  }
+]
