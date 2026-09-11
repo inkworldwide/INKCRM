@@ -564,6 +564,34 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
         }
       }
 
+      // Extract case details
+      const caseVal = extractFuzzyField(
+        lead,
+        ['caseDetails', 'case_details', 'caseStatus', 'case_status', 'details', 'description', 'statusDetail'],
+        ['case', 'details']
+      );
+
+      // Extract remarks / notes
+      const remarksVal = extractFuzzyField(
+        lead,
+        ['notes', 'remarks', 'remark', 'note', 'comment', 'comments', 'feedback'],
+        ['remark', 'note', 'comment']
+      );
+
+      // Extract email
+      const emailVal = extractFuzzyField(
+        lead,
+        ['email', 'emailAddress', 'email_address', 'mail'],
+        ['email', 'mail']
+      );
+
+      // Extract budget
+      const budgetVal = extractFuzzyField(
+        lead,
+        ['budget', 'amount', 'loanAmount', 'loan_amount'],
+        ['budget', 'amount']
+      );
+
       // Prioritize authentic alphanumeric code over numeric row index
       const authenticAlphaCode = codeCandidates.find(c => c !== slnoVal && !/^\d+$/.test(c));
       const nonSlnoCode = codeCandidates.find(c => c !== slnoVal);
@@ -1107,7 +1135,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
         }
 
         // Extract authentic Data Code
-        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || lead.Slno || '').trim();
+        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || (lead as any).Slno || '').trim();
         const authenticCode = d['Data Code'] || d['data code'] || d['DataCode'] || d['leadCode'] || d['lead_code'] || d.dataCode || d.data_code || '';
         let resolvedCode = authenticCode;
         if (d['Data Code'] && String(d['Data Code']).trim() && String(d['Data Code']).trim() !== 'N/A') {
@@ -1371,7 +1399,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       }
 
         // Extract authentic Data Code
-        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || lead.Slno || '').trim();
+        const slnoVal = String(d.Slno || d['Sl no'] || d['Sl.No'] || d.slno || d['S.No'] || (lead as any).Slno || '').trim();
         const authenticCode = d['Data Code'] || d['data code'] || d['DataCode'] || d['leadCode'] || d['lead_code'] || d.dataCode || d.data_code || '';
         let resolvedCode = authenticCode;
         if (d['Data Code'] && String(d['Data Code']).trim() && String(d['Data Code']).trim() !== 'N/A') {
