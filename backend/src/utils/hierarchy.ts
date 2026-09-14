@@ -92,39 +92,38 @@ export class HierarchyService {
     const allowedUsers = await User.find({ _id: { $in: allowedUserIds } }).select('_id firstName lastName email userCode');
 
     const strIds = allowedUserIds.map(id => id.toString());
-    const searchCriteria: any[] = [
-      { createdBy: { $in: allowedUserIds } },
-      { 'data.assignedTo': { $in: strIds } },
-      { 'data.telecaller': { $in: strIds } },
-      { 'data.assignedAgent': { $in: strIds } },
-      { 'data.psm': { $in: strIds } },
-      { 'data.assignedToUserId': { $in: strIds } },
-      { assignedTo: { $in: allowedUserIds } }
-    ];
+    const termSet = new Set<string>();
+    strIds.forEach(id => termSet.add(id));
 
     allowedUsers.forEach(u => {
       const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
-      const terms: string[] = [];
-      if (fullName) terms.push(fullName);
-      if (u.email) {
-        terms.push(u.email.trim());
-        const emailPrefix = u.email.trim().split('@')[0];
-        if (emailPrefix && emailPrefix !== u.email.trim()) {
-          terms.push(emailPrefix);
-        }
-      }
-      if (u.userCode) terms.push(u.userCode.trim());
+      const firstName = (u.firstName || '').trim();
+      const lastName = (u.lastName || '').trim();
+      const email = (u.email || '').trim();
+      const emailPrefix = email ? email.split('@')[0].trim() : '';
+      const userCode = (u.userCode || '').trim();
 
-      terms.forEach(term => {
-        const escTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const regex = new RegExp('^\\s*' + escTerm + '\\s*$', 'i');
-        searchCriteria.push({ 'data.assignedTo': regex });
-        searchCriteria.push({ 'data.telecaller': regex });
-        searchCriteria.push({ 'data.assignedAgent': regex });
-        searchCriteria.push({ 'data.assignedToName': regex });
-        searchCriteria.push({ 'data.psm': regex });
+      const rawTerms = [fullName, firstName, lastName, email, emailPrefix, userCode].filter(Boolean);
+      rawTerms.forEach(t => {
+        termSet.add(t);
+        termSet.add(t.toLowerCase());
+        termSet.add(t.toUpperCase());
+        termSet.add(t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
       });
     });
+
+    const allTerms = Array.from(termSet);
+
+    const searchCriteria: any[] = [
+      { createdBy: { $in: allowedUserIds } },
+      { assignedTo: { $in: allowedUserIds } },
+      { 'data.assignedTo': { $in: allTerms } },
+      { 'data.telecaller': { $in: allTerms } },
+      { 'data.assignedAgent': { $in: allTerms } },
+      { 'data.assignedToName': { $in: allTerms } },
+      { 'data.psm': { $in: allTerms } },
+      { 'data.assignedToUserId': { $in: strIds } }
+    ];
 
     const hierarchyFilter = { $or: searchCriteria };
 

@@ -91,6 +91,10 @@ CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.lastName': 1 })
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.firmName': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.leadNo': 1 });
 CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.leadNumber': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, createdBy: 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, assignedTo: 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.assignedToUserId': 1 });
+CustomRecordSchema.index({ organizationId: 1, moduleId: 1, 'data.psm': 1 });
 CustomRecordSchema.index({ organizationId: 1, createdAt: -1 });
 
 export default mongoose.model<ICustomRecord>('CustomRecord', CustomRecordSchema);
