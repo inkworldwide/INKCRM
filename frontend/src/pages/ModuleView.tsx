@@ -1358,7 +1358,8 @@ export default function ModuleView() {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/records/${apiPath}/${id}`),
+    mutationFn: ({ id, name }: { id: string; name?: string }) =>
+      api.delete(`/records/${apiPath}/${id}${name ? `?name=${encodeURIComponent(name)}` : ''}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: ['campaign-allocation-stats'] });
@@ -1369,13 +1370,13 @@ export default function ModuleView() {
     }
   });
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, name?: string) => {
     const label = apiPath === 'campaigns' ? 'Campaign' : (activeModule?.singularLabel || 'record');
     showConfirm({
       title: `Delete ${label}`,
       message: `Are you sure you want to delete this ${label}?`,
       onConfirm: () => {
-        deleteMutation.mutate(id, {
+        deleteMutation.mutate({ id, name }, {
           onSuccess: () => {
             showAlertModal({
               title: 'Deleted Successfully',
@@ -2270,7 +2271,7 @@ export default function ModuleView() {
                                     <Icons.Edit3 className="w-3.5 h-3.5" />
                                   </button>
                                   <button
-                                    onClick={() => handleDelete(rec._id)}
+                                    onClick={() => handleDelete(rec._id, rec.data?.campaignName || rec.data?.name)}
                                     className="w-8.5 h-8.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-150 text-rose-600 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800/80 flex items-center justify-center transition-all shadow-3xs cursor-pointer"
                                     title="Delete Campaign"
                                   >
@@ -2690,7 +2691,7 @@ export default function ModuleView() {
                                 Edit
                               </Link>
                               <button
-                                onClick={() => handleDelete(rec._id)}
+                                onClick={() => handleDelete(rec._id, rec.data?.campaignName || rec.data?.name)}
                                 className="text-rose-500 hover:text-rose-400 font-medium text-xs"
                               >
                                 Delete

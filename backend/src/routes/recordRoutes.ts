@@ -1593,20 +1593,60 @@ router.get('/:apiPath', async (req: Request, res: Response): Promise<void> => {
         const dialed = Number(stat.dialed || 0);
         const yetToDial = Math.max(0, allocated - dialed);
 
+        // Auto-persist / discover this campaign in CustomRecord under campaignModule so it has a persistent _id
+        let campDoc: any = null;
+        if (campaignModule) {
+          try {
+            const escName = cName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const nameRegex = new RegExp(`^\\s*${escName}\\s*$`, 'i');
+            campDoc = await CustomRecord.findOne({
+              organizationId: orgId,
+              moduleId: campaignModule._id,
+              $or: [
+                { 'data.campaignName': nameRegex },
+                { 'data.name': nameRegex }
+              ]
+            });
+
+            if (!campDoc) {
+              const userOid = (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id))
+                ? new mongoose.Types.ObjectId(req.user.id)
+                : (campaignModule.createdBy || new mongoose.Types.ObjectId());
+
+              campDoc = await CustomRecord.create({
+                organizationId: orgId,
+                moduleId: campaignModule._id,
+                createdBy: userOid,
+                updatedBy: userOid,
+                data: {
+                  campaignName: cName,
+                  name: cName,
+                  status: 'Active',
+                  type: 'Email'
+                }
+              });
+            }
+          } catch (upsertErr) {
+            console.error('[GET CAMPAIGNS] Error syncing campaign doc:', upsertErr);
+          }
+        }
+
         mergedRecords.push({
-          _id: new mongoose.Types.ObjectId(),
+          ...(campDoc ? campDoc.toObject() : {}),
+          _id: campDoc?._id || new mongoose.Types.ObjectId(),
           organizationId: orgId,
           moduleId: campaignModule?._id || new mongoose.Types.ObjectId(),
-          createdAt: stat.firstCreatedAt || new Date(),
-          updatedAt: stat.firstCreatedAt || new Date(),
+          createdAt: stat.firstCreatedAt || campDoc?.createdAt || new Date(),
+          updatedAt: campDoc?.updatedAt || new Date(),
           data: {
+            ...(campDoc?.data || {}),
             campaignName: cName,
             name: cName,
             allocatedLeads: allocated,
             totalAssigned: allocated,
             dialed,
             yetToDial,
-            status: 'Active'
+            status: campDoc?.data?.status || 'Active'
           }
         });
       }
@@ -2630,6 +2670,37 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       });
     }
 
+    // If a campaign's name was changed, sync that name to all associated leads
+    if (
+      (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign') &&
+      (changedFields.includes('campaignName') || changedFields.includes('name'))
+    ) {
+      const oldCamp = String(oldValues.campaignName || oldValues.name || oldValues.campaign || '').trim();
+      const newCamp = String(updateData.campaignName || updateData.name || '').trim();
+      if (oldCamp && newCamp && oldCamp.toLowerCase() !== newCamp.toLowerCase()) {
+        const escOld = oldCamp.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const oldRegex = new RegExp(`^\\s*${escOld}\\s*$`, 'i');
+        await CustomRecord.updateMany(
+          {
+            organizationId: req.organizationId,
+            $or: [
+              { 'data.campaignName': oldRegex },
+              { 'data.campaign': oldRegex },
+              { 'data.campaign_name': oldRegex }
+            ]
+          },
+          {
+            $set: {
+              'data.campaignName': newCamp,
+              'data.campaign': newCamp,
+              'data.campaign_name': newCamp
+            }
+          }
+        );
+        SummaryService.invalidateCache(req.organizationId, true);
+      }
+    }
+
     // Execute Workflows
     WorkflowEngine.trigger(req.organizationId as any, moduleDef._id as any, 'update', record, changedFields);
 
@@ -3083,6 +3154,8 @@ router.post('/leads/delete-duplicates', async (req: Request, res: Response): Pro
 router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { apiPath, id } = req.params;
+    const queryName = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    const isCampaign = apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign';
 
     const moduleDef = await ModuleDefinition.findOne({
       organizationId: req.organizationId,
@@ -3115,21 +3188,91 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
       record = await CustomRecord.findOne(query);
     }
 
-    // Fallback for campaign by name or auto_ id
-    if (!record && (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign')) {
-      const cleanName = id.replace(/^auto_/, '').trim();
-      const esc = cleanName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const nameRegex = new RegExp(`^\\s*${esc}\\s*$`, 'i');
-      record = await CustomRecord.findOne({
+    // Fallback for campaign by name, query.name, or auto_ id
+    if (!record && isCampaign) {
+      const rawTargetName = queryName || (id ? id.replace(/^auto_/, '').trim() : '');
+      const cleanName = decodeURIComponent(rawTargetName).trim();
+      if (cleanName) {
+        const esc = cleanName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const nameRegex = new RegExp(`^\\s*${esc}\\s*$`, 'i');
+        record = await CustomRecord.findOne({
+          organizationId: req.organizationId,
+          moduleId: moduleDef._id,
+          $or: [
+            { 'data.campaignName': nameRegex },
+            { 'data.name': nameRegex },
+            { 'data.campaign': nameRegex },
+            { 'data.source': nameRegex }
+          ]
+        });
+      }
+    }
+
+    // Resolve target campaign name if this is a campaign
+    let resolvedCampaignName = '';
+    if (isCampaign) {
+      const recData = record?.data instanceof Map
+        ? Object.fromEntries(record.data)
+        : (record?.data || (typeof record?.toObject === 'function' ? record.toObject().data : {}));
+
+      resolvedCampaignName = String(
+        recData?.campaignName ||
+        recData?.name ||
+        recData?.campaign ||
+        recData?.source ||
+        queryName ||
+        (!mongoose.Types.ObjectId.isValid(id) ? decodeURIComponent(id.replace(/^auto_/, '').trim()) : '')
+      ).trim();
+    }
+
+    // If campaign record not found in customrecords, check if leads exist with this campaign name
+    if (!record && isCampaign && resolvedCampaignName) {
+      const escCamp = resolvedCampaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const campRegex = new RegExp(`^\\s*${escCamp}\\s*$`, 'i');
+
+      const matchingLeadsCount = await CustomRecord.countDocuments({
         organizationId: req.organizationId,
-        moduleId: moduleDef._id,
         $or: [
-          { 'data.campaignName': nameRegex },
-          { 'data.name': nameRegex },
-          { 'data.campaign': nameRegex },
-          { 'data.source': nameRegex }
+          { 'data.campaignName': campRegex },
+          { 'data.campaign': campRegex },
+          { 'data.campaign_name': campRegex }
         ]
       });
+
+      if (matchingLeadsCount > 0) {
+        // Unlink the leads so the campaign disappears
+        await CustomRecord.updateMany(
+          {
+            organizationId: req.organizationId,
+            $or: [
+              { 'data.campaignName': campRegex },
+              { 'data.campaign': campRegex },
+              { 'data.campaign_name': campRegex }
+            ]
+          },
+          {
+            $unset: {
+              'data.campaignName': '',
+              'data.campaign': '',
+              'data.campaign_name': ''
+            }
+          }
+        );
+
+        SummaryService.invalidateCache(req.organizationId, true);
+
+        await AuditLog.create({
+          organizationId: req.organizationId,
+          userId: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? new mongoose.Types.ObjectId(req.user.id) : undefined,
+          action: 'record.delete',
+          resource: moduleDef.name,
+          resourceId: String(id),
+          oldValue: { campaignName: resolvedCampaignName, unlinkedLeads: matchingLeadsCount }
+        });
+
+        res.status(200).json({ message: 'Campaign deleted successfully.' });
+        return;
+      }
     }
 
     if (!record) {
@@ -3139,12 +3282,37 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
 
     await CustomRecord.findByIdAndDelete(record._id);
 
-    // If deleting a campaign, unlink leads and clear cache
-    if (apiPath.toLowerCase() === 'campaigns' || apiPath.toLowerCase() === 'campaign') {
-      const campaignName = String(record.data?.campaignName || record.data?.name || record.data?.campaign || record.data?.source || '').trim();
-      if (campaignName) {
-        const escCamp = campaignName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    // If deleting a campaign, unlink leads and remove any duplicate campaign docs
+    if (isCampaign) {
+      const recData = record?.data instanceof Map
+        ? Object.fromEntries(record.data)
+        : (record?.data || (typeof record?.toObject === 'function' ? record.toObject().data : {}));
+
+      const campNameToUnlink = resolvedCampaignName || String(
+        recData?.campaignName ||
+        recData?.name ||
+        recData?.campaign ||
+        recData?.source ||
+        ''
+      ).trim();
+
+      if (campNameToUnlink) {
+        const escCamp = campNameToUnlink.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         const campRegex = new RegExp(`^\\s*${escCamp}\\s*$`, 'i');
+
+        // Delete any other duplicate campaign docs matching this name
+        await CustomRecord.deleteMany({
+          organizationId: req.organizationId,
+          moduleId: moduleDef._id,
+          _id: { $ne: record._id },
+          $or: [
+            { 'data.campaignName': campRegex },
+            { 'data.name': campRegex },
+            { 'data.campaign': campRegex }
+          ]
+        });
+
+        // Unlink all matching leads
         await CustomRecord.updateMany(
           {
             organizationId: req.organizationId,
@@ -3163,13 +3331,13 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
           }
         );
       }
-      SummaryService.invalidateCache(req.organizationId);
+      SummaryService.invalidateCache(req.organizationId, true);
     }
 
     // Audit logs
     await AuditLog.create({
       organizationId: req.organizationId,
-      userId: new mongoose.Types.ObjectId(req.user?.id),
+      userId: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? new mongoose.Types.ObjectId(req.user.id) : undefined,
       action: 'record.delete',
       resource: moduleDef.name,
       resourceId: String(record._id),
@@ -3179,7 +3347,7 @@ router.delete('/:apiPath/:id', async (req: Request, res: Response): Promise<void
     // Execute delete workflow triggers
     WorkflowEngine.trigger(req.organizationId as any, moduleDef._id as any, 'delete', record);
 
-    res.status(200).json({ message: 'Record deleted successfully.' });
+    res.status(200).json({ message: `${moduleDef.singularLabel || 'Record'} deleted successfully.` });
   } catch (error) {
     console.error('Delete record error:', error);
     res.status(500).json({ error: 'Failed to delete record.' });
