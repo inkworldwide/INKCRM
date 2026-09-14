@@ -19,13 +19,13 @@
     "locationVerificationSkipped": true,
     "locationRadius": 100,
     "refreshTokens": [
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkwNDQyNDYsImV4cCI6MTc4OTY0OTA0Nn0.VK76FdOovewoUP-eMRn_8_6SjCsjfEEtDw0M_3yjTx8",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkwNDQyNDcsImV4cCI6MTc4OTY0OTA0N30.P2zeCdXN7SdayRKuJo2bNh0wV3CRxTYGWeU0o7s47bw",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkwNDQ0MDIsImV4cCI6MTc4OTY0OTIwMn0.ZA7nw8PygA7CACbTDhEBPM1zU8GEo1uYuYlCJzlO31c",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkwNDQ0MDMsImV4cCI6MTc4OTY0OTIwM30.BqeAKzoP1W1bmhxigoiR3W6URMVP30Z2XVs6MGBJBik",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkxMDIzOTgsImV4cCI6MTc4OTcwNzE5OH0.YNtkUeZhFP0Y56CaFtHObG2vp5dBC7on9YXyqyaRIkA",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkxMDI0NTUsImV4cCI6MTc4OTcwNzI1NX0.STFLW9nGjxpOkjDMytvWcI8XGAPJCXHWJHroC9pHsvU",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkxMjI2NDAsImV4cCI6MTc4OTcyNzQ0MH0.69et8ifZII8s_aHv9WyXp3AeI9fhwzfJg4jDlnvwi1Y"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkxMjI2NDAsImV4cCI6MTc4OTcyNzQ0MH0.69et8ifZII8s_aHv9WyXp3AeI9fhwzfJg4jDlnvwi1Y",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkzNzc5NDMsImV4cCI6MTc4OTk4Mjc0M30.1WftSWAwriY7QXKpRjnLNwIU1gA7rDHHHgWTfaQuXZk",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkzODEzMTgsImV4cCI6MTc4OTk4NjExOH0.wm-emREzNaHccu9kAdRxvsaPrZ80PT5EFyXpeoL74GQ",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5NSIsImVtYWlsIjoiaW5rQGNybS5jb20iLCJpYXQiOjE3ODkzODYyMTksImV4cCI6MTc4OTk5MTAxOX0.4-Q4WHoDidITUuZgs9O6yuO-qqKlNHouAulqOT4Ptgo"
     ],
     "failedLoginAttempts": 0,
     "skipFace": true,
@@ -35,6 +35,39 @@
     "approvalStatus": "approved",
     "department": "Management",
     "loginHistory": [
+      {
+        "loginAt": "2026-09-14T11:43:39.426Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.048040499999999,
+        "longitude": 77.62795100000001,
+        "address": "Ashwath Nagar, Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7ddeb6a4479eb7ec4219e"
+      },
+      {
+        "loginAt": "2026-09-14T10:21:58.259Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047223960134659,
+        "longitude": 77.62663615237263,
+        "address": "1st Main Road, Fatima Layout, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7cac6a2c7a86ed3e6caad"
+      },
+      {
+        "loginAt": "2026-09-14T09:25:43.993Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.04806165656364,
+        "longitude": 77.62641912882131,
+        "address": "Ashwath Nagar, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7bd973a19e92fdcf06cca"
+      },
       {
         "loginAt": "2026-09-11T10:30:40.306Z",
         "ip": "::1",
@@ -551,66 +584,9 @@
         "address": "Sampigehalli, Bengaluru North City Corporation, Bengaluru, Yelahanka taluku, Bengaluru Urban, Karnataka, 560064, India",
         "locationVerificationSkipped": true,
         "_id": "6a92d5d72a43f6ec4b29e1a7"
-      },
-      {
-        "loginAt": "2026-08-29T12:50:49.543Z",
-        "ip": "223.181.104.245",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "latitude": 12.9786,
-        "longitude": 77.364,
-        "address": "Naganahalli, Bangalore South, Bengaluru Urban, Karnataka, 562130, India",
-        "locationVerificationSkipped": true,
-        "_id": "6a92d5a92a43f6ec4b29d8be"
-      },
-      {
-        "loginAt": "2026-08-28T14:37:42.206Z",
-        "ip": "223.181.115.230",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "latitude": 12.9786,
-        "longitude": 77.364,
-        "address": "Naganahalli, Bangalore South, Bengaluru Urban, Karnataka, 562130, India",
-        "locationVerificationSkipped": true,
-        "_id": "6a919d3692dbab3247aa233c"
-      },
-      {
-        "loginAt": "2026-08-28T14:37:38.101Z",
-        "ip": "223.181.115.230",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "latitude": 13.09371865375778,
-        "longitude": 77.6324845727652,
-        "address": "Sampigehalli, Bengaluru North City Corporation, Bengaluru, Yelahanka taluku, Bengaluru Urban, Karnataka, 560064, India",
-        "locationVerificationSkipped": true,
-        "_id": "6a919d3292dbab3247aa201f"
       }
     ],
     "activeDevices": [
-      {
-        "deviceId": "ubtr9nrhcm",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "ip": "223.181.107.71",
-        "lastActive": "2026-09-10T12:44:06.151Z",
-        "_id": "6aa2a6160d71b5f790db0bba"
-      },
-      {
-        "deviceId": "i8rnuppueq",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "ip": "223.181.107.71",
-        "lastActive": "2026-09-10T12:44:07.901Z",
-        "_id": "6aa2a6170d71b5f790db0c50"
-      },
-      {
-        "deviceId": "bnkx4fndwqi",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "ip": "223.181.110.198",
-        "lastActive": "2026-09-10T12:46:42.690Z",
-        "_id": "6aa2a6b2b5480135b9e6569c"
-      },
       {
         "deviceId": "5uuclmiqhoi",
         "browser": "Google Chrome",
@@ -642,15 +618,39 @@
         "ip": "::1",
         "lastActive": "2026-09-11T10:30:40.304Z",
         "_id": "6aa3d85013d1d2162ed64a74"
+      },
+      {
+        "deviceId": "tkimwoft4sg",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:25:43.993Z",
+        "_id": "6aa7bd973a19e92fdcf06cc9"
+      },
+      {
+        "deviceId": "d3qy9wy0h1n",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T10:21:58.257Z",
+        "_id": "6aa7cac6a2c7a86ed3e6caac"
+      },
+      {
+        "deviceId": "ufvcirhh3q",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T11:43:39.426Z",
+        "_id": "6aa7ddeb6a4479eb7ec4219d"
       }
     ],
     "createdAt": "2026-08-19T12:01:38.322Z",
-    "updatedAt": "2026-09-11T10:30:40.316Z",
+    "updatedAt": "2026-09-14T11:43:39.439Z",
     "currentLocation": {
-      "latitude": 13.047922,
-      "longitude": 77.627607,
-      "address": "Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
-      "lastUpdated": "2026-09-11T04:54:15.221Z"
+      "latitude": 13.048040499999999,
+      "longitude": 77.62795100000001,
+      "address": "Ashwath Nagar, Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+      "lastUpdated": "2026-09-14T11:43:39.421Z"
     }
   },
   {
@@ -702,7 +702,11 @@
     },
     "locationVerificationSkipped": true,
     "locationRadius": 100,
-    "refreshTokens": [],
+    "refreshTokens": [
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5YiIsImVtYWlsIjoiaW5rQHNoYXJmdSIsImlhdCI6MTc4OTM3NzY5MCwiZXhwIjoxNzg5OTgyNDkwfQ.sRLZoP6MWYVe_AhWqkFDh5YQrQS4O-3FWdoaj7mnyPM",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5YiIsImVtYWlsIjoiaW5rQHNoYXJmdSIsImlhdCI6MTc4OTM3ODI1NiwiZXhwIjoxNzg5OTgzMDU2fQ.blmBr7oaUOxwQqOfnhEAvuh70csXcW3-e7tr3NQfKEI",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODU5YjIyYTQyMTk1MjJmNjQ2ZWY5YiIsImVtYWlsIjoiaW5rQHNoYXJmdSIsImlhdCI6MTc4OTM3ODI1NiwiZXhwIjoxNzg5OTgzMDU2fQ.blmBr7oaUOxwQqOfnhEAvuh70csXcW3-e7tr3NQfKEI"
+    ],
     "failedLoginAttempts": 0,
     "userCode": "PRO-INK",
     "skipFace": true,
@@ -712,10 +716,64 @@
     "approvalStatus": "approved",
     "reportingManager": "6a859b22a4219522f646ef95",
     "department": "SALES MANAGER",
-    "loginHistory": [],
-    "activeDevices": [],
+    "loginHistory": [
+      {
+        "loginAt": "2026-09-14T09:30:56.965Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047922,
+        "longitude": 77.627607,
+        "address": "Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7bed03a19e92fdcf07910"
+      },
+      {
+        "loginAt": "2026-09-14T09:21:30.187Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047223960134659,
+        "longitude": 77.62663615237263,
+        "address": "1st Main Road, Fatima Layout, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7bc9a3a19e92fdcf0606d"
+      }
+    ],
+    "activeDevices": [
+      {
+        "deviceId": "43jbgwqh3jt",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:21:30.184Z",
+        "_id": "6aa7bc9a3a19e92fdcf0606c"
+      },
+      {
+        "deviceId": "06xcooowtyrr",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:30:56.952Z",
+        "_id": "6aa7bed03a19e92fdcf0790c"
+      },
+      {
+        "deviceId": "t07yzofi438",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:30:56.964Z",
+        "_id": "6aa7bed03a19e92fdcf0790f"
+      }
+    ],
     "createdAt": "2026-08-19T12:01:38.334Z",
-    "updatedAt": "2026-09-07T11:36:47.821Z"
+    "updatedAt": "2026-09-14T09:30:56.967Z",
+    "currentLocation": {
+      "latitude": 13.047922,
+      "longitude": 77.627607,
+      "address": "Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+      "lastUpdated": "2026-09-14T09:30:56.960Z"
+    }
   },
   {
     "_id": "6a859b22a4219522f646ef9d",
@@ -3330,11 +3388,11 @@
     "locationVerificationSkipped": true,
     "locationRadius": 100,
     "refreshTokens": [
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDE4ODAxLCJleHAiOjE3ODk2MjM2MDF9.1GW59IKoMG0I-7m3q9FPpzPCgBSUxNken74U7ZiGVbQ",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDE5Nzc3LCJleHAiOjE3ODk2MjQ1Nzd9.VaegD5NMeyG1RGZKZZQZkc2qxe2dke9mYukwIwMqdVo",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDE5Nzc4LCJleHAiOjE3ODk2MjQ1Nzh9.uq9_Vs8iXgwzKC1hZJAgFIoa17UlAL-s-HOAiNMsnBY",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDIxNjM2LCJleHAiOjE3ODk2MjY0MzZ9.8Z50Za1t6WcsV7fRtjjuhFZ6hU6PLuedN_nb9XmodOc",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDIyNjg0LCJleHAiOjE3ODk2Mjc0ODR9.BqVMGY4_nK3Hoz5IOLjVxfluHtjmx_dbPxq7Y6syxds"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MDIyNjg0LCJleHAiOjE3ODk2Mjc0ODR9.BqVMGY4_nK3Hoz5IOLjVxfluHtjmx_dbPxq7Y6syxds",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhODY5N2M1MzI3NTZhY2E5ZjY3Yjg5NyIsImVtYWlsIjoibWRraGFzaW02ODZAZ21haWwuY29tIiwiaWF0IjoxNzg5MzgxNDMzLCJleHAiOjE3ODk5ODYyMzN9.9UxB0FubFXFhL2eINtiKZjNkmWQM7py5Xi8J8SvBZLA"
     ],
     "failedLoginAttempts": 0,
     "userCode": "ADM-MD",
@@ -3344,6 +3402,17 @@
     "isApproved": true,
     "approvalStatus": "approved",
     "loginHistory": [
+      {
+        "loginAt": "2026-09-14T10:23:53.487Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047395749849219,
+        "longitude": 77.62687379696843,
+        "address": "Fatima Layout, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7cb39a2c7a86ed3e6d3a3"
+      },
       {
         "loginAt": "2026-09-10T06:44:44.855Z",
         "ip": "122.171.20.188",
@@ -3882,28 +3951,9 @@
         "address": "Gangavati Bazar, Gangavathi, Gangavati taluku, Koppal, Karnataka, 583227, India",
         "locationVerificationSkipped": true,
         "_id": "6a870576e64a9e37eabe181a"
-      },
-      {
-        "loginAt": "2026-08-20T13:47:31.982Z",
-        "ip": "110.225.62.233",
-        "browser": "Google Chrome",
-        "os": "Linux",
-        "latitude": 15.4292638,
-        "longitude": 76.5314442,
-        "address": "Gangavati Bazar, Gangavathi, Gangavati taluku, Koppal, Karnataka, 583227, India",
-        "locationVerificationSkipped": true,
-        "_id": "6a870573e64a9e37eabe15e3"
       }
     ],
     "activeDevices": [
-      {
-        "deviceId": "p2unbzgeolg",
-        "browser": "Google Chrome",
-        "os": "Windows",
-        "ip": "122.171.20.188",
-        "lastActive": "2026-09-10T05:40:01.583Z",
-        "_id": "6aa242b184a92e064052c133"
-      },
       {
         "deviceId": "1as0j3811vkh",
         "browser": "Google Chrome",
@@ -3935,16 +3985,24 @@
         "ip": "122.171.20.188",
         "lastActive": "2026-09-10T06:44:44.848Z",
         "_id": "6aa251dc9c4f9d9e98ced014"
+      },
+      {
+        "deviceId": "1imqav1qf8m",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T10:23:53.486Z",
+        "_id": "6aa7cb39a2c7a86ed3e6d3a2"
       }
     ],
     "createdAt": "2026-08-20T05:59:33.292Z",
-    "updatedAt": "2026-09-10T06:44:44.900Z",
+    "updatedAt": "2026-09-14T10:23:53.497Z",
     "department": "",
     "currentLocation": {
-      "latitude": 12.9236992,
-      "longitude": 77.6503296,
-      "address": "GHPS Agara, Agara, Sector 1, HSR Layout, Bengaluru South City Corporation, Bengaluru, Bangalore South, Bengaluru Urban, Karnataka, 560102, India",
-      "lastUpdated": "2026-09-10T06:44:44.829Z"
+      "latitude": 13.047395749849219,
+      "longitude": 77.62687379696843,
+      "address": "Fatima Layout, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+      "lastUpdated": "2026-09-14T10:23:53.483Z"
     }
   },
   {
@@ -4190,5 +4248,105 @@
     "activeDevices": [],
     "createdAt": "2026-09-09T07:05:41.765Z",
     "updatedAt": "2026-09-09T07:05:41.765Z"
+  },
+  {
+    "_id": "6aa7be343a19e92fdcf07305",
+    "organizationId": "6a859b22a4219522f646ef6a",
+    "roleId": "6a859b22a4219522f646ef84",
+    "firstName": "umar",
+    "lastName": "ahmaed",
+    "email": "umar@ahmed.com",
+    "passwordHash": "$2a$10$uhO16Z7cLQqA6zJO4gjVZueZ4BuntJa313cn8JESCEZKa.hTzJlKS",
+    "plainPassword": "admin@123",
+    "isVerified": true,
+    "twoFactor": {
+      "enabled": false
+    },
+    "faceRecognition": {
+      "enabled": false
+    },
+    "locationVerificationSkipped": true,
+    "locationRadius": 100,
+    "refreshTokens": [
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYTdiZTM0M2ExOWU5MmZkY2YwNzMwNSIsImVtYWlsIjoidW1hckBhaG1lZC5jb20iLCJpYXQiOjE3ODkzNzgzMDEsImV4cCI6MTc4OTk4MzEwMX0.WGJDPqraoppOP64E7cWDlPtVsksCAZmBeIbkfWhMlyo",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYTdiZTM0M2ExOWU5MmZkY2YwNzMwNSIsImVtYWlsIjoidW1hckBhaG1lZC5jb20iLCJpYXQiOjE3ODkzNzgzMDEsImV4cCI6MTc4OTk4MzEwMX0.WGJDPqraoppOP64E7cWDlPtVsksCAZmBeIbkfWhMlyo",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYTdiZTM0M2ExOWU5MmZkY2YwNzMwNSIsImVtYWlsIjoidW1hckBhaG1lZC5jb20iLCJpYXQiOjE3ODkzODE1MzcsImV4cCI6MTc4OTk4NjMzN30.31HMRsFGYIg0WEEmbh6QmvhS90j8N1KJA4k2ds0Vug4",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhYTdiZTM0M2ExOWU5MmZkY2YwNzMwNSIsImVtYWlsIjoidW1hckBhaG1lZC5jb20iLCJpYXQiOjE3ODkzODE1MzcsImV4cCI6MTc4OTk4NjMzN30.31HMRsFGYIg0WEEmbh6QmvhS90j8N1KJA4k2ds0Vug4"
+    ],
+    "failedLoginAttempts": 0,
+    "userCode": "TEL-UMAR",
+    "skipFace": true,
+    "skipLocation": true,
+    "isActive": true,
+    "isApproved": true,
+    "approvalStatus": "approved",
+    "loginHistory": [
+      {
+        "loginAt": "2026-09-14T10:25:37.835Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047922,
+        "longitude": 77.627607,
+        "address": "Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7cba1a2c7a86ed3e6df2a"
+      },
+      {
+        "loginAt": "2026-09-14T09:31:41.589Z",
+        "ip": "::1",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "latitude": 13.047612384615384,
+        "longitude": 77.62625411538463,
+        "address": "Fatima Layout, Thanisandra, Kempapura, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+        "locationVerificationSkipped": true,
+        "_id": "6aa7befd3a19e92fdcf081a3"
+      }
+    ],
+    "activeDevices": [
+      {
+        "deviceId": "qr57ce7qmi",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:31:41.012Z",
+        "_id": "6aa7befd3a19e92fdcf080b8"
+      },
+      {
+        "deviceId": "mvie43jqr6",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T09:31:41.588Z",
+        "_id": "6aa7befd3a19e92fdcf081a2"
+      },
+      {
+        "deviceId": "22ixt1hww88",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T10:25:37.826Z",
+        "_id": "6aa7cba1a2c7a86ed3e6df26"
+      },
+      {
+        "deviceId": "efj9p2yn6ot",
+        "browser": "Google Chrome",
+        "os": "Windows",
+        "ip": "::1",
+        "lastActive": "2026-09-14T10:25:37.834Z",
+        "_id": "6aa7cba1a2c7a86ed3e6df29"
+      }
+    ],
+    "createdAt": "2026-09-14T09:28:20.574Z",
+    "updatedAt": "2026-09-14T10:25:37.836Z",
+    "reportingManager": "6a86898f32756aca9f678654",
+    "currentLocation": {
+      "latitude": 13.047922,
+      "longitude": 77.627607,
+      "address": "Thanisandra, Bengaluru North City Corporation, Bengaluru, Bangalore East, Bengaluru Urban, Karnataka, 560045, India",
+      "lastUpdated": "2026-09-14T10:25:37.831Z"
+    },
+    "department": ""
   }
 ]
