@@ -2242,8 +2242,7 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       }
       if (!creatorName) {
         const src = String(dataObj.source || '').trim();
-        const assTo = String(dataObj.assignedTo || dataObj.assignedToName || dataObj.telecaller || '').trim();
-        if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+        if (src && !/^[0-9a-fA-F]{24}$/.test(src) && src.toLowerCase() !== 'campaign' && src.toLowerCase() !== 'n/a') {
           creatorName = src;
         }
       }
@@ -2471,8 +2470,7 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     }
     if (!originalCreatorName) {
       const src = String(oldValues.source || '').trim();
-      const assTo = String(oldValues.assignedTo || oldValues.assignedToName || oldValues.telecaller || '').trim();
-      if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+      if (src && !/^[0-9a-fA-F]{24}$/.test(src) && src.toLowerCase() !== 'campaign' && src.toLowerCase() !== 'n/a') {
         originalCreatorName = src;
       }
     }

@@ -569,8 +569,7 @@ export default function RecordForm() {
 
       if (!creatorName) {
         const src = String(recordValues.source || '').trim();
-        const assTo = String(recordValues.assignedTo || recordValues.assignedToName || recordValues.telecaller || '').trim();
-        if (src && src.toLowerCase() !== assTo.toLowerCase()) {
+        if (src && !/^[0-9a-fA-F]{24}$/.test(src) && src.toLowerCase() !== 'campaign' && src.toLowerCase() !== 'n/a') {
           creatorName = src;
         }
       }
