@@ -7,6 +7,7 @@ import { DynamicIcon } from '../components/Layout';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '../utils/dateFormatter';
 import { useToastStore } from '../store/toastStore';
+import { useAuthStore } from '../store/authStore';
 import { maskPhoneNumber, triggerPhoneCall, openWhatsAppChat } from '../utils/phoneUtils';
 import SalesFunnel3D from '../components/SalesFunnel3D';
 
@@ -179,16 +180,19 @@ export default function Dashboard() {
     }
   };
 
+  const user = useAuthStore((state) => state.user);
+  const userMetricsCacheKey = user?.id ? `inkcrm_dashboard_metrics_cache_v2_${user.id}` : 'inkcrm_dashboard_metrics_cache_v2';
+
   // Fetch live dashboard metrics from database with instant local hydration & 30s background polling
   const { data: metricsData = DEFAULT_METRICS } = useQuery({
-    queryKey: ['dashboard-metrics'],
+    queryKey: ['dashboard-metrics', user?.id],
     queryFn: async () => {
       const res = await api.get('/dashboard/metrics');
-      if (res.data) setLocalCache('inkcrm_dashboard_metrics_cache_v2', res.data);
+      if (res.data) setLocalCache(userMetricsCacheKey, res.data);
       return res.data;
     },
-    initialData: () => getLocalCache('inkcrm_dashboard_metrics_cache_v2', DEFAULT_METRICS),
-    staleTime: 60000,
+    initialData: () => getLocalCache(userMetricsCacheKey, DEFAULT_METRICS),
+    staleTime: 10000,
     refetchInterval: (query) => (query.state.error ? false : 30000)
   });
 

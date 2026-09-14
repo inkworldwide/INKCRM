@@ -668,7 +668,7 @@ router.post('/campaigns/bulk-assign', async (req: Request, res: Response): Promi
     // Auto-register campaign in Campaigns module & clear cache
     if (isLastBatch !== false) {
       try {
-        SummaryService.invalidateCache(orgId);
+        SummaryService.invalidateCache(orgId, true);
         allocStatsCache.clear();
         const campaignModule = await ModuleDefinition.findOne({
           $or: [
@@ -2173,7 +2173,7 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       createdBy: creatorId,
       updatedBy: creatorId
     });
-    SummaryService.invalidateCache(req.organizationId);
+    SummaryService.invalidateCache(req.organizationId, true);
 
     // Timeline Logging (Activity)
     await Activity.create({
@@ -2615,7 +2615,7 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     };
     record.updatedBy = updaterId;
     await record.save();
-    SummaryService.invalidateCache(req.organizationId);
+    SummaryService.invalidateCache(req.organizationId, true);
 
     // Log Activity logs for status updates or assignments
     for (const fieldName of changedFields) {

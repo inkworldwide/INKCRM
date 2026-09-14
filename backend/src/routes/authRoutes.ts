@@ -13,6 +13,7 @@ import { seedNewTenantData } from '../utils/seeder';
 import { HierarchyService } from '../utils/hierarchy';
 import { reverseGeocode } from '../utils/geocoding';
 import { invalidateRoleCache } from './recordRoutes';
+import { SummaryService } from '../utils/summaryService';
 
 const router = Router();
 
@@ -1261,6 +1262,7 @@ router.post('/users', authenticate, async (req: Request, res: Response): Promise
       department: department || ''
     });
     
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(201).json(newUser);
   } catch (e) {
     res.status(500).json({ error: 'Failed to create user.' });
@@ -1360,6 +1362,7 @@ router.put('/users/:id', authenticate, async (req: Request, res: Response): Prom
     if (department !== undefined) user.department = department;
     
     await user.save();
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(200).json(user);
   } catch (e) {
     res.status(500).json({ error: 'Failed to update user.' });
@@ -1443,6 +1446,7 @@ router.delete('/users/:id', authenticate, async (req: Request, res: Response): P
     }
 
     await User.deleteOne({ _id: user._id });
+    SummaryService.invalidateCache(req.organizationId, true);
     res.status(200).json({ message: 'User deleted successfully.' });
   } catch (e: any) {
     console.error('Delete user error:', e);

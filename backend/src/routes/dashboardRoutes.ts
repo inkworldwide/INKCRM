@@ -192,18 +192,19 @@ router.put('/layout', async (req: Request, res: Response): Promise<void> => {
 // 3. Fetch Real-time Metadata KPI Counts
 // 3. Compute Real-time Metadata KPI Counts (with optimized indexing and SWR cache)
 export async function calculateDashboardMetrics(orgId: any, user: any, cacheKey?: string) {
+  const orgObjectId = new mongoose.Types.ObjectId(orgId.toString());
   // Find Lead and Deal Module Definitions
-  const leadModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'leads' });
-  const dealModule = await ModuleDefinition.findOne({ organizationId: orgId, apiPath: 'deals' });
+  const leadModule = await ModuleDefinition.findOne({ organizationId: orgObjectId, apiPath: 'leads' });
+  const dealModule = await ModuleDefinition.findOne({ organizationId: orgObjectId, apiPath: 'deals' });
 
-  const leadQuery: Record<string, any> = { organizationId: orgId };
+  const leadQuery: Record<string, any> = { organizationId: orgObjectId };
   if (leadModule) leadQuery.moduleId = leadModule._id;
-  const dealQuery: Record<string, any> = { organizationId: orgId };
+  const dealQuery: Record<string, any> = { organizationId: orgObjectId };
   if (dealModule) dealQuery.moduleId = dealModule._id;
 
   // Apply Dynamic Reporting Manager Hierarchy filtering
-  await HierarchyService.modifyRecordQuery(leadQuery, user, orgId!);
-  await HierarchyService.modifyRecordQuery(dealQuery, user, orgId!);
+  await HierarchyService.modifyRecordQuery(leadQuery, user, orgObjectId);
+  await HierarchyService.modifyRecordQuery(dealQuery, user, orgObjectId);
 
   const statusCounts: Record<string, number> = {};
   const pipelineData: Record<string, number> = {
@@ -246,6 +247,8 @@ export async function calculateDashboardMetrics(orgId: any, user: any, cacheKey?
       {
         $match: {
           ...leadQuery,
+          organizationId: orgObjectId,
+          moduleId: leadModule._id,
           'data.isCampaignDialOnly': { $ne: true },
           'data.normalizedStatus': { $ne: 'CAMPAIGN_DIAL' }
         }
@@ -410,7 +413,13 @@ export async function calculateDashboardMetrics(orgId: any, user: any, cacheKey?
 
     if (dealModule) {
       const dealAgg = await CustomRecord.aggregate([
-        { $match: dealQuery },
+        {
+          $match: {
+            ...dealQuery,
+            organizationId: orgObjectId,
+            moduleId: dealModule._id
+          }
+        },
         { $group: { _id: '$data.stage', total: { $sum: { $toDouble: '$data.amount' } } } }
       ]);
       dealAgg.forEach(item => {
@@ -481,14 +490,20 @@ export async function calculateDashboardMetrics(orgId: any, user: any, cacheKey?
     }
 
     const campLeadQuery: Record<string, any> = {
-      organizationId: orgId,
+      organizationId: orgObjectId,
       moduleId: leadModule._id,
       $or: campMatchConditions
     };
-    await HierarchyService.modifyRecordQuery(campLeadQuery, user, orgId!);
+    await HierarchyService.modifyRecordQuery(campLeadQuery, user, orgObjectId);
 
     const aggCampaignResults = await CustomRecord.aggregate([
-      { $match: campLeadQuery },
+      {
+        $match: {
+          ...campLeadQuery,
+          organizationId: orgObjectId,
+          moduleId: leadModule._id
+        }
+      },
       {
         $project: {
           rawName: {
@@ -637,20 +652,22 @@ router.get('/metrics', async (req: Request, res: Response): Promise<void> => {
   try {
     const userReq = req as any;
     const orgId = userReq.organizationId;
-    const userIdStr = userReq.user?.id || (userReq.user as any)?._id || 'user';
-    const cacheKey = `dashboard_full_${orgId}_${userIdStr}`;
-    const cachedDashboard = SummaryService.getCache(cacheKey, true);
-    if (cachedDashboard) {
-      const data = cachedDashboard.data || cachedDashboard;
-      res.status(200).json(data);
-      if (cachedDashboard.isStale) {
-        setImmediate(async () => {
-          try {
-            await calculateDashboardMetrics(orgId, userReq.user, cacheKey);
-          } catch (e) {}
-        });
+    const userIdStr = String(userReq.user?.id || userReq.user?._id || userReq.user?.userId || '').trim();
+    const cacheKey = userIdStr ? `dashboard_full_${orgId}_${userIdStr}` : undefined;
+    if (cacheKey) {
+      const cachedDashboard = SummaryService.getCache(cacheKey, true);
+      if (cachedDashboard) {
+        const data = cachedDashboard.data || cachedDashboard;
+        res.status(200).json(data);
+        if (cachedDashboard.isStale) {
+          setImmediate(async () => {
+            try {
+              await calculateDashboardMetrics(orgId, userReq.user, cacheKey);
+            } catch (e) {}
+          });
+        }
+        return;
       }
-      return;
     }
 
     const metricsPayload = await calculateDashboardMetrics(orgId, userReq.user, cacheKey);

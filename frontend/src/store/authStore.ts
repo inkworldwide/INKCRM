@@ -60,6 +60,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     localStorage.setItem('tenantId', user.organizationId);
     localStorage.setItem('user', JSON.stringify(user));
+    // Clear any stale dashboard metrics from previous or different users
+    try {
+      const keysToRemove = Object.keys(localStorage).filter(
+        k => k.startsWith('inkcrm_dashboard_metrics_cache') && !k.endsWith(user.id)
+      );
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
     set({ user, token, isAuthenticated: true, isInitializing: false });
     // Fetch full role details in background
     get().fetchProfile();
@@ -103,6 +110,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('tenantId');
+      // Purge cached dashboard metrics, counts and lists to prevent cross-user bleed
+      try {
+        const keysToRemove = Object.keys(localStorage).filter(
+          k => k.startsWith('inkcrm_dashboard_') || k.startsWith('cnt_') || k.startsWith('records_')
+        );
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      } catch (e) {}
       set({ user: null, role: null, token: null, isAuthenticated: false });
     }
   },
