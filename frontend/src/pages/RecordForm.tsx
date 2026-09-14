@@ -32,6 +32,27 @@ const normalizeLoanForSubmit = (loanType: string): string => {
   return type;
 };
 
+// Universal case/space/symbol-agnostic field value extractor for CRM and campaign records
+const getCaseInsensitiveVal = (obj: Record<string, any> | undefined, candidateKeys: string[]): string => {
+  if (!obj || typeof obj !== 'object') return '';
+  for (const k of candidateKeys) {
+    if (obj[k] !== undefined && obj[k] !== null) {
+      const v = String(obj[k]).trim();
+      if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+    }
+  }
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const targetNorms = candidateKeys.map(norm);
+  for (const k of Object.keys(obj)) {
+    const nk = norm(k);
+    if (targetNorms.includes(nk)) {
+      const v = String(obj[k] || '').trim();
+      if (v && v !== 'N/A' && v !== 'Unnamed') return v;
+    }
+  }
+  return '';
+};
+
 export default function RecordForm() {
   const { apiPath, id } = useParams<{ apiPath: string; id?: string }>();
   const navigate = useNavigate();
@@ -239,8 +260,9 @@ export default function RecordForm() {
         if (f.defaultValue) defaults[f.name] = f.defaultValue;
       });
       defaults['country'] = 'INDIA';
+      const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email.split('@')[0] : 'System';
+
       if (apiPath === 'leads') {
-        const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : 'System';
         defaults['source'] = loggedInName;
         defaults['createdBy'] = loggedInName;
         defaults['createdByName'] = loggedInName;
@@ -257,30 +279,109 @@ export default function RecordForm() {
         ...passedData
       };
 
-      if (!finalDefaults.firstName && (finalDefaults.customerName || finalDefaults.customer || finalDefaults.fullName || finalDefaults.name)) {
-        const rawCust = finalDefaults.customerName || finalDefaults.customer || finalDefaults.fullName || finalDefaults.name;
-        const parts = String(rawCust).trim().split(' ');
-        finalDefaults.firstName = parts[0] || '';
-        finalDefaults.lastName = parts.slice(1).join(' ') || '';
+      // Source MUST ALWAYS strictly be the creator (logged in user) and non-changeable
+      finalDefaults['source'] = loggedInName;
+      finalDefaults['createdBy'] = loggedInName;
+      finalDefaults['createdByName'] = loggedInName;
+
+      // Extract First & Last Name
+      const extractedFirstName = getCaseInsensitiveVal(finalDefaults, ['firstName', 'firstname', 'first_name']);
+      const extractedLastName = getCaseInsensitiveVal(finalDefaults, ['lastName', 'lastname', 'last_name']);
+      const extractedFullName = getCaseInsensitiveVal(finalDefaults, [
+        'customer', 'customerName', 'customer_name', 'fullName', 'full_name', 'name', 'leadName', 'lead_name', 'client', 'clientName'
+      ]);
+
+      if (!finalDefaults.firstName) {
+        if (extractedFirstName) {
+          finalDefaults.firstName = extractedFirstName;
+          finalDefaults.lastName = finalDefaults.lastName || extractedLastName;
+        } else if (extractedFullName) {
+          const parts = extractedFullName.split(' ');
+          finalDefaults.firstName = parts[0] || '';
+          finalDefaults.lastName = finalDefaults.lastName || parts.slice(1).join(' ') || '';
+        }
       }
-      if (!finalDefaults.phone && finalDefaults.mobile) {
-        finalDefaults.phone = finalDefaults.mobile;
+      if (!finalDefaults.lastName && extractedLastName) {
+        finalDefaults.lastName = extractedLastName;
       }
-      if (!finalDefaults.mobile && finalDefaults.phone) {
-        finalDefaults.mobile = finalDefaults.phone;
+      if (finalDefaults.firstName || finalDefaults.lastName) {
+        const full = `${finalDefaults.firstName || ''} ${finalDefaults.lastName || ''}`.trim();
+        finalDefaults.customerName = full;
+        finalDefaults.customer = full;
+        finalDefaults.fullName = full;
       }
-      if (!finalDefaults.company && (finalDefaults.firmName || finalDefaults.firm_name)) {
-        finalDefaults.company = finalDefaults.firmName || finalDefaults.firm_name;
+
+      // Phone & Mobile
+      const extractedPhone = getCaseInsensitiveVal(finalDefaults, [
+        'phone', 'mobile', 'contactNum', 'contact_num', 'contact num', 'phoneNumber', 'phone_number', 'contact', 'contactNumber', 'contact_number', 'mobileNo', 'mobile_no', 'name_contact_num'
+      ]);
+      if (extractedPhone) {
+        if (!finalDefaults.phone) finalDefaults.phone = extractedPhone;
+        if (!finalDefaults.mobile) finalDefaults.mobile = extractedPhone;
+        finalDefaults.contactNum = extractedPhone;
+        finalDefaults.contact_num = extractedPhone;
       }
-      if (!finalDefaults.firmName && finalDefaults.company) {
-        finalDefaults.firmName = finalDefaults.company;
+
+      // Email
+      const extractedEmail = getCaseInsensitiveVal(finalDefaults, [
+        'email', 'Email', 'EMAIL', 'mailId', 'mail_id', 'eMail', 'mail', 'emailAddress', 'email_address', 'contactEmail'
+      ]);
+      if (extractedEmail && !finalDefaults.email) {
+        finalDefaults.email = extractedEmail;
       }
-      if (!finalDefaults.location && finalDefaults.city) {
-        finalDefaults.location = finalDefaults.city;
+
+      // City & Location
+      const extractedCity = getCaseInsensitiveVal(finalDefaults, [
+        'city', 'City', 'district', 'District', 'place', 'location', 'Location'
+      ]);
+      if (extractedCity) {
+        if (!finalDefaults.city) finalDefaults.city = extractedCity;
+        if (!finalDefaults.location) finalDefaults.location = extractedCity;
       }
-      if (!finalDefaults.city && finalDefaults.location) {
-        finalDefaults.city = finalDefaults.location;
+
+      // State
+      let extractedState = getCaseInsensitiveVal(finalDefaults, [
+        'state', 'State', 'STATE', 'province', 'region'
+      ]);
+      if (!extractedState) {
+        const loc = finalDefaults.location || finalDefaults.city || '';
+        if (loc.includes(',')) {
+          const parts = loc.split(',');
+          extractedState = parts[parts.length - 1].trim();
+        }
       }
+      if (extractedState && !finalDefaults.state) {
+        finalDefaults.state = extractedState;
+      }
+
+      // Match state with dropdown options case-insensitively
+      const stateField = activeModule?.fields.find(f => f.name.toLowerCase() === 'state');
+      if (stateField && stateField.options && finalDefaults.state) {
+        const matchOpt = stateField.options.find(opt => opt.trim().toLowerCase() === String(finalDefaults.state).trim().toLowerCase());
+        if (matchOpt) {
+          finalDefaults.state = matchOpt;
+        }
+      }
+
+      // Address & Present Address
+      const extractedAddress = getCaseInsensitiveVal(finalDefaults, [
+        'presentAddress', 'present_address', 'Present Address', 'address', 'Address', 'fullAddress', 'area', 'location', 'Location'
+      ]);
+      if (extractedAddress) {
+        if (!finalDefaults.presentAddress) finalDefaults.presentAddress = extractedAddress;
+        if (!finalDefaults.address) finalDefaults.address = extractedAddress;
+      }
+
+      // Company & Firm Name
+      const extractedCompany = getCaseInsensitiveVal(finalDefaults, [
+        'company', 'Company', 'firmName', 'firm_name', 'Firm Name', 'firm', 'businessName', 'shopName', 'agencyName'
+      ]);
+      if (extractedCompany) {
+        if (!finalDefaults.company) finalDefaults.company = extractedCompany;
+        if (!finalDefaults.firmName) finalDefaults.firmName = extractedCompany;
+        if (!finalDefaults.firm_name) finalDefaults.firm_name = extractedCompany;
+      }
+
       if (!finalDefaults.dataCode) {
         finalDefaults.dataCode = finalDefaults['Data Code'] || finalDefaults.data_code || finalDefaults.leadNo || finalDefaults.leadNumber || finalDefaults.code || '';
       }
@@ -327,82 +428,102 @@ export default function RecordForm() {
       
       const recordValues = { ...rawData };
 
-      // Auto-populate firstName / lastName if lead has fullName, customerName, name, or leadName
-      if (!recordValues.firstName && recordValues.fullName) {
-        const parts = String(recordValues.fullName).trim().split(' ');
-        recordValues.firstName = parts[0] || '';
-        recordValues.lastName = parts.slice(1).join(' ') || '';
-      } else if (!recordValues.firstName && recordValues.customerName) {
-        const parts = String(recordValues.customerName).trim().split(' ');
-        recordValues.firstName = parts[0] || '';
-        recordValues.lastName = parts.slice(1).join(' ') || '';
-      } else if (!recordValues.firstName && recordValues.name) {
-        const parts = String(recordValues.name).trim().split(' ');
-        recordValues.firstName = parts[0] || '';
-        recordValues.lastName = parts.slice(1).join(' ') || '';
-      } else if (!recordValues.firstName && recordValues.leadName) {
-        const parts = String(recordValues.leadName).trim().split(' ');
-        recordValues.firstName = parts[0] || '';
-        recordValues.lastName = parts.slice(1).join(' ') || '';
-      } else if (!recordValues.firstName && recordValues.customer) {
-        const parts = String(recordValues.customer).trim().split(' ');
-        recordValues.firstName = parts[0] || '';
-        recordValues.lastName = parts.slice(1).join(' ') || '';
+      // Auto-populate firstName / lastName if lead has customer, fullName, customerName, name, or leadName
+      const extractedFirstName = getCaseInsensitiveVal(recordValues, ['firstName', 'firstname', 'first_name']);
+      const extractedLastName = getCaseInsensitiveVal(recordValues, ['lastName', 'lastname', 'last_name']);
+      const extractedFullName = getCaseInsensitiveVal(recordValues, [
+        'customer', 'customerName', 'customer_name', 'fullName', 'full_name', 'name', 'leadName', 'lead_name', 'client', 'clientName'
+      ]);
+
+      if (!recordValues.firstName) {
+        if (extractedFirstName) {
+          recordValues.firstName = extractedFirstName;
+          recordValues.lastName = recordValues.lastName || extractedLastName;
+        } else if (extractedFullName) {
+          const parts = extractedFullName.split(' ');
+          recordValues.firstName = parts[0] || '';
+          recordValues.lastName = recordValues.lastName || parts.slice(1).join(' ') || '';
+        }
+      }
+      if (!recordValues.lastName && extractedLastName) {
+        recordValues.lastName = extractedLastName;
+      }
+      if (recordValues.firstName || recordValues.lastName) {
+        const full = `${recordValues.firstName || ''} ${recordValues.lastName || ''}`.trim();
+        recordValues.customerName = full;
+        recordValues.customer = full;
+        recordValues.fullName = full;
       }
 
-      // Ensure dataCode is populated from data_code / Data Code / leadNo
-      if (!recordValues.dataCode) {
-        recordValues.dataCode = recordValues['Data Code'] || recordValues.data_code || recordValues.leadNo || recordValues.leadNumber || recordValues.code || '';
+      // Ensure phone is loaded from mobile / contact / contactNum
+      const extractedPhone = getCaseInsensitiveVal(recordValues, [
+        'phone', 'mobile', 'contactNum', 'contact_num', 'contact num', 'phoneNumber', 'phone_number', 'contact', 'contactNumber', 'contact_number', 'mobileNo', 'mobile_no', 'name_contact_num'
+      ]);
+      if (extractedPhone) {
+        if (!recordValues.phone) recordValues.phone = extractedPhone;
+        if (!recordValues.mobile) recordValues.mobile = extractedPhone;
+        recordValues.contactNum = extractedPhone;
+        recordValues.contact_num = extractedPhone;
       }
 
-      // Ensure caseDetails is populated
-      if (!recordValues.caseDetails && recordValues.case_details) {
-        recordValues.caseDetails = recordValues.case_details;
+      // Ensure email is loaded
+      const extractedEmail = getCaseInsensitiveVal(recordValues, [
+        'email', 'Email', 'EMAIL', 'mailId', 'mail_id', 'eMail', 'mail', 'emailAddress', 'email_address', 'contactEmail'
+      ]);
+      if (extractedEmail && !recordValues.email) {
+        recordValues.email = extractedEmail;
       }
 
-      // Ensure notes & remarks are populated
-      if (!recordValues.notes && recordValues.remarks) {
-        recordValues.notes = recordValues.remarks;
-      }
-      if (!recordValues.remarks && recordValues.notes) {
-        recordValues.remarks = recordValues.notes;
-      }
-
-      // Ensure loanType & leadCategory are populated
-      if (!recordValues.loanType && (recordValues.leadCategory || recordValues.category)) {
-        recordValues.loanType = recordValues.leadCategory || recordValues.category;
-      }
-      if (!recordValues.leadCategory && recordValues.loanType) {
-        recordValues.leadCategory = recordValues.loanType;
+      // Ensure city and location are loaded
+      const extractedCity = getCaseInsensitiveVal(recordValues, [
+        'city', 'City', 'district', 'District', 'place', 'location', 'Location'
+      ]);
+      if (extractedCity) {
+        if (!recordValues.city) recordValues.city = extractedCity;
+        if (!recordValues.location) recordValues.location = extractedCity;
       }
 
-      // Ensure assignedTo is populated
-      if (!recordValues.assignedTo) {
-        recordValues.assignedTo = recordValues.assignedToName || recordValues.telecaller || recordValues.assignedAgent || '';
+      // Ensure state is loaded
+      let extractedState = getCaseInsensitiveVal(recordValues, [
+        'state', 'State', 'STATE', 'province', 'region'
+      ]);
+      if (!extractedState) {
+        const loc = recordValues.location || recordValues.city || '';
+        if (loc.includes(',')) {
+          const parts = loc.split(',');
+          extractedState = parts[parts.length - 1].trim();
+        }
+      }
+      if (extractedState && !recordValues.state) {
+        recordValues.state = extractedState;
       }
 
-      // Ensure location is loaded from city / state / presentAddress if not set
-      if (!recordValues.location) {
-        recordValues.location = [recordValues.city, recordValues.state].filter(Boolean).join(', ') || recordValues.city || recordValues.presentAddress || recordValues.district || '';
-      }
-      if (!recordValues.city && recordValues.location) {
-        recordValues.city = recordValues.location;
-      }
-
-      // Ensure phone is loaded from mobile / contact / contactNum if not set
-      if (!recordValues.phone) {
-        recordValues.phone = recordValues.mobile || recordValues.contactNum || recordValues.contact_num || recordValues.contact || recordValues['CONTACT NUM'] || recordValues['contact num'] || recordValues.phoneNumber || recordValues.mobileNo || '';
-      }
-      if (!recordValues.mobile && recordValues.phone) {
-        recordValues.mobile = recordValues.phone;
+      // Match state with dropdown options case-insensitively
+      const stateField = activeModule?.fields.find(f => f.name.toLowerCase() === 'state');
+      if (stateField && stateField.options && recordValues.state) {
+        const matchOpt = stateField.options.find(opt => opt.trim().toLowerCase() === String(recordValues.state).trim().toLowerCase());
+        if (matchOpt) {
+          recordValues.state = matchOpt;
+        }
       }
 
-      // Ensure company is loaded from firmName / firm_name if not set
-      if (!recordValues.company) {
-        recordValues.company = recordValues.firmName || recordValues.firm_name || recordValues.firm || recordValues['FIRM_NAME'] || recordValues['firm_name'] || '';
+      // Ensure presentAddress and address are loaded
+      const extractedAddress = getCaseInsensitiveVal(recordValues, [
+        'presentAddress', 'present_address', 'Present Address', 'address', 'Address', 'fullAddress', 'area', 'location', 'Location'
+      ]);
+      if (extractedAddress) {
+        if (!recordValues.presentAddress) recordValues.presentAddress = extractedAddress;
+        if (!recordValues.address) recordValues.address = extractedAddress;
       }
-      if (!recordValues.firmName && recordValues.company) {
-        recordValues.firmName = recordValues.company;
+
+      // Ensure company is loaded from firmName / firm_name
+      const extractedCompany = getCaseInsensitiveVal(recordValues, [
+        'company', 'Company', 'firmName', 'firm_name', 'Firm Name', 'firm', 'businessName', 'shopName', 'agencyName'
+      ]);
+      if (extractedCompany) {
+        if (!recordValues.company) recordValues.company = extractedCompany;
+        if (!recordValues.firmName) recordValues.firmName = extractedCompany;
+        if (!recordValues.firm_name) recordValues.firm_name = extractedCompany;
       }
 
       // Merge values passed from navigation state (e.g. from MyCampaign Hot/Warm selection)
@@ -877,13 +998,14 @@ export default function RecordForm() {
       );
     }
 
-    if (field.name === 'source' && apiPath === 'leads') {
+    if (field.name.toLowerCase() === 'source' && (apiPath?.toLowerCase() === 'leads' || apiPath?.toLowerCase() === 'lead')) {
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
       const creatorSourceVal = watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || loggedInUserFullName;
       return (
         <div key={field.name} className="space-y-1.5 text-left">
           <label className={labelClass}>
-            {field.label}{isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
+            {field.label} <span className="text-[10px] font-medium text-slate-400 font-mono lowercase">(read-only creator)</span>
+            {isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
           </label>
           <input
             type="text"
@@ -892,7 +1014,7 @@ export default function RecordForm() {
             {...register(field.name)}
             title={creatorSourceVal}
             value={creatorSourceVal}
-            className={`${inputBase} bg-slate-100/80 text-[#111827] dark:text-slate-200 font-bold cursor-not-allowed border-[#EAE4DA] dark:border-slate-700 overflow-hidden text-ellipsis whitespace-nowrap`}
+            className={`${inputBase} bg-slate-100 dark:bg-slate-800 text-[#111827] dark:text-slate-200 font-bold cursor-not-allowed border-[#EAE4DA] dark:border-slate-700 select-none`}
           />
         </div>
       );
@@ -1133,14 +1255,32 @@ export default function RecordForm() {
           opts = allTeams;
         }
 
-        if (field.name === 'source') {
-          const loggedInName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email.split('@')[0] : '';
-          if (loggedInName && !opts.includes(loggedInName)) {
-            opts = [loggedInName, ...opts];
-          }
-          const passedSource = location.state?.source;
-          if (passedSource && !opts.includes(passedSource)) {
-            opts = [passedSource, ...opts];
+        if (field.name.toLowerCase() === 'source') {
+          const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+          const creatorSourceVal = watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || loggedInUserFullName;
+          return (
+            <div key={field.name} className="space-y-1.5 text-left">
+              <label className={labelClass}>
+                {field.label} <span className="text-[10px] font-medium text-slate-400 font-mono lowercase">(read-only creator)</span>
+                {isFieldRequired && <span className="text-rose-500 ml-0.5">*</span>}
+              </label>
+              <input
+                type="text"
+                readOnly
+                placeholder={field.label}
+                {...register(field.name)}
+                title={creatorSourceVal}
+                value={creatorSourceVal}
+                className={`${inputBase} bg-slate-100 dark:bg-slate-800 text-[#111827] dark:text-slate-200 font-bold cursor-not-allowed border-[#EAE4DA] dark:border-slate-700 select-none`}
+              />
+            </div>
+          );
+        }
+
+        if (field.name.toLowerCase() === 'state') {
+          const curState = String(watchedValues?.[field.name] || '').trim();
+          if (curState && !opts.some((o: string) => o.toLowerCase() === curState.toLowerCase())) {
+            opts = [curState, ...opts];
           }
         }
         return (

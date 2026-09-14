@@ -157,6 +157,45 @@ export const getLeadCategory = (data: any): string => {
   ) || 'N/A';
 };
 
+export const getLeadEmail = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['email', 'Email', 'mailId', 'eMail', 'mail', 'emailAddress', 'email_address', 'mail_id', 'contactEmail'],
+    ['email', 'mail']
+  ) || '';
+};
+
+export const getLeadCity = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['city', 'City', 'district', 'District', 'place', 'location', 'Location'],
+    ['city', 'district', 'place']
+  ) || '';
+};
+
+export const getLeadState = (data: any): string => {
+  const direct = getLeadFieldValue(
+    data,
+    ['state', 'State', 'province', 'region'],
+    ['state']
+  );
+  if (direct) return direct;
+  const loc = getLeadLocation(data);
+  if (loc && loc.includes(',')) {
+    const parts = loc.split(',');
+    return parts[parts.length - 1].trim();
+  }
+  return '';
+};
+
+export const getLeadAddress = (data: any): string => {
+  return getLeadFieldValue(
+    data,
+    ['presentAddress', 'present_address', 'Present Address', 'address', 'Address', 'fullAddress', 'area', 'Area', 'location', 'Location'],
+    ['address', 'area']
+  ) || '';
+};
+
 export const getLeadAgent = (data: any): string => {
   if (!data) return '';
   return data.assignedTo || data.assignedToName || data.telecaller || data.assignedAgent || data.agent || '';
@@ -612,6 +651,8 @@ export default function MyCampaign() {
 
     showToast(`Opening ${targetStatus} Lead Create page with auto-filled details...`, 'info');
 
+    const loggedInCreatorName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+
     navigate('/modules/leads/new', {
       state: {
         fromCampaign: true,
@@ -629,7 +670,11 @@ export default function MyCampaign() {
         company: getLeadFirmName(lead.data),
         firmName: getLeadFirmName(lead.data),
         location: getLeadLocation(lead.data),
-        city: getLeadLocation(lead.data),
+        city: getLeadCity(lead.data) || getLeadLocation(lead.data),
+        state: getLeadState(lead.data),
+        address: getLeadAddress(lead.data) || getLeadLocation(lead.data),
+        presentAddress: getLeadAddress(lead.data) || getLeadLocation(lead.data),
+        email: getLeadEmail(lead.data),
         dataCode: getLeadDataCode(lead),
         caseDetails: currentCaseDetails,
         leadCategory: currentCategory,
@@ -637,7 +682,9 @@ export default function MyCampaign() {
         loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
         notes: currentRemarks,
         remarks: currentRemarks,
-        source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
+        source: loggedInCreatorName,
+        createdBy: loggedInCreatorName,
+        createdByName: loggedInCreatorName,
         assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
       }
     });
@@ -658,6 +705,8 @@ export default function MyCampaign() {
       return;
     }
 
+    const loggedInCreatorName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+
     navigate('/modules/leads/new', {
       state: {
         fromCampaign: true,
@@ -675,7 +724,11 @@ export default function MyCampaign() {
         company: getLeadFirmName(lead.data),
         firmName: getLeadFirmName(lead.data),
         location: getLeadLocation(lead.data),
-        city: getLeadLocation(lead.data),
+        city: getLeadCity(lead.data) || getLeadLocation(lead.data),
+        state: getLeadState(lead.data),
+        address: getLeadAddress(lead.data) || getLeadLocation(lead.data),
+        presentAddress: getLeadAddress(lead.data) || getLeadLocation(lead.data),
+        email: getLeadEmail(lead.data),
         dataCode: getLeadDataCode(lead),
         caseDetails: currentCaseDetails,
         leadCategory: currentCategory,
@@ -683,7 +736,9 @@ export default function MyCampaign() {
         loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
         notes: currentRemarks,
         remarks: currentRemarks,
-        source: lead.data?.source || activeCampaign?.campaignName || 'Campaign',
+        source: loggedInCreatorName,
+        createdBy: loggedInCreatorName,
+        createdByName: loggedInCreatorName,
         assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
       }
     });

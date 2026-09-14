@@ -808,10 +808,14 @@ const buildUserAssignmentFilter = async (user: any, orgId?: any) => {
     userOrConditions.push({ 'data.assignedTo': regex });
     userOrConditions.push({ 'data.telecaller': regex });
     userOrConditions.push({ 'data.assignedAgent': regex });
+    userOrConditions.push({ 'data.assignedToName': regex });
+    userOrConditions.push({ 'data.assignedUser': regex });
+    userOrConditions.push({ 'data.assigned_to': regex });
+    userOrConditions.push({ 'data.psm': regex });
   });
 
   if (userOrConditions.length === 0) {
-    return {};
+    return { _id: new mongoose.Types.ObjectId() };
   }
 
   return { $or: userOrConditions };
@@ -890,16 +894,6 @@ router.get('/campaigns/my-campaigns', async (req: Request, res: Response): Promi
           userFilter
         ]
       };
-
-      const checkCount = await CustomRecord.countDocuments(finalQuery);
-      if (checkCount === 0) {
-        finalQuery = {
-          organizationId: orgId,
-          moduleId: (leadModule as any)?._id,
-          ...hasCampaignNameFilter
-        };
-        await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
-      }
     }
 
     // High-performance MongoDB Aggregation Pipeline (< 20ms execution time for 200k+ leads)
@@ -1099,16 +1093,6 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
             userFilter
           ]
         };
-
-        const directCount = await CustomRecord.countDocuments(exportQuery);
-        if (directCount === 0) {
-          exportQuery = {
-            organizationId: orgId,
-            moduleId: (leadModule as any)?._id,
-            ...campaignFilter
-          };
-          await HierarchyService.modifyRecordQuery(exportQuery, req.user as any, orgId!);
-        }
       }
 
       const exportLeads = await CustomRecord.find(exportQuery).sort({ createdAt: -1 }).lean();
@@ -1209,7 +1193,7 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
       await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
     } else {
       const userFilter = await buildUserAssignmentFilter(userObj, orgId);
-      const query: Record<string, any> = {
+      finalQuery = {
         organizationId: orgId,
         moduleId: (leadModule as any)?._id,
         $and: [
@@ -1217,18 +1201,6 @@ router.get('/campaigns/my-campaigns/details/:campaignName', async (req: Request,
           userFilter
         ]
       };
-
-      const directCount = await CustomRecord.countDocuments(query);
-      if (directCount > 0) {
-        finalQuery = query;
-      } else {
-        finalQuery = {
-          organizationId: orgId,
-          moduleId: (leadModule as any)?._id,
-          ...campaignFilter
-        };
-        await HierarchyService.modifyRecordQuery(finalQuery, req.user as any, orgId!);
-      }
     }
 
     const dialedCondition = {
@@ -2110,15 +2082,13 @@ router.post('/:apiPath', async (req: Request, res: Response): Promise<void> => {
       ? `${currentUserDoc.firstName || ''} ${currentUserDoc.lastName || ''}`.trim() || currentUserDoc.name || currentUserDoc.email 
       : req.user?.email || 'System';
 
-    if (!recordData.createdBy) {
-      recordData.createdBy = currentUserName;
-      recordData.createdByName = currentUserName;
-    }
+    recordData.createdBy = currentUserName;
+    recordData.createdByName = currentUserName;
     if (!recordData.assignedBy) {
       recordData.assignedBy = currentUserName;
       recordData.assignedByName = currentUserName;
     }
-    recordData.source = recordData.createdBy || recordData.createdByName || currentUserName;
+    recordData.source = currentUserName;
 
     const newRecordId = new mongoose.Types.ObjectId();
     let dcVal = recordData.dataCode || recordData.data_code || recordData['Data Code'] || recordData['data code'] || recordData.datacode || recordData.DataCode || recordData.code || recordData.leadNo || recordData.leadNumber;
