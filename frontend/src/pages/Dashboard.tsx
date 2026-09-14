@@ -18,6 +18,9 @@ export default function Dashboard() {
   const [animate, setAnimate] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<any>(null);
+  const searchSeqRef = useRef<number>(0);
   const [activeTab] = useState<'overview' | 'pipeline' | 'followups'>('overview');
   const [followupTab, setFollowupTab] = useState<'today' | 'upcoming'>('today');
 
@@ -283,18 +286,44 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [metricsData]);
 
-  const handleGlobalSearch = async (val: string) => {
+  const handleGlobalSearch = (val: string, immediate = false) => {
     setSearchQuery(val);
-    if (val.length < 2) {
+    const clean = val.trim();
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (clean.length < 2) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
-    try {
-      const res = await api.get(`/search?q=${val}`);
-      const results = res.data;
-      setSearchResults(results.filter((r: any) => r.records.length > 0));
-    } catch (e) {
-      console.error(e);
+
+    setIsSearching(true);
+    const thisSeq = ++searchSeqRef.current;
+
+    const executeSearch = async () => {
+      try {
+        const res = await api.get(`/search?q=${encodeURIComponent(clean)}`);
+        // Ignore stale responses if a newer search was initiated
+        if (thisSeq === searchSeqRef.current) {
+          const results = res.data;
+          setSearchResults(Array.isArray(results) ? results.filter((r: any) => r.records && r.records.length > 0) : []);
+          setIsSearching(false);
+        }
+      } catch (e) {
+        if (thisSeq === searchSeqRef.current) {
+          console.error('Search error:', e);
+          setIsSearching(false);
+        }
+      }
+    };
+
+    if (immediate) {
+      executeSearch();
+    } else {
+      searchDebounceRef.current = setTimeout(executeSearch, 200);
     }
   };
 
@@ -529,10 +558,19 @@ export default function Dashboard() {
               type="text"
               value={searchQuery}
               onChange={(e) => handleGlobalSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleGlobalSearch(searchQuery, true);
+                }
+              }}
               placeholder="Search leads, deals, contacts, campaigns..."
               className="w-full h-11 pl-11 pr-14 text-xs md:text-sm bg-white dark:bg-slate-800/90 border-2 border-stone-200 dark:border-slate-700 hover:border-stone-300 dark:hover:border-slate-600 rounded-xl focus:outline-none focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/15 focus:bg-white transition-all text-[#1C1917] dark:text-white font-medium shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] placeholder:text-[#78716C] dark:placeholder:text-stone-400"
             />
-            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none gap-1.5">
+              {isSearching && (
+                <Icons.Loader2 className="w-4 h-4 text-[#4F46E5] animate-spin" />
+              )}
               <kbd className="hidden sm:inline-flex items-center text-[10.5px] font-mono font-bold text-[#57534E] dark:text-stone-300 bg-[#F5F5F4] dark:bg-slate-700/80 border border-black/[0.08] dark:border-slate-600 px-2 py-0.5 rounded-md shadow-2xs">
                 ⌘K
               </kbd>
@@ -542,7 +580,12 @@ export default function Dashboard() {
           {/* Search Results Dropdown */}
           {searchQuery && (
             <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-black/[0.08] dark:border-slate-700 shadow-xl rounded-xl overflow-hidden max-h-80 overflow-y-auto z-50 p-2 space-y-2 text-left">
-              {searchResults.length === 0 ? (
+              {isSearching ? (
+                <div className="p-4 flex items-center justify-center gap-2 text-xs text-[#6B7280] font-medium">
+                  <Icons.Loader2 className="w-4 h-4 animate-spin text-[#4F46E5]" />
+                  <span>Searching records...</span>
+                </div>
+              ) : searchResults.length === 0 ? (
                 <div className="p-4 text-center text-xs text-[#6B7280] font-medium">
                   No lead, contact, or firm matching "{searchQuery}"
                 </div>
@@ -554,10 +597,16 @@ export default function Dashboard() {
                       {module.pluralLabel} ({records.length})
                     </div>
                     {records.map((rec: any) => {
-                      const name = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || rec.data?.company || 'Lead Record';
-                      const phone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contact;
-                      const code = rec.data?.dataCode || rec.data?.allocatedNo || rec.data?.leadNo || (rec._id ? `LND-${String(rec._id).slice(-6).toUpperCase()}` : '');
-                      const company = rec.data?.company || rec.data?.firmName;
+                      const name = `${rec.data?.firstName || ''} ${rec.data?.lastName || ''}`.trim() || 
+                                   rec.data?.customerName || 
+                                   rec.data?.customer || 
+                                   rec.data?.fullName || 
+                                   rec.data?.leadName || 
+                                   rec.data?.company || 
+                                   'Lead Record';
+                      const phone = rec.data?.phone || rec.data?.mobile || rec.data?.contactNumber || rec.data?.contact_num || rec.data?.['contact num'] || rec.data?.contact;
+                      const code = rec.data?.leadNo || rec.data?.dataCode || rec.data?.data_code || rec.data?.allocatedNo || (rec._id ? `LND-${String(rec._id).slice(-6).toUpperCase()}` : '');
+                      const company = rec.data?.company || rec.data?.firmName || rec.data?.firm_name;
 
                       return (
                         <Link

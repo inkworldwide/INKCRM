@@ -49,6 +49,17 @@ CustomRecordSchema.pre('save', function (next) {
         (this.data as any).normalizedStatus = normalized;
       }
     }
+
+    // Automatically ensure data.leadNo exists (LND-<last 6 hex chars of ObjectId>)
+    const currentLeadNo = this.data instanceof Map ? this.data.get('leadNo') : (this.data as any)?.leadNo;
+    if (!currentLeadNo && this._id) {
+      const generatedNo = `LND-${String(this._id).slice(-6).toUpperCase()}`;
+      if (this.data instanceof Map) {
+        this.data.set('leadNo', generatedNo);
+      } else {
+        (this.data as any).leadNo = generatedNo;
+      }
+    }
   }
   next();
 });
