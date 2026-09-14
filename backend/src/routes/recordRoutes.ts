@@ -2267,7 +2267,7 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
     if (record.data) {
       const dataObj = record.data instanceof Map ? Object.fromEntries(record.data) : (record.data || {});
       let creatorName = '';
-      if (record.createdBy && typeof record.createdBy === 'object') {
+      if (record.createdBy && typeof record.createdBy === 'object' && ('firstName' in (record.createdBy as any) || 'name' in (record.createdBy as any) || 'email' in (record.createdBy as any))) {
         const c = record.createdBy as any;
         creatorName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || c.email || '';
       }
@@ -2286,8 +2286,8 @@ router.get('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
           creatorName = src;
         }
       }
-      if (!creatorName) {
-        creatorName = dataObj.assignedBy || dataObj.assignedByName || 'System';
+      if (!creatorName || /^[0-9a-fA-F]{24}$/.test(creatorName)) {
+        creatorName = 'Ink CRM';
       }
       if (creatorName) {
         dataObj.createdBy = creatorName;
@@ -2495,7 +2495,7 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
       : req.user?.email || 'System';
 
     let originalCreatorName = '';
-    if (record.createdBy && typeof record.createdBy === 'object') {
+    if (record.createdBy && typeof record.createdBy === 'object' && ('firstName' in (record.createdBy as any) || 'name' in (record.createdBy as any) || 'email' in (record.createdBy as any))) {
       const c = record.createdBy as any;
       originalCreatorName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || c.email || '';
     }
@@ -2514,8 +2514,8 @@ router.put('/:apiPath/:id', async (req: Request, res: Response): Promise<void> =
         originalCreatorName = src;
       }
     }
-    if (!originalCreatorName) {
-      originalCreatorName = oldValues.assignedBy || currentUserName;
+    if (!originalCreatorName || /^[0-9a-fA-F]{24}$/.test(originalCreatorName)) {
+      originalCreatorName = 'Ink CRM';
     }
 
     updateData.createdBy = originalCreatorName;

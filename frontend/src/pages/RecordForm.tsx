@@ -95,6 +95,7 @@ export default function RecordForm() {
   const [rawUsersList, setRawUsersList] = useState<any[]>([]);
 
   const isInitialLoadRef = React.useRef(true);
+  const authenticCreatorRef = React.useRef<string>('');
 
   useEffect(() => {
     const fetchDynamicStatuses = async () => {
@@ -418,8 +419,8 @@ export default function RecordForm() {
     try {
       const [recordRes, docRes, activityRes] = await Promise.all([
         api.get(`/records/${apiPath}/${id}`),
-        api.get('/documents', { params: { recordId: id } }),
-        api.get('/dashboard/metrics') // loads activities
+        api.get('/documents', { params: { recordId: id } }).catch(() => ({ data: [] })),
+        api.get(`/records/${apiPath}/${id}/activities`).catch(() => ({ data: { activities: [] } }))
       ]);
 
       const rawData = recordRes.data.data instanceof Map 
@@ -546,8 +547,7 @@ export default function RecordForm() {
         }
       }
 
-      // Ensure SOURCE is strictly set to the Lead Creator User Name (e.g. md Khasim, K. Tanaz K, Reshma R)
-      const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+      // Ensure SOURCE is strictly set to the Lead Creator User Name (e.g. Ink CRM, md Khasim, etc.)
       const topCreatedBy = recordRes.data?.createdBy;
       let creatorName = '';
       if (topCreatedBy && typeof topCreatedBy === 'object') {
@@ -574,10 +574,11 @@ export default function RecordForm() {
         }
       }
 
-      if (!creatorName) {
-        creatorName = recordValues.assignedBy || loggedInUserFullName;
+      if (!creatorName || /^[0-9a-fA-F]{24}$/.test(creatorName)) {
+        creatorName = 'Ink CRM';
       }
       creatorName = String(creatorName).trim();
+      authenticCreatorRef.current = creatorName;
 
       recordValues.source = creatorName;
       recordValues.createdBy = creatorName;
@@ -592,8 +593,8 @@ export default function RecordForm() {
       setDocuments(docRes.data || []);
       
       // Filter activities for this record
-      const fullTimeline = activityRes.data.recentActivities || [];
-      setTimeline(fullTimeline.filter((t: any) => t.recordId === id));
+      const fullTimeline = activityRes.data?.activities || activityRes.data?.recentActivities || [];
+      setTimeline(fullTimeline);
     } catch (e) {
       console.error(e);
     } finally {
@@ -777,30 +778,21 @@ export default function RecordForm() {
         data.assignedBy = userFullName;
         data.assignedByName = userFullName;
       }
-      const isEditMode = Boolean(id && id !== 'new');
+      const isEditMode = Boolean((id && id !== 'new') || location.state?._id || location.state?.id);
       let submitCreator = '';
 
       if (isEditMode) {
-        const topCreatedBy = watchedValues['createdBy'] || watchedValues['createdByName'] || data.createdBy || data.createdByName;
-        if (topCreatedBy && typeof topCreatedBy === 'object') {
-          const c = topCreatedBy as any;
+        submitCreator = authenticCreatorRef.current || watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues['source'] || data.createdBy || data.createdByName || data.source;
+        if (submitCreator && typeof submitCreator === 'object') {
+          const c = submitCreator as any;
           submitCreator = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || c.email || '';
-        } else if (typeof topCreatedBy === 'string' && topCreatedBy.trim() && !/^[0-9a-fA-F]{24}$/.test(topCreatedBy.trim())) {
-          submitCreator = topCreatedBy.trim();
+        } else if (typeof submitCreator === 'string') {
+          submitCreator = submitCreator.trim();
         }
-      }
-
-      if (!submitCreator) {
-        const fallbackObj = data.createdBy || data.createdByName;
-        if (typeof fallbackObj === 'object' && fallbackObj !== null) {
-          const c = fallbackObj as any;
-          submitCreator = [c.firstName, c.lastName].filter(Boolean).join(' ') || c.name || c.email || '';
-        } else if (typeof fallbackObj === 'string' && fallbackObj.trim()) {
-          submitCreator = fallbackObj.trim();
+        if (!submitCreator || /^[0-9a-fA-F]{24}$/.test(submitCreator)) {
+          submitCreator = 'Ink CRM';
         }
-      }
-
-      if (!submitCreator) {
+      } else {
         submitCreator = userFullName;
       }
       submitCreator = String(submitCreator).trim();
@@ -998,8 +990,9 @@ export default function RecordForm() {
     }
 
     if (field.name.toLowerCase() === 'source' && (apiPath?.toLowerCase() === 'leads' || apiPath?.toLowerCase() === 'lead')) {
+      const isEdit = Boolean((id && id !== 'new') || location.state?._id || location.state?.id);
       const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
-      const creatorSourceVal = watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || loggedInUserFullName;
+      const creatorSourceVal = authenticCreatorRef.current || watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || (isEdit ? 'Ink CRM' : loggedInUserFullName);
       return (
         <div key={field.name} className="space-y-1.5 text-left">
           <label className={labelClass}>
@@ -1255,8 +1248,9 @@ export default function RecordForm() {
         }
 
         if (field.name.toLowerCase() === 'source') {
+          const isEdit = Boolean((id && id !== 'new') || location.state?._id || location.state?.id);
           const loggedInUserFullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
-          const creatorSourceVal = watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || loggedInUserFullName;
+          const creatorSourceVal = authenticCreatorRef.current || watchedValues['createdBy'] || watchedValues['createdByName'] || watchedValues[field.name] || (isEdit ? 'Ink CRM' : loggedInUserFullName);
           return (
             <div key={field.name} className="space-y-1.5 text-left">
               <label className={labelClass}>

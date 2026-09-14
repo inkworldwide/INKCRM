@@ -652,8 +652,9 @@ export default function MyCampaign() {
     showToast(`Opening ${targetStatus} Lead Create page with auto-filled details...`, 'info');
 
     const loggedInCreatorName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+    const authenticLeadCreator = lead.data?.source || lead.data?.createdByName || lead.data?.createdBy || ((lead as any).createdBy ? 'Ink CRM' : loggedInCreatorName);
 
-    navigate('/modules/leads/new', {
+    navigate(lead._id ? `/modules/leads/${lead._id}` : '/modules/leads/new', {
       state: {
         fromCampaign: true,
         campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
@@ -682,9 +683,9 @@ export default function MyCampaign() {
         loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
         notes: currentRemarks,
         remarks: currentRemarks,
-        source: loggedInCreatorName,
-        createdBy: loggedInCreatorName,
-        createdByName: loggedInCreatorName,
+        source: authenticLeadCreator,
+        createdBy: authenticLeadCreator,
+        createdByName: authenticLeadCreator,
         assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
       }
     });
@@ -706,8 +707,9 @@ export default function MyCampaign() {
     }
 
     const loggedInCreatorName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || (user as any).name || user.email : 'System';
+    const authenticLeadCreator = lead.data?.source || lead.data?.createdByName || lead.data?.createdBy || ((lead as any).createdBy ? 'Ink CRM' : loggedInCreatorName);
 
-    navigate('/modules/leads/new', {
+    navigate(lead._id ? `/modules/leads/${lead._id}` : '/modules/leads/new', {
       state: {
         fromCampaign: true,
         campaignName: activeCampaign?.campaignName || lead.data?.campaignName || '',
@@ -736,9 +738,9 @@ export default function MyCampaign() {
         loanType: currentCategory || lead.data?.loanType || 'SALARIED PERSONAL LOAN',
         notes: currentRemarks,
         remarks: currentRemarks,
-        source: loggedInCreatorName,
-        createdBy: loggedInCreatorName,
-        createdByName: loggedInCreatorName,
+        source: authenticLeadCreator,
+        createdBy: authenticLeadCreator,
+        createdByName: authenticLeadCreator,
         assignedTo: getLeadAgent(lead.data) || lead.data?.assignedTo || ''
       }
     });
