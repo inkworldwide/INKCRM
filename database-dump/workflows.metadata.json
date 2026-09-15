@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"organizationId":{"$numberInt":"1"},"moduleId":{"$numberInt":"1"},"isEnabled":{"$numberInt":"1"}},"name":"organizationId_1_moduleId_1_isEnabled_1","background":true}],"uuid":"d55a434596e84915b0f81e1f4b945b72","collectionName":"workflows","type":"collection"}
